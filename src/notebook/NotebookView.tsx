@@ -12,6 +12,9 @@ import { usePinchZoom } from "./usePinchZoom";
 import { sendCommand, setTool, useTool } from "./tool";
 import { addImage, pasteImages } from "../ink/objects";
 import { platform } from "../platform/port";
+import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
+import { useSmartPaste } from "../live/useSmartPaste";
+import type { HtmlPage } from "../store/schema";
 import type { InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
@@ -27,7 +30,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const { mounted, current } = useVisiblePages(scroller, pages.length);
   const [zoom, setZoomRaw] = useState(1);
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
-  const [liveInsertAt, setLiveInsertAt] = useState<number | null>(null);
+  const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
   const width = BASE_WIDTH * zoom;
   usePinchZoom(scroller, setZoomRaw, clampZoom);
 
@@ -80,8 +83,26 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   }, [curPage]);
 
   async function insert(index: number, kind: InsertKind) {
-    if (kind === "live") { setLiveInsertAt(index); return; }
+    if (kind === "live") { setSheet({ index }); return; }
     await insertPage(id, index, kind === "ink" ? { kind: "ink", template: "blank" } : { kind: "text" });
+  }
+
+  const currentRef = useRef(current);
+  currentRef.current = current;
+  const pagesLen = useRef(pages.length);
+  pagesLen.current = pages.length;
+  const onSmartPaste = useCallback((source: string) => {
+    setSheet({ index: Math.min(currentRef.current + 1, pagesLen.current), initial: { source } });
+  }, []);
+  useSmartPaste(onSmartPaste);
+
+  async function saveLive(d: LiveDraft) {
+    const s = sheet;
+    setSheet(null);
+    if (!s) return;
+    if (s.edit) { await updatePage(s.edit.id, d); return; }
+    const p = await insertPage(id, s.index, { kind: "html", ...d });
+    setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   if (!notebook) return <main className="nb-loading dim">Loading...</main>;
@@ -93,15 +114,19 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
       <div className="nb-body">
         <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}
           onInsert={insert} onReorder={(a, b) => movePage(id, a, b)} />
-        <div className="nb-scroll" ref={scroller} data-live-insert={liveInsertAt ?? undefined}>
+        <div className="nb-scroll" ref={scroller}>
           <div className="nb-column" style={{ width }}>
             <PageList pages={pages} notebook={notebook} mounted={mounted} width={width}
-              renderPage={(p, _i, m, w) => <PageFrame page={p} notebook={notebook} mounted={m} width={w} />}
+              renderPage={(p, i, m, w) => (
+                <PageFrame page={p} notebook={notebook} mounted={m} width={w} priority={1000 - Math.abs(i - current)}
+                  onEditLive={(pg) => pg.kind === "html" && setSheet({ index: i, edit: pg, initial: { title: pg.title, source: pg.source, artifactType: pg.artifactType, allowNetwork: pg.allowNetwork } })} />
+              )}
               onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>
         </div>
       </div>
+      <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
     </div>
   );

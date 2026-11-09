@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "copy-vendor": "node scripts/copy-vendor.mjs",
+    "predev": "npm run copy-vendor",
+    "prebuild": "npm run copy-vendor",
+    "postinstall": "node scripts/copy-vendor.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

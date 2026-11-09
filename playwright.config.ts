@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 30_000,
-  use: { baseURL: 'http://localhost:5199', ...devices['Desktop Chrome'] },
-  webServer: { command: 'npx vite --port 5199 --strictPort', port: 5199, reuseExistingServer: true },
+  // Real Chrome: it isolates sandboxed iframes into their own process (the bundled headless shell does not),
+  // which is what users run and what the infinite-loop test depends on.
+  use: { baseURL: 'http://localhost:5199', ...devices['Desktop Chrome'], channel: 'chrome' },
+  webServer: { command: 'npm run copy-vendor && npx vite --port 5199 --strictPort', port: 5199, reuseExistingServer: false },
 });

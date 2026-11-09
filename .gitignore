@@ -4,3 +4,8 @@ dist/
 test-results/
 playwright-report/
 public/vendor/
+
+# native shells
+src-tauri/target/
+src-tauri/gen/
+*.tsbuildinfo

@@ -13,8 +13,9 @@ import type { PenVariant } from "../ink/model";
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
 export const DEFAULT_COLORS = ["#E8E9EE", "#7C5CFF", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
 
-export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS }: {
+export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind }: {
   notebook: Notebook; zoom: number; setZoom: (z: number) => void; onUndo: () => void; onRedo: () => void; palette?: string[];
+  currentKind?: "ink" | "text" | "html";
 }) {
   const [t, set] = useTool();
   const [menu, setMenu] = useState(false);
@@ -70,12 +71,16 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
         <button className="btn ghost icon" aria-label="Undo" onClick={onUndo}><Undo2 {...ICON} /></button>
         <button className="btn ghost icon" aria-label="Redo" onClick={onRedo}><Redo2 {...ICON} /></button>
       </div>
-      {!t.penSeen && (
-        <button className={`btn ghost ${t.mode === "annotate" ? "active" : ""}`} aria-label="Interact or annotate"
-          onClick={() => set({ mode: t.mode === "annotate" ? "interact" : "annotate" })}>
-          {t.mode === "annotate" ? <PenLine {...ICON} /> : <MousePointer2 {...ICON} />}
-          {t.mode === "annotate" ? "Annotate" : "Interact"}
-        </button>
+      {currentKind && currentKind !== "ink" && (
+        // Ink pages are always for writing. On Text/Live pages the mouse either uses the page
+        // (type, click buttons in the artifact) or writes on top of it. A pen always writes.
+        <div className="mode-switch" role="radiogroup" aria-label="Mouse on this page"
+          title="A pen always writes. This chooses what the mouse or finger does on text and live pages.">
+          <button role="radio" aria-checked={t.mode === "interact"} className={t.mode === "interact" ? "on" : ""}
+            onClick={() => set({ mode: "interact" })}><MousePointer2 {...ICON} />Use page</button>
+          <button role="radio" aria-checked={t.mode === "annotate"} className={t.mode === "annotate" ? "on" : ""}
+            onClick={() => set({ mode: "annotate" })}><PenLine {...ICON} />Write on page</button>
+        </div>
       )}
       <div className="tool-group">
         <button className="btn ghost icon" aria-label="Zoom out" onClick={() => setZoom(zoom / 1.2)}><ZoomOut {...ICON} /></button>

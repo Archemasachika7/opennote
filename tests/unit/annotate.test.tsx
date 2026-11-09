@@ -5,7 +5,7 @@ import { createNotebook } from "../../src/store/notebooks";
 import { insertPage } from "../../src/store/pages";
 import { getStrokes } from "../../src/store/strokes";
 import { Annotatable, useAnnotate } from "../../src/ink/Annotatable";
-import { setTool } from "../../src/notebook/tool";
+import { setTool, getTool } from "../../src/notebook/tool";
 import { Toolbar } from "../../src/notebook/Toolbar";
 import { buildSrcdoc } from "../../src/live/srcdoc";
 
@@ -79,11 +79,23 @@ it("sandbox documents report pen activity to the app", () => {
   expect(buildSrcdoc({ source: "<p/>", type: "html", allowNetwork: false })).toContain("opennote:pen");
 });
 
-it("interact/annotate toggle is hidden once a pen has been seen", () => {
+describe("mouse mode switch", () => {
   const nb = { id: "n", title: "t", coverColor: "#fff", paper: "dark" as const, folderId: null, bookmarks: [], pageIds: [], createdAt: 0, updatedAt: 0 };
-  const { rerender } = render(<Toolbar notebook={nb} zoom={1} setZoom={() => {}} onUndo={() => {}} onRedo={() => {}} />);
-  expect(screen.getByRole("button", { name: /interact or annotate/i })).toBeInTheDocument();
-  act(() => setTool({ penSeen: true }));
-  rerender(<Toolbar notebook={nb} zoom={1} setZoom={() => {}} onUndo={() => {}} onRedo={() => {}} />);
-  expect(screen.queryByRole("button", { name: /interact or annotate/i })).toBeNull();
+  const bar = (kind: "ink" | "text" | "html") => <Toolbar notebook={nb} zoom={1} setZoom={() => {}} onUndo={() => {}} onRedo={() => {}} currentKind={kind} />;
+  it("is not shown on ink pages (they are always for writing)", () => {
+    render(bar("ink"));
+    expect(screen.queryByRole("radiogroup", { name: /mouse on this page/i })).toBeNull();
+  });
+  it("on live and text pages offers explicit Use page / Write on page choices", async () => {
+    const { rerender } = render(bar("html"));
+    const use = screen.getByRole("radio", { name: "Use page" });
+    const write = screen.getByRole("radio", { name: "Write on page" });
+    expect(use).toBeChecked();
+    act(() => write.click());
+    expect(getTool().mode).toBe("annotate");
+    rerender(bar("text"));
+    expect(screen.getByRole("radio", { name: "Write on page" })).toBeChecked();
+    act(() => screen.getByRole("radio", { name: "Use page" }).click());
+    expect(getTool().mode).toBe("interact");
+  });
 });

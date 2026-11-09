@@ -158,3 +158,24 @@ it("undoing a move restores position but keeps later text edits", async () => {
   await waitFor(async () => expect((await getObjects(pageId))[0].x).toBeCloseTo(200));
   expect((await getObjects(pageId))[0].text).toBe("first and later");
 });
+
+it("adding several images keeps all of them and does not stack them on the same spot", async () => {
+  await addImage(pageId, png());
+  await addImage(pageId, png());
+  await pasteImages([png(), png()], pageId);
+  const objs = await getObjects(pageId);
+  expect(objs).toHaveLength(4);
+  expect(new Set(objs.map((o) => `${Math.round(o.x)},${Math.round(o.y)}`)).size).toBe(4);
+});
+
+it("the image picker allows choosing several files", async () => {
+  const { platform } = await import("../../src/platform/port");
+  const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(function (this: HTMLInputElement) {
+    expect(this.multiple).toBe(true);
+    Object.defineProperty(this, "files", { value: [png(), png()] });
+    this.onchange?.(new Event("change"));
+  });
+  const files = await platform.openFiles(["image/*"]);
+  expect(files).toHaveLength(2);
+  click.mockRestore();
+});

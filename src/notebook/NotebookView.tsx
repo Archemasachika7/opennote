@@ -69,7 +69,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     setTool({ tool: lastTool.current });
     const target = curPage && curPage.kind === "ink" ? curPage : pages.find((p) => p.kind === "ink");
     if (!target) return;
-    void platform.openFile(["image/*"]).then((f) => { if (f) void addImage(target.id, f); });
+    void platform.openFiles(["image/*"]).then(async (files) => { for (const f of files) await addImage(target.id, f); });
   }, [tool.tool, curPage, pages]);
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const cur = pages[current];
   return (
     <div className="nb-view">
-      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)}
+      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind}
         onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
       <div className="nb-body">
         <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}

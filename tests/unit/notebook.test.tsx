@@ -86,7 +86,7 @@ it("paper menu switches notebook paper", async () => {
 it("image tool returns to the previous tool after the picker closes (even when cancelled)", async () => {
   const user = userEvent.setup();
   const port = await import("../../src/platform/port");
-  const spy = vi.spyOn(port.platform, "openFile").mockResolvedValue(null);
+  const spy = vi.spyOn(port.platform, "openFiles").mockResolvedValue([]);
   const { getTool, setTool } = await import("../../src/notebook/tool");
   setTool({ tool: "pen" });
   await setup();

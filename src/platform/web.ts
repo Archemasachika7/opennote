@@ -15,6 +15,14 @@ export const platform: PlatformPort = {
       input.click();
     });
   },
+  openFiles(accept) {
+    return new Promise((resolve) => {
+      const input = Object.assign(document.createElement("input"), { type: "file", accept: accept.join(","), multiple: true });
+      input.onchange = () => resolve([...(input.files ?? [])]);
+      input.addEventListener("cancel", () => resolve([]));
+      input.click();
+    });
+  },
   async requestPersistentStorage() {
     return (await navigator.storage?.persist?.()) ?? false;
   },

@@ -42,10 +42,13 @@ export async function addImage(pageId: string, file: Blob, at?: { x: number; y: 
   const w = Math.min(img.w, MAX_W);
   const h = (w / img.w) * img.h;
   const blobId = newId();
+  // Without an explicit spot, cascade new images so they never sit exactly on top of earlier ones.
+  const n = at ? 0 : await db.objects.where("pageId").equals(pageId).filter((x) => x.kind === "image").count();
+  const step = (n % 12) * 36;
   const o: PageObject = {
     id: newId(), pageId, kind: "image", w, h, rotation: 0, blobId, z: await nextZ(pageId),
-    x: at ? Math.min(at.x, PAGE_SIZE.w - w) : (PAGE_SIZE.w - w) / 2,
-    y: at ? at.y : (PAGE_SIZE.h - h) / 2,
+    x: at ? Math.min(at.x, PAGE_SIZE.w - w) : Math.max(0, Math.min((PAGE_SIZE.w - w) / 2 + step, PAGE_SIZE.w - w)),
+    y: at ? at.y : Math.max(0, (PAGE_SIZE.h - h) / 2 + step),
   };
   await db.transaction("rw", [db.blobs, db.objects, db.pages, db.notebooks], async () => {
     await db.blobs.add({ id: blobId, data: img.blob });

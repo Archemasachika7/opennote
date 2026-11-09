@@ -15,6 +15,8 @@ import { resolveImageTarget } from "./imageTarget";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { exportPagesPdf } from "../io/exportPdf";
 import { BACKUP_EXT, exportBackup } from "../io/backup";
+import { exportPagesJpg } from "../io/exportImages";
+import { ExportSheet, type ExportRequest } from "./ExportSheet";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
@@ -37,6 +39,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const { mounted, current } = useVisiblePages(scroller, pages.length);
   const [zoom, setZoomRaw] = useState(1);
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
+  const [exporting, setExporting] = useState(false);
   const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
   const width = BASE_WIDTH * zoom;
   usePinchZoom(scroller, setZoomRaw, clampZoom);
@@ -129,6 +132,23 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     }
   }
 
+  async function exportJpg(list: Page[], nbForName: Notebook) {
+    if (list.length === 0) return;
+    toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} as JPG...`);
+    try {
+      const r = await exportPagesJpg(list, nbForName);
+      await platform.saveFile(r.name, r.blob);
+      toast("Images saved");
+    } catch (e) { toast(`JPG export failed: ${String(e)}`); }
+  }
+
+  async function runExport(r: ExportRequest) {
+    setExporting(false);
+    if (!notebook) return;
+    const list = r.indices.map((i) => pages[i]).filter((p): p is Page => !!p);
+    if (r.format === "pdf") await exportPdf(list, notebook.title); else await exportJpg(list, notebook);
+  }
+
   async function saveLive(d: LiveDraft) {
     const s = sheet;
     setSheet(null);
@@ -143,6 +163,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   return (
     <div className="nb-view">
       <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind} onExportPdf={() => exportPdf(pages, notebook.title)}
+        onExportOptions={() => setExporting(true)}
         onExportBackup={async () => {
           const blob = await exportBackup(notebook.id);
           await platform.saveFile(`${safeName(notebook.title)}${BACKUP_EXT}`, blob);
@@ -162,10 +183,12 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
               onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
               onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
               onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
+              onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>
         </div>
       </div>
+      <ExportSheet open={exporting} onClose={() => setExporting(false)} total={pages.length} current={current} onExport={runExport} />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
     </div>

@@ -160,3 +160,35 @@ it("notebook menu exports a .opennote backup", async () => {
   await waitFor(() => expect(save).toHaveBeenCalledWith("Lab.opennote", expect.anything()));
   save.mockRestore();
 });
+
+it("Export dialog sends the chosen page range to JPG export and saves the result", async () => {
+  const user = userEvent.setup();
+  const port = await import("../../src/platform/port");
+  const images = await import("../../src/io/exportImages");
+  const save = vi.spyOn(port.platform, "saveFile").mockResolvedValue();
+  const jpg = vi.spyOn(images, "exportPagesJpg").mockResolvedValue({ blob: new Blob(["j"]), name: "Lab.jpg" });
+  const nb = await setup();
+  const pages = await getPages(nb.id);
+  await user.click(screen.getByRole("button", { name: /notebook options/i }));
+  await user.click(screen.getByRole("menuitem", { name: "Export..." }));
+  const dialog = screen.getByRole("dialog", { name: "Export" });
+  await user.click(within(dialog).getByRole("radio", { name: "JPG images" }));
+  await user.click(within(dialog).getByRole("radio", { name: "Pages" }));
+  await user.type(within(dialog).getByRole("textbox", { name: "Page range" }), "2");
+  await user.click(within(dialog).getByRole("button", { name: "Export" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith("Lab.jpg", expect.anything()));
+  expect(jpg.mock.calls[0][0].map((p) => p.id)).toEqual([pages[1].id]);
+  save.mockRestore(); jpg.mockRestore();
+});
+
+it("Export dialog shows a readable error for a bad range", async () => {
+  const user = userEvent.setup();
+  await setup();
+  await user.click(screen.getByRole("button", { name: /notebook options/i }));
+  await user.click(screen.getByRole("menuitem", { name: "Export..." }));
+  const dialog = screen.getByRole("dialog", { name: "Export" });
+  await user.click(within(dialog).getByRole("radio", { name: "Pages" }));
+  await user.type(within(dialog).getByRole("textbox", { name: "Page range" }), "7");
+  await user.click(within(dialog).getByRole("button", { name: "Export" }));
+  expect(within(dialog).getByText("Pages go from 1 to 2")).toBeInTheDocument();
+});

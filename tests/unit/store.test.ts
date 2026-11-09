@@ -117,3 +117,16 @@ describe("store", () => {
     expect((await getNotebook(nb.id))!.folderId).toBeNull();
   });
 });
+
+it("deleting a page keeps images still used by its duplicate", async () => {
+  const nb = await createNotebook({ title: "A" });
+  const [p] = await getPages(nb.id);
+  await db.blobs.add({ id: "b1", data: new Blob(["img"]) });
+  await db.objects.add({ id: "o1", pageId: p.id, kind: "image", x: 0, y: 0, w: 10, h: 10, rotation: 0, blobId: "b1", z: 1 });
+  const d = await duplicatePage(p.id);
+  await deletePage(p.id);
+  expect(await db.objects.where("pageId").equals(d.id).count()).toBe(1);
+  expect(await db.blobs.get("b1")).toBeTruthy();
+  await deletePage(d.id);
+  expect(await db.blobs.get("b1")).toBeUndefined();
+});

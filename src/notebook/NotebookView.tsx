@@ -62,12 +62,15 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
 
   const [tool] = useTool();
   const curPage = pages[current];
+  const lastTool = useRef(tool.tool);
   useEffect(() => {
-    if (tool.tool !== "image") return;
-    setTool({ tool: "lasso" });
-    if (!curPage || curPage.kind !== "ink") return;
-    void platform.openFile(["image/*"]).then((f) => { if (f) void addImage(curPage.id, f); });
-  }, [tool.tool, curPage]);
+    if (tool.tool !== "image") { lastTool.current = tool.tool; return; }
+    // Image is a one-shot action: open the picker, then go back to the tool the user had.
+    setTool({ tool: lastTool.current });
+    const target = curPage && curPage.kind === "ink" ? curPage : pages.find((p) => p.kind === "ink");
+    if (!target) return;
+    void platform.openFile(["image/*"]).then((f) => { if (f) void addImage(target.id, f); });
+  }, [tool.tool, curPage, pages]);
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {

@@ -82,3 +82,21 @@ it("paper menu switches notebook paper", async () => {
   await user.click(screen.getByRole("menuitem", { name: "Light paper" }));
   await waitFor(async () => expect((await getNotebook(nb.id))!.paper).toBe("light"));
 });
+
+it("image tool returns to the previous tool after the picker closes (even when cancelled)", async () => {
+  const user = userEvent.setup();
+  const port = await import("../../src/platform/port");
+  const spy = vi.spyOn(port.platform, "openFile").mockResolvedValue(null);
+  const { getTool, setTool } = await import("../../src/notebook/tool");
+  setTool({ tool: "pen" });
+  await setup();
+  await user.click(screen.getByRole("button", { name: "Image" }));
+  await waitFor(() => expect(spy).toHaveBeenCalled());
+  await waitFor(() => expect(getTool().tool).toBe("pen"));
+  spy.mockRestore();
+});
+
+it("tool buttons have hover labels", async () => {
+  await setup();
+  expect(screen.getByRole("button", { name: "Lasso" })).toHaveAttribute("title", expect.stringMatching(/lasso/i));
+});

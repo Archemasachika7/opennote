@@ -21,15 +21,15 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
   useEffect(() => {
     if (t.paletteIndex !== null && palette[t.paletteIndex] !== t.color) set({ color: palette[t.paletteIndex] });
   }, [palette, t.paletteIndex, t.color, set]);
-  const tools: { name: ToolName; label: string; icon: JSX.Element }[] = [
-    { name: "pen", label: "Pen", icon: <PenLine {...ICON} /> },
-    { name: "highlighter", label: "Highlighter", icon: <Highlighter {...ICON} /> },
-    { name: "eraser", label: "Eraser", icon: <Eraser {...ICON} /> },
-    { name: "lasso", label: "Lasso", icon: <Lasso {...ICON} /> },
-    { name: "shape", label: "Shapes", icon: <Shapes {...ICON} /> },
-    { name: "text", label: "Text box", icon: <Type {...ICON} /> },
-    { name: "image", label: "Image", icon: <ImageIcon {...ICON} /> },
-    { name: "hand", label: "Hand", icon: <Hand {...ICON} /> },
+  const tools: { name: ToolName; label: string; hint: string; icon: JSX.Element }[] = [
+    { name: "pen", label: "Pen", hint: "Pen (draw)", icon: <PenLine {...ICON} /> },
+    { name: "highlighter", label: "Highlighter", hint: "Highlighter", icon: <Highlighter {...ICON} /> },
+    { name: "eraser", label: "Eraser", hint: "Eraser", icon: <Eraser {...ICON} /> },
+    { name: "lasso", label: "Lasso", hint: "Lasso (select and move, does not draw)", icon: <Lasso {...ICON} /> },
+    { name: "shape", label: "Shapes", hint: "Shapes (hold still at the end to snap)", icon: <Shapes {...ICON} /> },
+    { name: "text", label: "Text box", hint: "Text box (click on the page)", icon: <Type {...ICON} /> },
+    { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
+    { name: "hand", label: "Hand", hint: "Hand (scroll)", icon: <Hand {...ICON} /> },
   ];
   return (
     <header className="nb-toolbar">
@@ -37,7 +37,7 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
       <span className="nb-name">{notebook.title}</span>
       <div className="tool-group" role="toolbar" aria-label="Tools">
         {tools.map((x) => (
-          <button key={x.name} className={`btn ghost icon ${t.tool === x.name ? "active" : ""}`} aria-label={x.label}
+          <button key={x.name} className={`btn ghost icon ${t.tool === x.name ? "active" : ""}`} aria-label={x.label} title={x.hint}
             aria-pressed={t.tool === x.name} onClick={() => set({ tool: x.name })}>{x.icon}</button>
         ))}
       </div>

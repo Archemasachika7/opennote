@@ -130,3 +130,22 @@ it("shapes tool shows a picker of predefined shapes", async () => {
   await user.selectOptions(picker, "star");
   expect(getTool().shapeKind).toBe("star");
 });
+
+it("Outline tab lists headings from text pages and jumps to their page", async () => {
+  const user = userEvent.setup();
+  const { updatePage } = await import("../../src/store/pages");
+  const nb = await createNotebook({ title: "O" });
+  const tp = await insertPage(nb.id, 1, { kind: "text" });
+  await updatePage(tp.id, { doc: { type: "doc", content: [
+    { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Kinematics" }] },
+    { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Velocity" }] },
+  ] } });
+  render(<NotebookView id={nb.id} />);
+  await screen.findAllByTestId("thumb");
+  await user.click(screen.getByRole("tab", { name: "Outline" }));
+  const items = await screen.findAllByTestId("outline-item");
+  expect(items.map((i) => i.textContent)).toEqual(["Kinematics", "Velocity"]);
+  expect(items[1]).toHaveAttribute("data-level", "2");
+  await user.click(items[0]);
+  expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+});

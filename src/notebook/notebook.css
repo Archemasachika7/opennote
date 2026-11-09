@@ -52,3 +52,9 @@
 .mode-switch button > svg, .mode-switch button { z-index: 0; }
 .mode-pill { position: absolute; inset: 0; z-index: -1; border-radius: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent); }
 .mode-switch button.on { background: none; box-shadow: none; }
+.thumb-tabs button { font-size: 12.5px; }
+.outline-row { display: block; width: 100%; padding: 6px 8px; border: 0; background: none; text-align: left; cursor: pointer; border-radius: 4px;
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-row[data-level="1"] { font-weight: 600; }
+.outline-row[data-level="3"] { color: var(--text-dim); }
+.outline-row:hover { background: var(--surface-2); }

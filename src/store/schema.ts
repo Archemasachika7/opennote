@@ -32,7 +32,9 @@ interface PageBase {
   updatedAt: number;
   size: { w: number; h: number };
 }
-export interface InkPage extends PageBase { kind: "ink"; template: Template }
+/** Imported PDF page shown under the ink (never erasable); text is kept for search. */
+export interface PageBackground { blobId: string; pdfText?: string }
+export interface InkPage extends PageBase { kind: "ink"; template: Template; background?: PageBackground }
 export interface TextPage extends PageBase { kind: "text"; doc: unknown | null }
 export interface HtmlPage extends PageBase {
   kind: "html";

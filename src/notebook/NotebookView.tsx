@@ -14,6 +14,7 @@ import { addImage, pasteImages } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { exportPagesPdf } from "../io/exportPdf";
+import { BACKUP_EXT, exportBackup } from "../io/backup";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
@@ -25,6 +26,8 @@ import { LatencyOverlay } from "../dev/LatencyOverlay";
 import "./notebook.css";
 
 const BASE_WIDTH = 860;
+/** File-system safe file name (no reserved characters). */
+export const safeName = (name: string): string => name.replace(/[<>:"/|?*]+/g, "-").trim() || "notebook";
 export const clampZoom = (z: number): number => Math.min(4, Math.max(0.5, z));
 
 export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
@@ -117,7 +120,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} to PDF...`);
     try {
       const r = await exportPagesPdf(list, notebook);
-      const safe = name.replace(/[<>:"/|?*]+/g, "-").trim() || "notebook";
+      const safe = safeName(name);
       await platform.saveFile(`${safe}.pdf`, new Blob([r.bytes as BlobPart], { type: "application/pdf" }));
       toast(`PDF saved (${r.pdfPages} ${r.pdfPages === 1 ? "page" : "pages"})` +
         (r.livesAsCards ? ` - ${r.livesAsCards} live ${r.livesAsCards === 1 ? "page" : "pages"} shown as a card` : ""));
@@ -140,6 +143,11 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   return (
     <div className="nb-view">
       <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind} onExportPdf={() => exportPdf(pages, notebook.title)}
+        onExportBackup={async () => {
+          const blob = await exportBackup(notebook.id);
+          await platform.saveFile(`${safeName(notebook.title)}${BACKUP_EXT}`, blob);
+          toast("Backup saved");
+        }}
         onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
       <div className="nb-body">
         <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}

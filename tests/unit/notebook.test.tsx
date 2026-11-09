@@ -149,3 +149,14 @@ it("Outline tab lists headings from text pages and jumps to their page", async (
   await user.click(items[0]);
   expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
 });
+
+it("notebook menu exports a .opennote backup", async () => {
+  const user = userEvent.setup();
+  const port = await import("../../src/platform/port");
+  const save = vi.spyOn(port.platform, "saveFile").mockResolvedValue();
+  await setup();
+  await user.click(screen.getByRole("button", { name: /notebook options/i }));
+  await user.click(screen.getByRole("menuitem", { name: "Export backup (.opennote)" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith("Lab.opennote", expect.anything()));
+  save.mockRestore();
+});

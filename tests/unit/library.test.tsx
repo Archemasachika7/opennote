@@ -152,3 +152,20 @@ describe("searchAll", () => {
     expect(await searchAll("")).toEqual([]);
   });
 });
+
+describe("import", () => {
+  it("Import with a .opennote file adds the notebook copy", async () => {
+    const user = userEvent.setup();
+    const port = await import("../../src/platform/port");
+    const backup = await import("../../src/io/backup");
+    const file = new File(["zip"], "Bio.opennote");
+    const pick = vi.spyOn(port.platform, "openFile").mockResolvedValue(file);
+    const imp = vi.spyOn(backup, "importBackup").mockImplementation(async () => createNotebook({ title: "Bio copy" }));
+    render(<LibraryView />);
+    await user.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() => expect(imp).toHaveBeenCalledWith(file));
+    expect(await screen.findByText("Bio copy")).toBeInTheDocument();
+    expect(pick).toHaveBeenCalledWith([".opennote", ".pdf", "application/pdf"]);
+    pick.mockRestore(); imp.mockRestore();
+  });
+});

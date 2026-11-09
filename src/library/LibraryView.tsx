@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckSquare, FolderPlus, LayoutGrid, List, Plus, Search, Star, Trash2, X } from "lucide-react";
+import { CheckSquare, FolderPlus, LayoutGrid, List, Plus, Search, Star, Trash2, Upload, X } from "lucide-react";
 import { navigate } from "../App";
 import { db, type Notebook } from "../store/schema";
 import {
@@ -15,6 +15,8 @@ import { platform } from "../platform/port";
 import { Sheet } from "../ui/Sheet";
 import { motionTokens } from "../ui/motion";
 import { NotebookCard } from "./NotebookCard";
+import { importFile } from "../io/importFile";
+import { toast } from "../ui/Toast";
 import "./library.css";
 
 type Filter = { kind: "all" } | { kind: "favorites" } | { kind: "trash" } | { kind: "folder"; id: string | null };
@@ -74,6 +76,11 @@ export function LibraryView() {
           <Search {...I} aria-hidden />
           <input type="search" placeholder="Search notes and live pages" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
+        <button className="btn" onClick={async () => {
+          const f = await platform.openFile([".opennote", ".pdf", "application/pdf"]);
+          if (!f) return;
+          try { const nb = await importFile(f); toast(`Imported "${nb.title}"`); } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+        }}><Upload {...I} />Import</button>
         <button className="btn" onClick={() => setNaming(true)}><FolderPlus {...I} />New folder</button>
         <button className="btn primary" onClick={newNotebook}><Plus {...I} />New notebook</button>
       </header>

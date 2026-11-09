@@ -5,7 +5,7 @@ import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selec
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, setTool, useTool } from "../notebook/tool";
-import { classifyPointer, coalesced, predicted } from "./input";
+import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
 import { createHistory, type History, type Op } from "./history";
 import { hitTest, snapShape, splitByEraser } from "./geometry";
 import { paintStroke, strokePath } from "./render";
@@ -174,7 +174,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     if (!kind) return;
     if (selection) setSelection(null);
     e.preventDefault();
-    surface.current?.setPointerCapture?.(e.pointerId);
+    tryCapture(surface.current, e.pointerId);
     const now = performance.now();
     const pen = e.pointerType === "pen";
     const [x, y] = toLogical(e);

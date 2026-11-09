@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Copy, Crop, Palette, RotateCw, Trash2 } from "lucide-react";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
+import { tryCapture } from "./input";
 
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
@@ -31,7 +32,7 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
 
   const start = (mode: "move" | "scale" | "rotate") => (e: React.PointerEvent) => {
     e.stopPropagation();
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    tryCapture(e.currentTarget as Element, e.pointerId);
     drag.current = { mode, x: e.clientX, y: e.clientY };
   };
   const move = (e: React.PointerEvent) => { if (drag.current) onPreview(compute(e)); };

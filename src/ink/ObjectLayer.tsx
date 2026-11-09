@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PageObject } from "../store/schema";
 import { getBlob, updateObject, addTextBox } from "./objects";
+import { tryCapture } from "./input";
 
 function useBlobUrl(blobId?: string): string | null {
   const [url, setUrl] = useState<string | null>(null);
@@ -27,7 +28,7 @@ function ImageObj({ o, scale, cropping, onCrop }: { o: PageObject; scale: number
 
   const down = (edge: string) => (e: React.PointerEvent) => {
     e.stopPropagation();
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    tryCapture(e.target as Element, e.pointerId);
     drag.current = { edge, x: e.clientX, y: e.clientY, start: o };
   };
   const move = (e: React.PointerEvent) => {

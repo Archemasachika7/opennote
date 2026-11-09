@@ -100,3 +100,16 @@ it("shape tool snaps a held straight line to 2 points", async () => {
   expect((await getStrokes(pageId))[0].points.length / 4).toBe(2);
   now.mockRestore();
 });
+
+it("still draws when setPointerCapture throws (pointer no longer active)", async () => {
+  const proto = Element.prototype as unknown as { setPointerCapture?: (id: number) => void };
+  const original = proto.setPointerCapture;
+  proto.setPointerCapture = () => { throw new DOMException("No active pointer with the given id is found.", "NotFoundError"); };
+  try {
+    const { getByTestId } = render(layer());
+    draw(getByTestId("ink-surface"), hline(60));
+    await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
+  } finally {
+    proto.setPointerCapture = original;
+  }
+});

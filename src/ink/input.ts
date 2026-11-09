@@ -23,3 +23,8 @@ export function coalesced(e: PointerEvent): PointerEvent[] {
 export function predicted(e: PointerEvent): PointerEvent[] {
   return typeof e.getPredictedEvents === "function" ? e.getPredictedEvents() : [];
 }
+
+/** Pointer capture is best-effort: it throws when the pointer is no longer active (e.g. synthetic or already lifted). */
+export function tryCapture(el: Element | null | undefined, pointerId: number): void {
+  try { el?.setPointerCapture?.(pointerId); } catch { /* capture is an optimisation, not required */ }
+}

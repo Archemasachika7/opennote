@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { fixture, newNotebook } from "./helpers";
 
 test("draw, add text, smart-paste a React artifact, reload: everything is still there", async ({ page }) => {
+  test.setTimeout(60_000);
   await newNotebook(page);
 
   // pen stroke on page 1
@@ -25,6 +26,13 @@ test("draw, add text, smart-paste a React artifact, reload: everything is still 
   await editor.click();
   await page.keyboard.type("Lecture 4 notes");
   await page.locator(".nb-scroll").click({ position: { x: 5, y: 5 } }); // blur -> save
+  await expect.poll(() => page.evaluate(() => new Promise<string>((resolve) => {
+    const req = indexedDB.open("opennote");
+    req.onsuccess = () => {
+      const all = req.result.transaction("pages").objectStore("pages").getAll();
+      all.onsuccess = () => resolve(JSON.stringify(all.result.filter((p: { kind: string }) => p.kind === "text")));
+    };
+  })), { timeout: 10000 }).toContain("Lecture 4 notes");
 
   // smart paste of an AI artifact
   await page.evaluate((src) => {

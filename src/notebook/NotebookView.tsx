@@ -11,6 +11,7 @@ import { useVisiblePages } from "./useVisiblePages";
 import { usePinchZoom } from "./usePinchZoom";
 import { sendCommand, setTool, useTool } from "./tool";
 import { addImage, pasteImages } from "../ink/objects";
+import { resolveImageTarget } from "./imageTarget";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
 import { useSmartPaste } from "../live/useSmartPaste";
@@ -67,23 +68,26 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     if (tool.tool !== "image") { lastTool.current = tool.tool; return; }
     // Image is a one-shot action: open the picker, then go back to the tool the user had.
     setTool({ tool: lastTool.current });
-    const target = curPage && curPage.kind === "ink" ? curPage : pages.find((p) => p.kind === "ink");
-    if (!target) return;
-    void platform.openFiles(["image/*"]).then(async (files) => { for (const f of files) await addImage(target.id, f); });
-  }, [tool.tool, curPage, pages]);
+    const snapshot = { pages, current };
+    void platform.openFiles(["image/*"]).then(async (files) => {
+      if (files.length === 0) return;
+      const pageId = await resolveImageTarget(id, snapshot.pages, snapshot.current);
+      for (const f of files) await addImage(pageId, f);
+    });
+  }, [tool.tool]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest?.("input, textarea, [contenteditable=true]")) return;
       const files = [...(e.clipboardData?.files ?? [])].filter((x) => x.type.startsWith("image/"));
-      if (files.length === 0 || !curPage || curPage.kind !== "ink") return;
+      if (files.length === 0) return;
       e.preventDefault();
-      void pasteImages(files, curPage.id);
+      void resolveImageTarget(id, pages, current).then((pageId) => pasteImages(files, pageId));
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [curPage]);
+  }, [id, pages, current]);
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setSheet({ index }); return; }

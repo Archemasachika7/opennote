@@ -13,11 +13,12 @@ export function useVisiblePages(container: RefObject<HTMLElement | null>, count:
         for (const e of entries) {
           const i = Number((e.target as HTMLElement).dataset.pageIndex);
           if (Number.isNaN(i)) continue;
-          if (e.isIntersecting) next.set(i, e.intersectionRatio); else next.delete(i);
+          // rank by visible pixel height: a tall page filling the screen beats a fully visible sliver
+          if (e.isIntersecting) next.set(i, e.intersectionRect?.height ?? e.intersectionRatio); else next.delete(i);
         }
         return next;
       });
-    }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+    }, { threshold: Array.from({ length: 21 }, (_, k) => k / 20) });
     root.querySelectorAll<HTMLElement>("[data-page-index]").forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [container, count]);

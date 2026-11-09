@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2, PenLine, Redo2,
   Shapes, Type, Undo2, ZoomIn, ZoomOut,
@@ -18,6 +18,9 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
 }) {
   const [t, set] = useTool();
   const [menu, setMenu] = useState(false);
+  useEffect(() => {
+    if (t.paletteIndex !== null && palette[t.paletteIndex] !== t.color) set({ color: palette[t.paletteIndex] });
+  }, [palette, t.paletteIndex, t.color, set]);
   const tools: { name: ToolName; label: string; icon: JSX.Element }[] = [
     { name: "pen", label: "Pen", icon: <PenLine {...ICON} /> },
     { name: "highlighter", label: "Highlighter", icon: <Highlighter {...ICON} /> },

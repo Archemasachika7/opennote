@@ -11,6 +11,8 @@ import { useVisiblePages } from "./useVisiblePages";
 import { usePinchZoom } from "./usePinchZoom";
 import { sendCommand } from "./tool";
 import type { InsertKind } from "./InsertMenu";
+import { inkPalette } from "../ink/render";
+import { LatencyOverlay } from "../dev/LatencyOverlay";
 import "./notebook.css";
 
 const BASE_WIDTH = 860;
@@ -62,7 +64,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const cur = pages[current];
   return (
     <div className="nb-view">
-      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom}
+      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)}
         onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
       <div className="nb-body">
         <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}
@@ -76,6 +78,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
           </div>
         </div>
       </div>
+      {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
     </div>
   );
 }

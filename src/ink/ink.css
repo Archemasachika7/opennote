@@ -1,0 +1,2 @@
+.ink-surface { position: absolute; inset: 0; user-select: none; -webkit-user-select: none; }
+.ink-canvas { position: absolute; left: 0; top: 0; pointer-events: none; }

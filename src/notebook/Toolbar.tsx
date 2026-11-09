@@ -1,4 +1,7 @@
+"use client";
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
+import { springs } from "../ui/motion";
 import {
   ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2, PenLine, Redo2,
   Shapes, Type, Undo2, ZoomIn, ZoomOut,
@@ -12,7 +15,7 @@ import { SHAPES } from "../ink/shapes";
 import type { PenVariant } from "../ink/model";
 
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
-export const DEFAULT_COLORS = ["#E8E9EE", "#7C5CFF", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
+export const DEFAULT_COLORS = ["#E8E9EE", "#4FD1C5", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
 
 export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind, onExportPdf }: {
   notebook: Notebook; zoom: number; setZoom: (z: number) => void; onUndo: () => void; onRedo: () => void; palette?: string[];
@@ -49,9 +52,9 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
         </select>
       )}
       {t.tool === "shape" && (
-        <select className="input" aria-label="Shape" title="Drag on the page to draw. Hold Shift for perfect squares, circles and 45 degree lines."
+        <select className="input" aria-label="Shape" title="Drag on the page to draw. Hold Shift for perfect squares, circles and 45 degree lines. Auto: draw by hand and hold still to snap."
           value={t.shapeKind} onChange={(e) => set({ shapeKind: e.target.value as ToolState["shapeKind"] })}>
-          <option value="auto">Auto (draw by hand, hold to snap)</option>
+          <option value="auto">Auto (hold to snap)</option>
           {SHAPES.map((s) => <option key={s.kind} value={s.kind}>{s.label}</option>)}
         </select>
       )}
@@ -85,9 +88,13 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
         <div className="mode-switch" role="radiogroup" aria-label="Mouse on this page"
           title="A pen always writes. This chooses what the mouse or finger does on text and live pages.">
           <button role="radio" aria-checked={t.mode === "interact"} className={t.mode === "interact" ? "on" : ""}
-            onClick={() => set({ mode: "interact" })}><MousePointer2 {...ICON} />Use page</button>
+            onClick={() => set({ mode: "interact" })}>
+            {t.mode === "interact" && <motion.span layoutId="mode-pill" className="mode-pill" transition={springs.snappy} />}
+            <MousePointer2 {...ICON} />Use page</button>
           <button role="radio" aria-checked={t.mode === "annotate"} className={t.mode === "annotate" ? "on" : ""}
-            onClick={() => set({ mode: "annotate" })}><PenLine {...ICON} />Write on page</button>
+            onClick={() => set({ mode: "annotate" })}>
+            {t.mode === "annotate" && <motion.span layoutId="mode-pill" className="mode-pill" transition={springs.snappy} />}
+            <PenLine {...ICON} />Write on page</button>
         </div>
       )}
       <div className="tool-group">

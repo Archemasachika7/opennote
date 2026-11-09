@@ -124,7 +124,7 @@ it("shapes tool shows a picker of predefined shapes", async () => {
   await setup();
   await user.click(screen.getByRole("button", { name: "Shapes" }));
   const picker = screen.getByRole("combobox", { name: "Shape" });
-  for (const label of ["Auto (draw by hand, hold to snap)", "Line", "Arrow", "Rectangle", "Rounded rectangle", "Ellipse / circle", "Triangle", "Diamond", "Star"]) {
+  for (const label of ["Auto (hold to snap)", "Line", "Arrow", "Rectangle", "Rounded rectangle", "Ellipse / circle", "Triangle", "Diamond", "Star"]) {
     expect(within(picker).getByRole("option", { name: label })).toBeInTheDocument();
   }
   await user.selectOptions(picker, "star");

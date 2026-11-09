@@ -60,3 +60,12 @@ h1, h2, h3 { font-family: var(--font-title); font-weight: 600; margin: 0; letter
   height: 32px; padding: 0 10px; border-radius: var(--radius);
   border: 1px solid var(--line); background: var(--bg);
 }
+
+/* Press feedback mirrors motionTokens (fast = 0.18s, press scale = 0.95). */
+.btn, .chip, .gap-btn, .swatch, .thumb, .menu button { transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.18s, border-color 0.18s, color 0.18s; }
+.btn:active:not([disabled]), .chip:active, .gap-btn:active, .swatch:active { transform: scale(0.95); }
+::selection { background: rgb(245 165 36 / 0.35); }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .chip, .gap-btn, .swatch, .thumb, .menu button { transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+  .btn:active, .chip:active, .gap-btn:active, .swatch:active { transform: none; }
+}

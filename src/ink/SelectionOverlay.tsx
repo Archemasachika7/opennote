@@ -1,4 +1,7 @@
+"use client";
 import { useRef } from "react";
+import { motion } from "motion/react";
+import { motionTokens } from "../ui/motion";
 import { ClipboardCopy, Copy, Crop, Palette, RotateCw, Scissors, Trash2 } from "lucide-react";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
@@ -57,7 +60,8 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
 
   const t = `translate(${xf.dx * scale}px, ${xf.dy * scale}px)`;
   return (
-    <div className="sel" data-testid="selection" onPointerDown={start("move")}
+    <motion.div className="sel" data-testid="selection" onPointerDown={start("move")}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: motionTokens.duration.fast }}
       style={{ left: box.x * scale, top: box.y * scale, width: box.w * scale, height: box.h * scale, transform: t }}>
       <span className="sel-rot" data-testid="sel-rotate" onPointerDown={start("rotate")}><RotateCw {...I} /></span>
       <span className="sel-scale" data-testid="sel-scale" onPointerDown={start("scale")} />
@@ -69,6 +73,6 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
         {onCrop && <button className="btn ghost icon" aria-label="Crop image" onClick={onCrop}><Crop {...I} /></button>}
         <button className="btn ghost icon" aria-label="Delete selection" onClick={onDelete}><Trash2 {...I} /></button>
       </div>
-    </div>
+    </motion.div>
   );
 }

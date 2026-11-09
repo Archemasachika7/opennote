@@ -42,4 +42,4 @@ it("a live page that froze last time starts paused with an explanation", async (
   expect(await screen.findByText(/stopped responding last time/i)).toBeInTheDocument();
   expect(document.querySelector("iframe")).toBeNull();
   expect(screen.getAllByRole("button", { name: /run/i }).length).toBeGreaterThan(0);
-});
+}, 15_000); // re-imports the whole live-page module graph after resetModules

@@ -3,8 +3,8 @@ import { STRIDE, type Stroke } from "./model";
 import type { Paper } from "../store/schema";
 
 const PALETTES: Record<Paper, string[]> = {
-  dark: ["#E8E9EE", "#A996FF", "#3DDC97", "#FF9E6B", "#6CC4FF", "#F2C94C", "#FF8A8A", "#B4B7C3"],
-  light: ["#16171C", "#5B3DF5", "#08704A", "#B5430F", "#1F5FBF", "#8A6100", "#C0262B", "#4A4D5A"],
+  dark: ["#E8E9EE", "#4FD1C5", "#3DDC97", "#FF9E6B", "#6CC4FF", "#F2C94C", "#FF8A8A", "#B4B7C3"],
+  light: ["#16171C", "#0F766E", "#08704A", "#B5430F", "#1F5FBF", "#8A6100", "#C0262B", "#4A4D5A"],
 };
 
 /** 8 ink colours, each >= 4.5:1 contrast on the given paper. Index i means the same hue on both papers. */

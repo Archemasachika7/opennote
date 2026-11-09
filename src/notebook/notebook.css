@@ -48,3 +48,7 @@
 .mode-switch button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 4px;
   background: none; color: var(--text-dim); cursor: pointer; }
 .mode-switch button.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.mode-switch button { position: relative; }
+.mode-switch button > svg, .mode-switch button { z-index: 0; }
+.mode-pill { position: absolute; inset: 0; z-index: -1; border-radius: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent); }
+.mode-switch button.on { background: none; box-shadow: none; }

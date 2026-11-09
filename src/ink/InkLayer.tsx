@@ -160,7 +160,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     }
     if (a.kind === "lasso") {
       ctx.save();
-      ctx.strokeStyle = "#7C5CFF";
+      ctx.strokeStyle = "#F5A524";
       ctx.lineWidth = 2 / scale;
       ctx.setLineDash([8 / scale, 6 / scale]);
       ctx.beginPath();

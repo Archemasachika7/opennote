@@ -1,4 +1,7 @@
+"use client";
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { motionTokens } from "../ui/motion";
 import { FolderPlus, Plus, Search } from "lucide-react";
 import { navigate } from "../App";
 import { db, type Notebook } from "../store/schema";
@@ -77,14 +80,17 @@ export function LibraryView() {
               <p className="dim">Create one, then paste an AI artifact into it to make a live page.</p>
             </div>
           ) : (
-            <section className="grid">
+            <motion.section className="grid" initial="hidden" animate="visible"
+              variants={{ visible: { transition: { staggerChildren: motionTokens.stagger } } }}>
+              <AnimatePresence mode="popLayout">
               {notebooks.map((nb) => (
                 <NotebookCard key={nb.id} nb={nb} liveCount={liveCounts.get(nb.id) ?? 0}
                   onOpen={() => navigate(`/nb/${nb.id}`)}
                   onRename={(t) => renameNotebook(nb.id, t)}
                   onDelete={() => setDoomed(nb)} />
               ))}
-            </section>
+              </AnimatePresence>
+            </motion.section>
           )}
         </>
       )}

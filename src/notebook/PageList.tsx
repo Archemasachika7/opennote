@@ -1,4 +1,7 @@
+"use client";
 import { useState, type ReactNode } from "react";
+import { motion } from "motion/react";
+import { motionTokens, springs, useSafeMotion } from "../ui/motion";
 import { MoreHorizontal } from "lucide-react";
 import type { Notebook, Page, Template } from "../store/schema";
 import { Menu, type MenuItem } from "../ui/Menu";
@@ -12,6 +15,8 @@ export function PageList({ pages, notebook, mounted, width, renderPage, onDuplic
   onDuplicate: (p: Page) => void; onDelete: (p: Page) => void; onBookmark: (p: Page) => void; onTemplate: (p: Page, t: Template) => void; onPaste?: (p: Page) => void; onExportPage?: (p: Page) => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const safe = useSafeMotion(motionTokens.distance.lg);
+  const [mountedAt] = useState(() => Date.now());
   return (
     <>
       {pages.map((p, i) => {
@@ -24,7 +29,10 @@ export function PageList({ pages, notebook, mounted, width, renderPage, onDuplic
           { label: "Delete", danger: true, onSelect: () => onDelete(p) },
         ];
         return (
-          <section key={p.id} className={`page-wrap ${p.kind === "html" ? "live" : ""}`} data-page-index={i} id={`page-${p.id}`}>
+          <motion.section key={p.id} className={`page-wrap ${p.kind === "html" ? "live" : ""}`} data-page-index={i} id={`page-${p.id}`}
+            // only pages created while the notebook is open animate in; existing pages appear at once
+            initial={p.createdAt > mountedAt ? safe.initial : false} animate={safe.animate}
+            transition={safe.reduce ? safe.transition : springs.gentle}>
             <header className="page-head">
               <span className="mono dim">{i + 1}</span>
               {p.kind === "html" && <span className="live-tag mono inline">LIVE</span>}
@@ -37,7 +45,7 @@ export function PageList({ pages, notebook, mounted, width, renderPage, onDuplic
               </div>
             </header>
             {renderPage(p, i, mounted.has(i), width)}
-          </section>
+          </motion.section>
         );
       })}
     </>

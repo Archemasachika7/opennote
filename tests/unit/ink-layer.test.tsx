@@ -47,7 +47,7 @@ it("touch does not draw once a pen was seen", async () => {
   draw(el, hline(50));
   await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
   draw(el, hline(120), "touch");
-  await new Promise((r) => setTimeout(r, 30));
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
   expect(await getStrokes(pageId)).toHaveLength(1);
 });
 
@@ -63,7 +63,7 @@ it("partial eraser splits a stroke in two", async () => {
   await seedLine();
   setTool({ tool: "eraser", eraseMode: "partial" });
   const { getByTestId } = render(layer());
-  await new Promise((r) => setTimeout(r, 20));
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
   draw(getByTestId("ink-surface"), [[150, 80], [150, 100], [150, 120]]);
   await waitFor(async () => {
     const s = await getStrokes(pageId);
@@ -76,7 +76,7 @@ it("stroke eraser removes the whole stroke and undo restores it", async () => {
   await seedLine();
   setTool({ tool: "eraser", eraseMode: "stroke" });
   const { getByTestId } = render(layer());
-  await new Promise((r) => setTimeout(r, 20));
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
   draw(getByTestId("ink-surface"), [[150, 90], [150, 110]]);
   await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(0));
   await act(async () => { sendCommand("undo", pageId); });

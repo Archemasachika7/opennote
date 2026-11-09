@@ -28,6 +28,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   objects?: PageObject[]; onPreviewObjects?: (o: PageObject[] | null) => void; disabled?: boolean; onCropRequest?: (id: string) => void;
 }) {
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [previewXf, setPreviewXf] = useState<Xf>(IDENTITY);
   const [tool] = useTool();
   const surface = useRef<HTMLDivElement>(null);
@@ -80,6 +81,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       strokes.current = new Map(list.map((s) => [s.id, s]));
       paths.current.clear();
       redrawDry();
+      setLoaded(true);
     });
     return () => { alive = false; };
   }, [pageId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -292,7 +294,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
 
   const touchAction = tool.tool === "hand" ? "auto" : tool.penSeen ? "pan-x pan-y" : "none";
   return (
-    <div ref={surface} className="ink-surface" data-testid="ink-surface" style={{ width, height, touchAction, pointerEvents: disabled ? "none" : undefined }}
+    <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined} style={{ width, height, touchAction, pointerEvents: disabled ? "none" : undefined }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
       <canvas ref={dry} className="ink-canvas" style={{ width, height }} />
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />

@@ -67,7 +67,8 @@ it("lasso moves a stroke and an image together; one undo restores both", async (
   const before = (await getObjects(pageId))[0];
   setTool({ tool: "lasso" });
   const { getByTestId } = render(page());
-  await new Promise((r) => setTimeout(r, 30));
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
+  await screen.findByTestId(`obj-${o.id}`);
   const surf = getByTestId("ink-surface");
   const loop: [number, number][] = [[150, 150], [1400, 150], [1400, 1800], [150, 1800], [150, 150]];
   fireEvent.pointerDown(surf, { pointerId: 1, pointerType: "mouse", clientX: loop[0][0], clientY: loop[0][1], buttons: 1 });
@@ -97,4 +98,22 @@ it("text tool creates a text box that persists typing", async () => {
   const box = await screen.findByRole("textbox", { name: /text box/i });
   await user.type(box, "hello");
   await waitFor(async () => expect((await getObjects(pageId))[0].text).toBe("hello"));
+});
+
+it("lasso moves a lone stroke", async () => {
+  const pts = new Float32Array([200, 200, 0.5, 0, 260, 200, 0.5, 1, 320, 200, 0.5, 2]);
+  await putStroke(pageId, { id: "solo", tool: "pen", variant: "ball", color: "#fff", width: 3, points: pts });
+  setTool({ tool: "lasso" });
+  const { getByTestId } = render(page());
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
+  const surf = getByTestId("ink-surface");
+  const loop: [number, number][] = [[150, 150], [400, 150], [400, 260], [150, 260], [150, 150]];
+  fireEvent.pointerDown(surf, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 150, buttons: 1 });
+  for (const [x, y] of loop.slice(1)) fireEvent.pointerMove(surf, { pointerId: 1, pointerType: "mouse", clientX: x, clientY: y, buttons: 1 });
+  fireEvent.pointerUp(surf, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 150 });
+  const box = await screen.findByTestId("selection");
+  fireEvent.pointerDown(box, { pointerId: 3, pointerType: "mouse", clientX: 300, clientY: 200, buttons: 1 });
+  fireEvent.pointerMove(box, { pointerId: 3, pointerType: "mouse", clientX: 300, clientY: 260, buttons: 1 });
+  fireEvent.pointerUp(box, { pointerId: 3, pointerType: "mouse", clientX: 300, clientY: 260 });
+  await waitFor(async () => expect((await getStrokes(pageId))[0].points[1]).toBeCloseTo(260));
 });

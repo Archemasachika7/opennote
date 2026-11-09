@@ -1,11 +1,14 @@
 import { useSyncExternalStore } from "react";
 import { ToastHost } from "./ui/Toast";
+import { LibraryView } from "./library/LibraryView";
 
-export type Route = { name: "library" } | { name: "notebook"; id: string };
+export type Route = { name: "library" } | { name: "notebook"; id: string; pageId?: string };
 
 function parse(hash: string): Route {
-  const m = /^#\/nb\/([^/?]+)/.exec(hash);
-  return m ? { name: "notebook", id: decodeURIComponent(m[1]) } : { name: "library" };
+  const m = /^#\/nb\/([^/?]+)(?:\?p=([^&]+))?/.exec(hash);
+  if (!m) return { name: "library" };
+  return m[2] ? { name: "notebook", id: decodeURIComponent(m[1]), pageId: decodeURIComponent(m[2]) }
+    : { name: "notebook", id: decodeURIComponent(m[1]) };
 }
 
 let cached: { hash: string; route: Route } | null = null;
@@ -32,7 +35,7 @@ export function App() {
   return (
     <>
       {route.name === "library"
-        ? <main style={{ padding: 24 }}><h1>OpenNote</h1></main>
+        ? <LibraryView />
         : <main style={{ padding: 24 }}><h1>Notebook</h1></main>}
       <ToastHost />
     </>

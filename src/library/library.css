@@ -1,0 +1,30 @@
+.library { max-width: 1200px; margin: 0 auto; padding: 20px 24px 64px; }
+.lib-header { display: flex; align-items: center; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.wordmark { font-size: 20px; margin-right: auto; }
+.lib-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; width: min(360px, 40vw);
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text-dim); }
+.lib-search input { flex: 1; border: 0; background: none; outline: none; color: var(--text); }
+.lib-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line); background: none; cursor: pointer; color: var(--text-dim); }
+.chip.on { color: var(--text); border-color: var(--accent); background: var(--surface-2); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 20px; }
+.nb-card { display: flex; flex-direction: column; gap: 8px; }
+.nb-cover { position: relative; aspect-ratio: 3 / 4; border-radius: var(--radius); border: 1px solid var(--line);
+  background: var(--surface); cursor: pointer; overflow: hidden; text-align: left; padding: 0; }
+.nb-cover:hover { border-color: var(--text-dim); }
+.nb-spine { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; }
+.nb-pages { position: absolute; left: 22px; bottom: 12px; font-size: 11px; color: var(--text-dim); }
+.live-tag { position: absolute; right: 10px; top: 10px; font-size: 10px; letter-spacing: 0.06em; color: var(--live);
+  border: 1px solid var(--live); border-radius: 3px; padding: 1px 5px; }
+.nb-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 32px; }
+.nb-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { padding: 80px 0; text-align: center; display: grid; gap: 8px; }
+.dim { color: var(--text-dim); margin: 0; }
+.row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.lib-results { display: grid; gap: 4px; padding-top: 14px; }
+.hit { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--radius);
+  background: none; cursor: pointer; }
+.hit:hover { background: var(--surface); border-color: var(--line); }
+.hit-title { font-weight: 500; }
+.hit-snippet { font-size: 13px; }

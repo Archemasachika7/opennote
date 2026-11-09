@@ -12,6 +12,7 @@ import { usePinchZoom } from "./usePinchZoom";
 import { sendCommand, setTool, useTool } from "./tool";
 import { addImage, pasteImages } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
+import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
 import { useSmartPaste } from "../live/useSmartPaste";
@@ -80,6 +81,12 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     const onPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest?.("input, textarea, [contenteditable=true]")) return;
+      const text = e.clipboardData?.getData("text/plain") ?? "";
+      if (hasClipboard() && (text === CLIP_MARKER || text === "")) {
+        e.preventDefault();
+        void resolveImageTarget(id, pages, current).then((pageId) => pasteClipboard(pageId));
+        return;
+      }
       const files = [...(e.clipboardData?.files ?? [])].filter((x) => x.type.startsWith("image/"));
       if (files.length === 0) return;
       e.preventDefault();
@@ -129,6 +136,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
                   onEditLive={(pg) => pg.kind === "html" && setSheet({ index: i, edit: pg, initial: { title: pg.title, source: pg.source, artifactType: pg.artifactType, allowNetwork: pg.allowNetwork } })} />
               )}
               onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
+              onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>
         </div>

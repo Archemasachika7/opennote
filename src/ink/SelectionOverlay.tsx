@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Copy, Crop, Palette, RotateCw, Trash2 } from "lucide-react";
+import { ClipboardCopy, Copy, Crop, Palette, RotateCw, Scissors, Trash2 } from "lucide-react";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
 import { tryCapture } from "./input";
@@ -7,9 +7,9 @@ import { tryCapture } from "./input";
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
 /** Selection box with move (drag body), uniform scale (corner) and rotate (top handle). */
-export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop }: {
+export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut }: {
   box: Box; scale: number; xf: Xf; onPreview: (m: Xf) => void; onCommit: (m: Xf) => void;
-  onDelete: () => void; onDuplicate: () => void; onRecolor: () => void; onCrop?: () => void;
+  onDelete: () => void; onDuplicate: () => void; onRecolor: () => void; onCrop?: () => void; onCopy?: () => void; onCut?: () => void;
 }) {
   const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number } | null>(null);
   const cx = box.x + box.w / 2;
@@ -63,7 +63,9 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
       <span className="sel-scale" data-testid="sel-scale" onPointerDown={start("scale")} />
       <div className="sel-bar" onPointerDown={(e) => e.stopPropagation()}>
         <button className="btn ghost icon" aria-label="Recolour selection" onClick={onRecolor}><Palette {...I} /></button>
-        <button className="btn ghost icon" aria-label="Duplicate selection" onClick={onDuplicate}><Copy {...I} /></button>
+        {onCopy && <button className="btn ghost icon" aria-label="Copy selection" title="Copy (Ctrl+C), then paste on any page with Ctrl+V" onClick={onCopy}><ClipboardCopy {...I} /></button>}
+        {onCut && <button className="btn ghost icon" aria-label="Cut selection" title="Cut (Ctrl+X) to move it to another page" onClick={onCut}><Scissors {...I} /></button>}
+        <button className="btn ghost icon" aria-label="Duplicate selection" title="Duplicate" onClick={onDuplicate}><Copy {...I} /></button>
         {onCrop && <button className="btn ghost icon" aria-label="Crop image" onClick={onCrop}><Crop {...I} /></button>}
         <button className="btn ghost icon" aria-label="Delete selection" onClick={onDelete}><Trash2 {...I} /></button>
       </div>

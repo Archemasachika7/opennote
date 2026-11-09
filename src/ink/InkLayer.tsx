@@ -6,7 +6,9 @@ import { SelectionOverlay } from "./SelectionOverlay";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, setTool, useTool } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
-import { createHistory, type History, type Op } from "./history";
+import { historyFor, type Op } from "./history";
+import { onPageChanged } from "./pageEvents";
+import { copyToClipboard, cutToClipboard } from "./clipboard";
 import { hitTest, snapShape, splitByEraser } from "./geometry";
 import { paintStroke, strokePath } from "./render";
 import type { Stroke } from "./model";
@@ -14,12 +16,7 @@ import "./ink.css";
 
 const ERASER_RADIUS = 8;
 const SNAP_HOLD_MS = 500;
-const histories = new Map<string, History>();
-export const historyFor = (pageId: string): History => {
-  let h = histories.get(pageId);
-  if (!h) { h = createHistory(); histories.set(pageId, h); }
-  return h;
-};
+export { historyFor };
 
 type Active = { id: number; kind: "stroke" | "erase" | "lasso"; pts: number[]; start: number; lastMove: number; pen: boolean };
 
@@ -90,6 +87,17 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   }, [pageId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { redrawDry(); }, [redrawDry]);
+
+  // Paste/cut from elsewhere changed this page's strokes: reload them.
+  useEffect(() => onPageChanged((id) => {
+    if (id !== pageId) return;
+    void getStrokes(pageId).then((list) => {
+      strokes.current = new Map(list.map((s) => [s.id, s]));
+      paths.current.clear();
+      setSelection(null);
+      redrawDry();
+    });
+  }), [pageId, redrawDry]);
 
   const apply = useCallback(async (remove: Stroke[], add: Stroke[]) => {
     for (const s of remove) { strokes.current.delete(s.id); paths.current.delete(s.id); }
@@ -319,6 +327,21 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   };
 
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
+  const copySel = () => copyToClipboard(pageId, selStrokes, selObjects);
+  const cutSel = async () => { setSelection(null); await cutToClipboard(pageId, selStrokes, selObjects); };
+
+  useEffect(() => {
+    if (!selection) return;
+    const key = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest?.("input, textarea, [contenteditable=true]")) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); copySel(); }
+      else if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); void cutSel(); }
+      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); void deleteSel(); }
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  });
 
   const touchAction = tool.tool === "hand" ? "auto" : "none";
   return (
@@ -328,7 +351,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />
       {selBox && (
         <SelectionOverlay box={selBox} scale={scale} xf={previewXf} onPreview={preview} onCommit={commit}
-          onDelete={deleteSel} onDuplicate={duplicateSel} onRecolor={recolorSel}
+          onDelete={deleteSel} onDuplicate={duplicateSel} onRecolor={recolorSel} onCopy={copySel} onCut={cutSel}
           onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined} />
       )}
     </div>

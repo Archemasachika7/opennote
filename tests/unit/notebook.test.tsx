@@ -100,3 +100,20 @@ it("tool buttons have hover labels", async () => {
   await setup();
   expect(screen.getByRole("button", { name: "Lasso" })).toHaveAttribute("title", expect.stringMatching(/lasso/i));
 });
+
+it("Ctrl+V pastes copied ink onto the current page; page menu offers Paste here", async () => {
+  const user = userEvent.setup();
+  const { copyToClipboard, CLIP_MARKER } = await import("../../src/ink/clipboard");
+  const { getStrokes } = await import("../../src/store/strokes");
+  const nb = await setup();
+  const [p0, p1] = await getPages(nb.id);
+  copyToClipboard(p1.id, [{ id: "c1", tool: "pen", variant: "ball", color: "#fff", width: 3, points: new Float32Array([10, 10, 0.5, 0, 40, 40, 0.5, 8]) }], []);
+  const dt = { files: [], getData: (t: string) => (t === "text/plain" ? CLIP_MARKER : "") };
+  const ev = new Event("paste", { bubbles: true }) as ClipboardEvent;
+  Object.defineProperty(ev, "clipboardData", { value: dt });
+  document.body.dispatchEvent(ev);
+  await waitFor(async () => expect(await getStrokes(p0.id)).toHaveLength(1));
+  await user.click(screen.getAllByRole("button", { name: /page options/i })[1]);
+  await user.click(screen.getByRole("menuitem", { name: "Paste here" }));
+  await waitFor(async () => expect(await getStrokes(p1.id)).toHaveLength(1));
+});

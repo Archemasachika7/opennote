@@ -64,3 +64,5 @@
 .opt-group input[type="radio"] { accent-color: var(--accent); }
 .range-row .input { flex: 1; }
 .pdf-bg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }
+.goto { padding: 8px 12px 0; }
+.goto .input { width: 100%; height: 28px; font-size: 12.5px; }

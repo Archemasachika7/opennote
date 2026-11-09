@@ -31,6 +31,17 @@ export function Thumbnails({ pages, bookmarks, current, onJump, onInsert, onReor
         <button role="tab" aria-selected={tab === "bookmarks"} onClick={() => setTab("bookmarks")}>Bookmarks</button>
         <button role="tab" aria-selected={tab === "outline"} onClick={() => setTab("outline")}>Outline</button>
       </div>
+      {tab === "pages" && (
+        <div className="goto">
+          <input type="number" min={1} max={pages.length} className="input" aria-label="Go to page"
+            placeholder={`Go to page (1-${pages.length})`}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              const n = Number(e.currentTarget.value);
+              if (Number.isInteger(n) && n >= 1 && n <= pages.length) onJump(n - 1);
+            }} />
+        </div>
+      )}
       {tab === "pages" ? (
         <div className="thumb-list">
           {gap(0)}

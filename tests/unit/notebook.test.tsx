@@ -192,3 +192,15 @@ it("Export dialog shows a readable error for a bad range", async () => {
   await user.click(within(dialog).getByRole("button", { name: "Export" }));
   expect(within(dialog).getByText("Pages go from 1 to 2")).toBeInTheDocument();
 });
+
+it("Go to page jumps to a page number; out-of-range numbers do nothing", async () => {
+  const user = userEvent.setup();
+  await setup();
+  const box = screen.getByRole("spinbutton", { name: "Go to page" });
+  vi.mocked(Element.prototype.scrollIntoView).mockClear();
+  await user.type(box, "9{Enter}");
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  await user.clear(box);
+  await user.type(box, "2{Enter}");
+  expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+});

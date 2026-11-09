@@ -33,7 +33,7 @@ interface PageBase {
   size: { w: number; h: number };
 }
 /** Imported PDF page shown under the ink (never erasable); text is kept for search. */
-export interface PageBackground { blobId: string; pdfText?: string }
+export interface PageBackground { blobId: string; pdfText?: string; /** degrees clockwise: 0, 90, 180, 270 */ rotation?: number }
 export interface InkPage extends PageBase { kind: "ink"; template: Template; background?: PageBackground }
 export interface TextPage extends PageBase { kind: "text"; doc: unknown | null }
 export interface HtmlPage extends PageBase {

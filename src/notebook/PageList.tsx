@@ -9,10 +9,10 @@ import { hasClipboard } from "../ink/clipboard";
 
 const TEMPLATES: Template[] = ["blank", "ruled", "grid", "dot"];
 
-export function PageList({ pages, notebook, mounted, width, renderPage, onDuplicate, onDelete, onBookmark, onTemplate, onPaste, onExportPage, onExportPageJpg }: {
+export function PageList({ pages, notebook, mounted, width, renderPage, onDuplicate, onDelete, onBookmark, onTemplate, onPaste, onExportPage, onExportPageJpg, onRotate }: {
   pages: Page[]; notebook: Notebook; mounted: Set<number>; width: number;
   renderPage: (p: Page, index: number, mounted: boolean, width: number) => ReactNode;
-  onDuplicate: (p: Page) => void; onDelete: (p: Page) => void; onBookmark: (p: Page) => void; onTemplate: (p: Page, t: Template) => void; onPaste?: (p: Page) => void; onExportPage?: (p: Page) => void; onExportPageJpg?: (p: Page) => void;
+  onDuplicate: (p: Page) => void; onDelete: (p: Page) => void; onBookmark: (p: Page) => void; onTemplate: (p: Page, t: Template) => void; onPaste?: (p: Page) => void; onExportPage?: (p: Page) => void; onExportPageJpg?: (p: Page) => void; onRotate?: (p: Page) => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const safe = useSafeMotion(motionTokens.distance.lg);
@@ -25,6 +25,7 @@ export function PageList({ pages, notebook, mounted, width, renderPage, onDuplic
           { label: "Duplicate", onSelect: () => onDuplicate(p) },
           { label: notebook.bookmarks.includes(p.id) ? "Remove bookmark" : "Bookmark", onSelect: () => onBookmark(p) },
           ...(p.kind === "ink" ? TEMPLATES.filter((t) => t !== p.template).map((t) => ({ label: `Template: ${t}`, onSelect: () => onTemplate(p, t) })) : []),
+          ...(p.kind === "ink" && onRotate ? [{ label: "Rotate page", onSelect: () => onRotate(p) }] : []),
           ...(onExportPage ? [{ label: "Export page as PDF", onSelect: () => onExportPage(p) }] : []),
           ...(onExportPageJpg ? [{ label: "Export page as JPG", onSelect: () => onExportPageJpg(p) }] : []),
           { label: "Delete", danger: true, onSelect: () => onDelete(p) },

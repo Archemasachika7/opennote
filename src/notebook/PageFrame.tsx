@@ -40,7 +40,14 @@ export function PageFrame({ page, notebook, mounted, width, priority = 0, onEdit
         </Annotatable>
       )}
       {/* Imported PDF page: an image under the ink, so the eraser can never remove it. */}
-      {bg && <img className="pdf-bg" src={bg} alt="" draggable={false} data-testid="pdf-background" />}
+      {bg && (() => {
+        const rot = page.kind === "ink" ? page.background?.rotation ?? 0 : 0;
+        const turned = rot % 180 !== 0;
+        // a turned background is sized to the swapped box, then rotated about its centre
+        const style = turned ? { width: height, height: width, left: (width - height) / 2, top: (height - width) / 2, transform: `rotate(${rot}deg)` }
+          : rot ? { transform: `rotate(${rot}deg)` } : undefined;
+        return <img className="pdf-bg" src={bg} alt="" draggable={false} data-testid="pdf-background" style={style} />;
+      })()}
       {mounted && page.kind === "ink" && <InkPage pageId={page.id} width={width} height={height} paper={notebook.paper} />}
     </div>
   );

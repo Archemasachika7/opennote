@@ -17,6 +17,7 @@ import { exportPagesPdf } from "../io/exportPdf";
 import { BACKUP_EXT, exportBackup } from "../io/backup";
 import { exportPagesJpg } from "../io/exportImages";
 import { importPdf } from "../io/pdfImport";
+import { rotatePage } from "../ink/rotate";
 import { ExportSheet, type ExportRequest } from "./ExportSheet";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
@@ -194,6 +195,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
               onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
               onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
               onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
+              onRotate={(p) => rotatePage(p.id)}
               onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>

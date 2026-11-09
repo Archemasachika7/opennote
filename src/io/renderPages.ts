@@ -76,7 +76,14 @@ export async function renderInkPage(page: InkPage, nb: Notebook): Promise<PageIm
   drawTemplate(ctx, page, nb.paper, h);
   if (page.background) {
     const blob = await getBlob(page.background.blobId);
-    if (blob) { const bmp = await createImageBitmap(blob); ctx.drawImage(bmp, 0, 0, W, h); bmp.close(); }
+    if (blob) {
+      const bmp = await createImageBitmap(blob);
+      const rot = ((page.background.rotation ?? 0) * Math.PI) / 180;
+      const turned = (page.background.rotation ?? 0) % 180 !== 0;
+      ctx.save(); ctx.translate(W / 2, h / 2); ctx.rotate(rot);
+      ctx.drawImage(bmp, turned ? -h / 2 : -W / 2, turned ? -W / 2 : -h / 2, turned ? h : W, turned ? W : h);
+      ctx.restore(); bmp.close();
+    }
   }
   await drawObjects(ctx, await getObjects(page.id), nb.paper);
   await drawStrokes(ctx, page.id, nb.paper);

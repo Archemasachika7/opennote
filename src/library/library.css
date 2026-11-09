@@ -28,3 +28,24 @@
 .hit:hover { background: var(--surface); border-color: var(--line); }
 .hit-title { font-weight: 500; }
 .hit-snippet { font-size: 13px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.lib-tools { display: flex; align-items: center; gap: 8px; }
+.seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius); }
+.seg .btn { height: 26px; width: 28px; }
+.bulk-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 14px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); }
+.bulk-bar > span { margin-right: auto; font-weight: 500; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.nb-card { position: relative; }
+.nb-card.selected .nb-cover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.nb-check { position: absolute; z-index: 2; top: 10px; left: 18px; width: 18px; height: 18px; accent-color: var(--accent); }
+.nb-title { display: inline-flex; align-items: center; gap: 6px; }
+.nb-title .fav { color: var(--accent); flex: none; }
+.nb-sub { font-size: 12px; }
+.list { display: grid; gap: 6px; }
+.nb-card.list { flex-direction: row; align-items: center; gap: 12px; padding: 6px 10px 6px 6px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); }
+.nb-card.list .nb-cover { width: 34px; height: 44px; aspect-ratio: auto; flex: none; }
+.nb-card.list .nb-cover .live-tag { display: none; }
+.nb-card.list .nb-meta { flex: 1; }
+.nb-card.list .nb-check { position: static; }

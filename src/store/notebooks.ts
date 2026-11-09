@@ -44,12 +44,50 @@ export async function deleteNotebook(id: string): Promise<void> {
   });
 }
 
-export async function listNotebooks(opts: { folderId?: string | null; sort?: "updated" | "title" } = {}): Promise<Notebook[]> {
-  let all = await db.notebooks.toArray();
-  if (opts.folderId !== undefined) all = all.filter((n) => n.folderId === opts.folderId);
-  return opts.sort === "title"
-    ? all.sort((a, b) => a.title.localeCompare(b.title))
-    : all.sort((a, b) => b.updatedAt - a.updatedAt);
+export type LibrarySort = "updated" | "created" | "title" | "pages";
+export type LibraryView = "all" | "favorites" | "trash";
+
+export async function listNotebooks(opts: { folderId?: string | null; sort?: LibrarySort; view?: LibraryView } = {}): Promise<Notebook[]> {
+  const view = opts.view ?? "all";
+  let all = (await db.notebooks.toArray()).filter((n) => (view === "trash" ? !!n.trashedAt : !n.trashedAt));
+  if (view === "favorites") all = all.filter((n) => n.favorite);
+  if (opts.folderId !== undefined && view !== "trash") all = all.filter((n) => n.folderId === opts.folderId);
+  const by: Record<LibrarySort, (a: Notebook, b: Notebook) => number> = {
+    title: (a, b) => a.title.localeCompare(b.title),
+    created: (a, b) => b.createdAt - a.createdAt,
+    updated: (a, b) => b.updatedAt - a.updatedAt,
+    pages: (a, b) => b.pageIds.length - a.pageIds.length,
+  };
+  return all.sort(view === "trash" ? (a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0) : by[opts.sort ?? "updated"]);
+}
+
+export async function toggleFavorite(id: string): Promise<void> {
+  const nb = await db.notebooks.get(id);
+  if (nb) await db.notebooks.update(id, { favorite: !nb.favorite });
+}
+
+/** Delete = move to Trash (restorable). `at` is only for tests. */
+export async function trashNotebook(id: string, at: number = now()): Promise<void> {
+  await db.notebooks.update(id, { trashedAt: at });
+}
+
+export async function restoreNotebook(id: string): Promise<void> {
+  await db.notebooks.update(id, { trashedAt: null });
+}
+
+export const TRASH_DAYS = 30;
+/** Permanently delete notebooks that have been in Trash longer than 30 days. Returns how many. */
+export async function purgeTrash(maxAgeDays: number = TRASH_DAYS): Promise<number> {
+  const cutoff = now() - maxAgeDays * 864e5;
+  const old = (await db.notebooks.toArray()).filter((n) => n.trashedAt && n.trashedAt < cutoff);
+  for (const n of old) await deleteNotebook(n.id);
+  return old.length;
+}
+
+export async function moveNotebooks(ids: string[], folderId: string | null): Promise<void> {
+  await db.transaction("rw", db.notebooks, async () => {
+    for (const id of ids) await db.notebooks.update(id, { folderId });
+  });
 }
 
 export async function toggleBookmark(notebookId: string, pageId: string): Promise<void> {

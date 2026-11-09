@@ -19,6 +19,10 @@ export interface Notebook {
   pageIds: string[];
   createdAt: number;
   updatedAt: number;
+  /** Library favourite (absent on older notebooks = false). */
+  favorite?: boolean;
+  /** When it was moved to Trash; absent/null = not in Trash. */
+  trashedAt?: number | null;
 }
 
 interface PageBase {

@@ -17,10 +17,11 @@ export async function searchAll(raw: string): Promise<SearchHit[]> {
   const q = raw.trim().toLowerCase();
   if (!q) return [];
   const hits: SearchHit[] = [];
-  const notebooks = await db.notebooks.toArray();
+  const notebooks = (await db.notebooks.toArray()).filter((n) => !n.trashedAt);
   const titles = new Map(notebooks.map((n) => [n.id, n.title]));
   for (const n of notebooks) if (n.title.toLowerCase().includes(q)) hits.push({ notebookId: n.id, title: n.title, snippet: "Notebook" });
   await db.pages.each((p) => {
+    if (!titles.has(p.notebookId)) return; // trashed notebook
     const nbTitle = titles.get(p.notebookId) ?? "";
     if (p.kind === "text") {
       const t = textOf(p.doc);

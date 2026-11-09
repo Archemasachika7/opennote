@@ -35,17 +35,67 @@ describe("LibraryView", () => {
     expect(await screen.findByText("New")).toBeInTheDocument();
   });
 
-  it("deletes after confirming in a sheet", async () => {
+  it("delete moves a notebook to Trash, where it can be restored or deleted forever after confirming", async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, "confirm");
     await createNotebook({ title: "Doomed" });
     render(<LibraryView />);
     await user.click(await screen.findByRole("button", { name: /more for doomed/i }));
-    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
-    const dialog = screen.getByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Move to Trash" }));
     await waitFor(() => expect(screen.queryByText("Doomed")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Trash" }));
+    expect(await screen.findByText("Doomed")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /more for doomed/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Restore" }));
+    await user.click(screen.getByRole("button", { name: "All" }));
+    expect(await screen.findByText("Doomed")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /more for doomed/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Move to Trash" }));
+    await user.click(screen.getByRole("button", { name: "Trash" }));
+    await user.click(await screen.findByRole("button", { name: /more for doomed/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete forever" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete forever" }));
+    await waitFor(async () => expect(await listNotebooks({ view: "trash" })).toHaveLength(0));
     expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("favourite from the card menu shows a star and the Favourites filter", async () => {
+    const user = userEvent.setup();
+    await createNotebook({ title: "Star me" });
+    await createNotebook({ title: "Plain" });
+    render(<LibraryView />);
+    await user.click(await screen.findByRole("button", { name: /more for star me/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Add to Favourites" }));
+    expect(await screen.findByLabelText("Favourite")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Favourites" }));
+    await waitFor(() => expect(screen.queryByText("Plain")).not.toBeInTheDocument());
+    expect(screen.getByText("Star me")).toBeInTheDocument();
+  });
+
+  it("switches between grid and list view", async () => {
+    const user = userEvent.setup();
+    await createNotebook({ title: "A" });
+    render(<LibraryView />);
+    await screen.findByText("A");
+    await user.click(screen.getByRole("button", { name: "List view" }));
+    expect(document.querySelector("[data-view=list]")).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Grid view" }));
+    expect(document.querySelector("[data-view=grid]")).not.toBeNull();
+  });
+
+  it("select mode moves several notebooks to Trash at once", async () => {
+    const user = userEvent.setup();
+    await createNotebook({ title: "One" });
+    await createNotebook({ title: "Two" });
+    await createNotebook({ title: "Three" });
+    render(<LibraryView />);
+    await screen.findByText("One");
+    await user.click(screen.getByRole("button", { name: "Select" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select One" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select Two" }));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Move selected to Trash" }));
+    await waitFor(async () => expect((await listNotebooks()).map((n) => n.title)).toEqual(["Three"]));
   });
 
   it("filters by folder chip", async () => {
@@ -66,7 +116,7 @@ describe("LibraryView", () => {
     await createNotebook({ title: "Alpha" });
     render(<LibraryView />);
     await screen.findByText("Alpha");
-    await user.click(screen.getByRole("button", { name: /sort: updated/i }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Sort" }), "title");
     await waitFor(() => {
       const titles = screen.getAllByTestId("nb-title").map((e) => e.textContent);
       expect(titles).toEqual(["Alpha", "Bravo"]);

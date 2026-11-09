@@ -50,7 +50,7 @@ export type PagePatch = Partial<Omit<InkPage, "kind" | "id">> & Partial<Omit<Tex
   Partial<Omit<HtmlPage, "kind" | "id">>;
 
 export type NewPage =
-  | { kind: "ink"; template: Template }
+  | { kind: "ink"; template: Template; background?: PageBackground; size?: { w: number; h: number } }
   | { kind: "text" }
   | { kind: "html"; title: string; source: string; artifactType: ArtifactType; allowNetwork: boolean };
 

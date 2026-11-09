@@ -38,6 +38,7 @@ export function Thumbnails({ pages, bookmarks, current, onJump, onInsert, onReor
             <div key={p.id}>
               <button data-testid="thumb" data-live={p.kind === "html" ? "true" : undefined}
                 className={`thumb ${i === current ? "current" : ""} ${p.kind === "html" ? "live" : ""}`}
+                style={p.kind === "ink" && p.size ? { aspectRatio: `${p.size.w} / ${p.size.h}` } : undefined}
                 draggable onClick={() => onJump(i)}
                 onDragStart={(e) => { setDragFrom(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
                 onDragOver={(e) => e.preventDefault()}

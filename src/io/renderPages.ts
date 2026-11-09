@@ -71,8 +71,13 @@ async function drawStrokes(ctx: CanvasRenderingContext2D, pageId: string, paper:
 }
 
 export async function renderInkPage(page: InkPage, nb: Notebook): Promise<PageImage[]> {
-  const [c, ctx] = canvas(W, H);
-  drawTemplate(ctx, page, nb.paper, H);
+  const h = page.size?.h ?? H;
+  const [c, ctx] = canvas(W, h);
+  drawTemplate(ctx, page, nb.paper, h);
+  if (page.background) {
+    const blob = await getBlob(page.background.blobId);
+    if (blob) { const bmp = await createImageBitmap(blob); ctx.drawImage(bmp, 0, 0, W, h); bmp.close(); }
+  }
   await drawObjects(ctx, await getObjects(page.id), nb.paper);
   await drawStrokes(ctx, page.id, nb.paper);
   return [await toImage(c)];

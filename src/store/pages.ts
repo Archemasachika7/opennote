@@ -6,7 +6,10 @@ function build(notebookId: string, init: NewPage): Page {
   const t = now();
   const base = { id: newId(), notebookId, createdAt: t, updatedAt: t, size: { ...PAGE_SIZE } };
   switch (init.kind) {
-    case "ink": return { ...base, kind: "ink", template: init.template };
+    case "ink": return {
+      ...base, kind: "ink", template: init.template, ...(init.size ? { size: { ...init.size } } : {}),
+      ...(init.background ? { background: { ...init.background } } : {}),
+    };
     case "text": return { ...base, kind: "text", doc: null };
     case "html": return { ...base, ...init, kind: "html", height: PAGE_SIZE.h };
   }

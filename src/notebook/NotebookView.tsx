@@ -16,6 +16,7 @@ import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { exportPagesPdf } from "../io/exportPdf";
 import { BACKUP_EXT, exportBackup } from "../io/backup";
 import { exportPagesJpg } from "../io/exportImages";
+import { importPdf } from "../io/pdfImport";
 import { ExportSheet, type ExportRequest } from "./ExportSheet";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
@@ -106,6 +107,16 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setSheet({ index }); return; }
+    if (kind === "pdf") {
+      const f = await platform.openFile([".pdf", "application/pdf"]);
+      if (!f) return;
+      toast("Importing PDF...");
+      try {
+        const r = await importPdf(f, { notebookId: id, at: index });
+        toast(`Added ${r.pageIds.length} PDF ${r.pageIds.length === 1 ? "page" : "pages"}`);
+      } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      return;
+    }
     await insertPage(id, index, kind === "ink" ? { kind: "ink", template: "blank" } : { kind: "text" });
   }
 

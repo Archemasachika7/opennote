@@ -1,7 +1,7 @@
-import { FileText, PenLine, Sparkles } from "lucide-react";
+import { FileText, FileUp, PenLine, Sparkles } from "lucide-react";
 import { Menu } from "../ui/Menu";
 
-export type InsertKind = "ink" | "text" | "live";
+export type InsertKind = "ink" | "text" | "live" | "pdf";
 
 export function InsertMenu({ onPick, onClose, style }: { onPick: (k: InsertKind) => void; onClose: () => void; style?: React.CSSProperties }) {
   return (
@@ -9,6 +9,7 @@ export function InsertMenu({ onPick, onClose, style }: { onPick: (k: InsertKind)
       { label: "Ink page", icon: <PenLine size={14} strokeWidth={1.5} />, onSelect: () => onPick("ink") },
       { label: "Text page", icon: <FileText size={14} strokeWidth={1.5} />, onSelect: () => onPick("text") },
       { label: "Live page", icon: <Sparkles size={14} strokeWidth={1.5} color="var(--live)" />, onSelect: () => onPick("live") },
+      { label: "PDF pages", icon: <FileUp size={14} strokeWidth={1.5} />, onSelect: () => onPick("pdf") },
     ]} />
   );
 }

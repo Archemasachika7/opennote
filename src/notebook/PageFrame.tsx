@@ -4,13 +4,28 @@ import { InkPage } from "../ink/InkPage";
 import { TextPage } from "../text/TextPage";
 import { LivePage, LIVE_BAR } from "../live/LivePage";
 import { Annotatable } from "../ink/Annotatable";
+import { useEffect, useState } from "react";
+import { getBlob } from "../ink/objects";
+
+function useBlobUrl(blobId?: string): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let made: string | null = null;
+    let alive = true;
+    if (blobId) void getBlob(blobId).then((b) => { if (b && alive) { made = URL.createObjectURL(b); setUrl(made); } });
+    else setUrl(null);
+    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
+  }, [blobId]);
+  return url;
+}
 
 /** Renders a page body by kind. Text/Live renderers are plugged in by later tasks. */
 export function PageFrame({ page, notebook, mounted, width, priority = 0, onEditLive }: {
   page: Page; notebook: Notebook; mounted: boolean; width: number; priority?: number; onEditLive?: (p: Page) => void;
 }) {
   const scale = width / PAGE_SIZE.w;
-  const height = (page.kind === "html" ? page.height : PAGE_SIZE.h) * scale;
+  const height = (page.kind === "html" ? page.height : page.kind === "ink" ? page.size?.h ?? PAGE_SIZE.h : PAGE_SIZE.h) * scale;
+  const bg = useBlobUrl(page.kind === "ink" ? page.background?.blobId : undefined);
   const paperClass = `paper paper-${notebook.paper} tpl-${page.kind === "ink" ? page.template : "blank"}`;
   return (
     <div className={paperClass} style={{ width, height, ["--s" as string]: scale }} data-kind={page.kind}>
@@ -24,6 +39,8 @@ export function PageFrame({ page, notebook, mounted, width, priority = 0, onEdit
           <TextPage page={page} width={width} />
         </Annotatable>
       )}
+      {/* Imported PDF page: an image under the ink, so the eraser can never remove it. */}
+      {bg && <img className="pdf-bg" src={bg} alt="" draggable={false} data-testid="pdf-background" />}
       {mounted && page.kind === "ink" && <InkPage pageId={page.id} width={width} height={height} paper={notebook.paper} />}
     </div>
   );

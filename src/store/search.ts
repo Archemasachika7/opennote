@@ -23,7 +23,10 @@ export async function searchAll(raw: string): Promise<SearchHit[]> {
   await db.pages.each((p) => {
     if (!titles.has(p.notebookId)) return; // trashed notebook
     const nbTitle = titles.get(p.notebookId) ?? "";
-    if (p.kind === "text") {
+    if (p.kind === "ink" && p.background?.pdfText) {
+      const t = p.background.pdfText;
+      if (t.toLowerCase().includes(q)) hits.push({ notebookId: p.notebookId, pageId: p.id, title: nbTitle, snippet: snippetAround(t, q) });
+    } else if (p.kind === "text") {
       const t = textOf(p.doc);
       if (t.toLowerCase().includes(q)) hits.push({ notebookId: p.notebookId, pageId: p.id, title: nbTitle, snippet: snippetAround(t, q) });
     } else if (p.kind === "html") {

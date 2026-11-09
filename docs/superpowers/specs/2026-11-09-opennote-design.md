@@ -237,7 +237,7 @@ icons, no stock illustrations, no centered hero blobs. Dense and calm, like a pr
 | `--page-light` | `#F3F1EC` | Optional light paper |
 | `--line` | `#2A2D37` | Hairlines, template rules |
 | `--text` / `--text-dim` | `#E8E9EE` / `#9A9DAB` | Type |
-| `--accent` | `#7C5CFF` | Selection, primary actions (sparingly) |
+| `--accent` | `#F5A524` (amber; light theme `#B45309`) | Selection, primary actions (sparingly). No purple anywhere in the app (enforced by tests/unit/no-purple.test.ts) |
 | `--live` | `#3DDC97` | HTML-page indicator only: the brand signature |
 
 - Type: **Space Grotesk** (titles), **Inter** (UI), **JetBrains Mono** (code/HTML).

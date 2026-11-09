@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/notebook/notebook.css"
+        ],
+        "createdAt": "2026-11-09T20:38:24.739Z",
+        "reason": "Design decision in docs/superpowers/specs/2026-11-09-opennote-design.md section 9: a 2px --live edge marks Live page thumbnails (brand signature for live pages); spec was approved before build"
+      }
+    ]
+  }
+}

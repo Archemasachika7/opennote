@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><title>Hostile</title></head>
+<body><ul id="out"></ul>
+<script>
+function log(k, f) {
+  var li = document.createElement("li");
+  li.id = "r-" + k;
+  try { var r = f(); li.textContent = k + ": ALLOWED " + r; } catch (e) { li.textContent = k + ": BLOCKED"; }
+  document.getElementById("out").appendChild(li);
+}
+log("parent", function () { parent.document.body.innerHTML = "pwned"; return "x"; });
+log("indexedDB", function () { var r = indexedDB.open("x"); return typeof r; });
+log("cookie", function () { document.cookie = "a=b"; return document.cookie; });
+log("localStorage", function () { localStorage.setItem("a", "b"); return "x"; });
+log("top", function () { top.location = "https://example.com/"; return "nav"; });
+</script>
+</body></html>

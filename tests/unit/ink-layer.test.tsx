@@ -84,7 +84,7 @@ it("stroke eraser removes the whole stroke and undo restores it", async () => {
 });
 
 it("shape tool snaps a held straight line to 2 points", async () => {
-  setTool({ tool: "shape" });
+  setTool({ tool: "shape", shapeKind: "auto" });
   let t = 1000;
   const now = vi.spyOn(performance, "now").mockImplementation(() => t);
   const { getByTestId } = render(layer());
@@ -137,4 +137,28 @@ it("never requests a desynchronized canvas (renders opaque black on some Windows
   const opts = spy.mock.calls.map((c) => c[1] as { desynchronized?: boolean } | undefined);
   expect(opts.some((o) => o?.desynchronized)).toBe(false);
   spy.mockRestore();
+});
+
+it("shape tool with a predefined shape draws it from the drag start to end", async () => {
+  setTool({ tool: "shape", shapeKind: "rect" });
+  const { getByTestId } = render(layer());
+  const el = getByTestId("ink-surface");
+  fireEvent.pointerDown(el, { pointerId: 1, pointerType: "mouse", clientX: 50, clientY: 50, buttons: 1 });
+  fireEvent.pointerMove(el, { pointerId: 1, pointerType: "mouse", clientX: 120, clientY: 90, buttons: 1 });
+  fireEvent.pointerMove(el, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 100, buttons: 1 });
+  fireEvent.pointerUp(el, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 100 });
+  await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
+  const p = (await getStrokes(pageId))[0].points;
+  expect(p.length / 4).toBe(5);
+  expect([p[0], p[1], p[8], p[9]]).toEqual([100, 100, 300, 200]);
+});
+
+it("a tiny shape drag (a click) does not leave a shape behind", async () => {
+  setTool({ tool: "shape", shapeKind: "ellipse" });
+  const { getByTestId } = render(layer());
+  const el = getByTestId("ink-surface");
+  fireEvent.pointerDown(el, { pointerId: 1, pointerType: "mouse", clientX: 50, clientY: 50, buttons: 1 });
+  fireEvent.pointerUp(el, { pointerId: 1, pointerType: "mouse", clientX: 51, clientY: 50 });
+  await new Promise((r) => setTimeout(r, 50));
+  expect(await getStrokes(pageId)).toHaveLength(0);
 });

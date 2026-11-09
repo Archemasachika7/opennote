@@ -117,3 +117,16 @@ it("Ctrl+V pastes copied ink onto the current page; page menu offers Paste here"
   await user.click(screen.getByRole("menuitem", { name: "Paste here" }));
   await waitFor(async () => expect(await getStrokes(p1.id)).toHaveLength(1));
 });
+
+it("shapes tool shows a picker of predefined shapes", async () => {
+  const user = userEvent.setup();
+  const { getTool } = await import("../../src/notebook/tool");
+  await setup();
+  await user.click(screen.getByRole("button", { name: "Shapes" }));
+  const picker = screen.getByRole("combobox", { name: "Shape" });
+  for (const label of ["Auto (draw by hand, hold to snap)", "Line", "Arrow", "Rectangle", "Rounded rectangle", "Ellipse / circle", "Triangle", "Diamond", "Star"]) {
+    expect(within(picker).getByRole("option", { name: label })).toBeInTheDocument();
+  }
+  await user.selectOptions(picker, "star");
+  expect(getTool().shapeKind).toBe("star");
+});

@@ -3,6 +3,7 @@ import { PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
 import { putObjects, removeObjectRows, updateObject } from "./objects";
 import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selection, type Xf } from "./selection";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { shapePoints, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, setTool, useTool } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
@@ -18,7 +19,8 @@ const ERASER_RADIUS = 8;
 const SNAP_HOLD_MS = 500;
 export { historyFor };
 
-type Active = { id: number; kind: "stroke" | "erase" | "lasso"; pts: number[]; start: number; lastMove: number; pen: boolean };
+type Active = { id: number; kind: "stroke" | "erase" | "lasso"; pts: number[]; start: number; lastMove: number; pen: boolean;
+  shape?: { kind: ShapeKind; x0: number; y0: number; x1: number; y1: number } };
 
 export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWidth = PAGE_SIZE.w, objects = [], onPreviewObjects, disabled, onCropRequest }: {
   pageId: string; width: number; height: number; paper: Paper; inputFilter?: (e: PointerEvent) => boolean; logicalWidth?: number;
@@ -204,6 +206,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const pen = e.pointerType === "pen";
     const [x, y] = toLogical(e);
     active.current = { id: e.pointerId, kind, pts: kind === "stroke" ? [x, y, pen ? e.pressure : 0.5, 0] : [x, y], start: now, lastMove: now, pen };
+    if (t.tool === "shape" && t.shapeKind !== "auto") active.current.shape = { kind: t.shapeKind, x0: x, y0: y, x1: x, y1: y };
     lastEvent.current = e;
     schedule();
   };
@@ -223,6 +226,13 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     }
     if (!a || a.id !== e.pointerId) return;
     const now = performance.now();
+    if (a.shape) {
+      [a.shape.x1, a.shape.y1] = toLogical(e);
+      a.pts = Array.from(shapePoints(a.shape.kind, a.shape.x0, a.shape.y0, a.shape.x1, a.shape.y1, e.shiftKey));
+      a.lastMove = now;
+      schedule();
+      return;
+    }
     for (const c of coalesced(e)) {
       const [x, y] = toLogical(c);
       if (a.kind === "stroke") a.pts.push(x, y, a.pen ? c.pressure : 0.5, now - a.start);
@@ -268,8 +278,14 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       setSelection(sel.strokeIds.length || sel.objectIds.length ? sel : null);
       return;
     }
+    if (a.shape) {
+      const sh = a.shape;
+      [sh.x1, sh.y1] = toLogical(ev.nativeEvent);
+      if (Math.hypot(sh.x1 - sh.x0, sh.y1 - sh.y0) < 6) return; // a click, not a shape
+      a.pts = Array.from(shapePoints(sh.kind, sh.x0, sh.y0, sh.x1, sh.y1, ev.nativeEvent.shiftKey));
+    }
     let s = currentStroke(a);
-    if (getTool().tool === "shape" && performance.now() - a.lastMove >= SNAP_HOLD_MS) {
+    if (!a.shape && getTool().tool === "shape" && performance.now() - a.lastMove >= SNAP_HOLD_MS) {
       const snapped = snapShape(s.points);
       if (snapped) s = { ...s, points: snapped.points };
     }

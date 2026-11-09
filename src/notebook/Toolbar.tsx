@@ -7,7 +7,8 @@ import { navigate } from "../App";
 import type { Notebook } from "../store/schema";
 import { updateNotebook } from "../store/notebooks";
 import { Menu } from "../ui/Menu";
-import { useTool, type ToolName } from "./tool";
+import { useTool, type ToolName, type ToolState } from "./tool";
+import { SHAPES } from "../ink/shapes";
 import type { PenVariant } from "../ink/model";
 
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
@@ -27,7 +28,7 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
     { name: "highlighter", label: "Highlighter", hint: "Highlighter", icon: <Highlighter {...ICON} /> },
     { name: "eraser", label: "Eraser", hint: "Eraser", icon: <Eraser {...ICON} /> },
     { name: "lasso", label: "Lasso", hint: "Lasso (select and move, does not draw)", icon: <Lasso {...ICON} /> },
-    { name: "shape", label: "Shapes", hint: "Shapes (hold still at the end to snap)", icon: <Shapes {...ICON} /> },
+    { name: "shape", label: "Shapes", hint: "Shapes (pick one, then drag on the page)", icon: <Shapes {...ICON} /> },
     { name: "text", label: "Text box", hint: "Text box (click on the page)", icon: <Type {...ICON} /> },
     { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
     { name: "hand", label: "Hand", hint: "Hand (scroll)", icon: <Hand {...ICON} /> },
@@ -45,6 +46,13 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
       {t.tool === "pen" && (
         <select className="input" aria-label="Pen type" value={t.variant} onChange={(e) => set({ variant: e.target.value as PenVariant })}>
           <option value="ball">Ballpoint</option><option value="fountain">Fountain</option><option value="brush">Brush</option>
+        </select>
+      )}
+      {t.tool === "shape" && (
+        <select className="input" aria-label="Shape" title="Drag on the page to draw. Hold Shift for perfect squares, circles and 45 degree lines."
+          value={t.shapeKind} onChange={(e) => set({ shapeKind: e.target.value as ToolState["shapeKind"] })}>
+          <option value="auto">Auto (draw by hand, hold to snap)</option>
+          {SHAPES.map((s) => <option key={s.kind} value={s.kind}>{s.label}</option>)}
         </select>
       )}
       {t.tool === "eraser" && (

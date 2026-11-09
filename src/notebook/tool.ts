@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { PenVariant } from "../ink/model";
+import type { ShapeKind } from "../ink/shapes";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "image" | "hand";
 export interface ToolState {
@@ -9,13 +10,14 @@ export interface ToolState {
   paletteIndex: number | null;
   width: number;
   eraseMode: "stroke" | "partial";
+  shapeKind: ShapeKind | "auto";
   mode: "annotate" | "interact";
   penSeen: boolean;
 }
 
 let state: ToolState = {
   tool: "pen", variant: "ball", color: "#E8E9EE", paletteIndex: 0, width: 3,
-  eraseMode: "stroke", mode: "interact", penSeen: false,
+  eraseMode: "stroke", shapeKind: "rect", mode: "interact", penSeen: false,
 };
 const subs = new Set<() => void>();
 

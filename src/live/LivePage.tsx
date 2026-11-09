@@ -5,6 +5,7 @@ import { updatePage } from "../store/pages";
 import { buildSrcdoc } from "./srcdoc";
 import { loadVendor } from "./vendor";
 import { liveFrames } from "./registry";
+import { crashGuard } from "./crashGuard";
 import { useAnnotate } from "../ink/Annotatable";
 import "./live.css";
 
@@ -14,15 +15,33 @@ const MAX_H = 20000;
 const I = { size: 14, strokeWidth: 1.5 } as const;
 export const clampHeight = (h: number): number => Math.min(MAX_H, Math.max(MIN_H, h));
 
+/**
+ * Decide a live page's new logical height from a content-height report (CSS px inside the frame).
+ * Content sized to the viewport (100vh + margins) always overflows by the same amount; once we see
+ * the same overflow again after growing, we stop instead of growing forever.
+ */
+export function nextLiveHeight(current: number, reportedCss: number, scale: number, st: { lastOverflow: number | null }): number | null {
+  const frameCss = current * scale - LIVE_BAR;
+  const overflow = reportedCss - frameCss;
+  if (overflow <= 2) return null;
+  if (st.lastOverflow !== null && Math.abs(overflow - st.lastOverflow) <= 2) return null;
+  st.lastOverflow = overflow;
+  const next = clampHeight(Math.ceil((reportedCss + LIVE_BAR) / scale));
+  return next === current ? null : next;
+}
+
 export function LivePage({ page, mounted, width, priority, onEdit }: {
   page: HtmlPage; mounted: boolean; width: number; priority: number; onEdit: () => void;
 }) {
   const scale = width / PAGE_SIZE.w;
-  const [stopped, setStopped] = useState(false);
+  const [suspect, setSuspect] = useState(() => crashGuard.isSuspect(page.id));
+  const [stopped, setStopped] = useState(suspect);
   const [reloadKey, setReloadKey] = useState(0);
   const [doc, setDoc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const growth = useRef<{ lastOverflow: number | null }>({ lastOverflow: null });
+  useEffect(() => { growth.current.lastOverflow = null; }, [page.source, reloadKey]);
   const { penActivity } = useAnnotate();
   const active = useSyncExternalStore(liveFrames.subscribe, () => liveFrames.active().includes(page.id));
 
@@ -31,6 +50,10 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
     else liveFrames.release(page.id);
   }, [mounted, stopped, priority, page.id]);
   useEffect(() => () => liveFrames.release(page.id), [page.id]);
+  useEffect(() => {
+    if (active) crashGuard.markRunning(page.id); else crashGuard.markStopped(page.id);
+  }, [active, page.id]);
+  useEffect(() => () => crashGuard.markStopped(page.id), [page.id]);
 
   useEffect(() => {
     if (!active) { setDoc(null); return; }
@@ -50,14 +73,18 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
       const d = e.data as { type?: string; h?: unknown };
       if (d?.type === "opennote:pen") { penActivity(); return; }
       if (d?.type !== "opennote:height" || typeof d.h !== "number" || !Number.isFinite(d.h)) return;
-      const logical = clampHeight(Math.ceil(d.h / scale + LIVE_BAR / scale));
-      if (Math.abs(logical - page.height) > 4) void updatePage(page.id, { height: logical });
+      const next = nextLiveHeight(page.height, d.h, scale, growth.current);
+      if (next !== null) void updatePage(page.id, { height: next });
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [scale, page.id, page.height, penActivity]);
 
-  const run = () => { setStopped(false); liveFrames.request(page.id, Number.MAX_SAFE_INTEGER); };
+  const run = () => {
+    if (suspect) { crashGuard.forgive(page.id); setSuspect(false); }
+    setStopped(false);
+    liveFrames.request(page.id, Number.MAX_SAFE_INTEGER);
+  };
   return (
     <div className="live-page">
       <div className="live-bar">
@@ -76,7 +103,7 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
         <iframe key={reloadKey} ref={frame} title={page.title} sandbox="allow-scripts" srcDoc={doc} />
       ) : (
         <div className="live-idle">
-          {error ? <span style={{ color: "var(--danger)" }}>{error}</span> : <span>{active ? "Starting..." : stopped ? "Stopped" : "Paused to save memory"}</span>}
+          {error ? <span style={{ color: "var(--danger)" }}>{error}</span> : <span>{active ? "Starting..." : suspect ? "This page stopped responding last time, so it was not started. Run it again?" : stopped ? "Stopped" : "Paused to save memory"}</span>}
           {!active && <button className="btn" onClick={run}><Play {...I} />Run</button>}
         </div>
       )}

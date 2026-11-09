@@ -113,3 +113,18 @@ it("still draws when setPointerCapture throws (pointer no longer active)", async
     proto.setPointerCapture = original;
   }
 });
+
+it("after a pen is seen the surface still blocks native panning, and finger drags scroll the notebook in JS", async () => {
+  const scrollBy = vi.fn();
+  const { container } = render(<div className="nb-scroll">{layer()}</div>);
+  (container.querySelector(".nb-scroll") as HTMLElement).scrollBy = scrollBy as unknown as HTMLElement["scrollBy"];
+  const el = container.querySelector("[data-testid=ink-surface]")!;
+  draw(el, hline(50));
+  await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
+  expect((el as HTMLElement).style.touchAction).toBe("none");
+  fireEvent.pointerDown(el, { pointerId: 11, pointerType: "touch", clientX: 100, clientY: 300, buttons: 1 });
+  fireEvent.pointerMove(el, { pointerId: 11, pointerType: "touch", clientX: 100, clientY: 240, buttons: 1 });
+  fireEvent.pointerUp(el, { pointerId: 11, pointerType: "touch", clientX: 100, clientY: 240 });
+  expect(scrollBy).toHaveBeenCalledWith({ left: -0, top: 60 });
+  expect(await getStrokes(pageId)).toHaveLength(1);
+});

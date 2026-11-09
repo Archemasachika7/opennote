@@ -117,3 +117,44 @@ it("lasso moves a lone stroke", async () => {
   fireEvent.pointerUp(box, { pointerId: 3, pointerType: "mouse", clientX: 300, clientY: 260 });
   await waitFor(async () => expect((await getStrokes(pageId))[0].points[1]).toBeCloseTo(260));
 });
+
+it("a selection drag commits even when the pointer is released outside the box", async () => {
+  const pts = new Float32Array([200, 200, 0.5, 0, 260, 200, 0.5, 1, 320, 200, 0.5, 2]);
+  await putStroke(pageId, { id: "w1", tool: "pen", variant: "ball", color: "#fff", width: 3, points: pts });
+  setTool({ tool: "lasso" });
+  const { getByTestId } = render(page());
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
+  const surf = getByTestId("ink-surface");
+  const loop: [number, number][] = [[150, 150], [400, 150], [400, 260], [150, 260], [150, 150]];
+  fireEvent.pointerDown(surf, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 150, buttons: 1 });
+  for (const [x, y] of loop.slice(1)) fireEvent.pointerMove(surf, { pointerId: 1, pointerType: "mouse", clientX: x, clientY: y, buttons: 1 });
+  fireEvent.pointerUp(surf, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 150 });
+  const box = await screen.findByTestId("selection");
+  fireEvent.pointerDown(box, { pointerId: 4, pointerType: "mouse", clientX: 300, clientY: 200, buttons: 1 });
+  fireEvent.pointerMove(window, { pointerId: 4, pointerType: "mouse", clientX: 300, clientY: 240, buttons: 1 });
+  fireEvent.pointerUp(window, { pointerId: 4, pointerType: "mouse", clientX: 300, clientY: 240 });
+  await waitFor(async () => expect((await getStrokes(pageId))[0].points[1]).toBeCloseTo(240));
+});
+
+it("undoing a move restores position but keeps later text edits", async () => {
+  const { addTextBox, updateObject } = await import("../../src/ink/objects");
+  const tb = await addTextBox(pageId, { x: 200, y: 200 });
+  await updateObject(tb.id, { text: "first" });
+  setTool({ tool: "lasso" });
+  const { getByTestId } = render(page());
+  await waitFor(() => expect(document.querySelector("[data-testid=ink-surface]")).toHaveAttribute("data-loaded"));
+  await screen.findByTestId(`obj-${tb.id}`);
+  const surf = getByTestId("ink-surface");
+  const loop: [number, number][] = [[150, 150], [700, 150], [700, 330], [150, 330], [150, 150]];
+  fireEvent.pointerDown(surf, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 150, buttons: 1 });
+  for (const [x, y] of loop.slice(1)) fireEvent.pointerMove(surf, { pointerId: 1, pointerType: "mouse", clientX: x, clientY: y, buttons: 1 });
+  fireEvent.pointerUp(surf, { pointerId: 1, pointerType: "mouse", clientX: 150, clientY: 150 });
+  const box = await screen.findByTestId("selection");
+  fireEvent.pointerDown(box, { pointerId: 5, pointerType: "mouse", clientX: 300, clientY: 240, buttons: 1 });
+  fireEvent.pointerUp(window, { pointerId: 5, pointerType: "mouse", clientX: 400, clientY: 240 });
+  await waitFor(async () => expect((await getObjects(pageId))[0].x).toBeCloseTo(300));
+  await updateObject(tb.id, { text: "first and later" });
+  await act(async () => { sendCommand("undo", pageId); });
+  await waitFor(async () => expect((await getObjects(pageId))[0].x).toBeCloseTo(200));
+  expect((await getObjects(pageId))[0].text).toBe("first and later");
+});

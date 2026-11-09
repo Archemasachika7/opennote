@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
-import { putObjects, removeObjectRows } from "./objects";
+import { putObjects, removeObjectRows, updateObject } from "./objects";
 import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selection, type Xf } from "./selection";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
@@ -37,6 +37,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   const strokes = useRef(new Map<string, Stroke>());
   const paths = useRef(new Map<string, Path2D>());
   const active = useRef<Active | null>(null);
+  const pans = useRef(new Map<number, { x: number; y: number }>());
   const frame = useRef(0);
   const lastEvent = useRef<PointerEvent | null>(null);
   const scale = width / logicalWidth;
@@ -105,7 +106,16 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     if (op.objects) {
       const [target, other] = c === "undo" ? [op.objects.before, op.objects.after] : [op.objects.after, op.objects.before];
       const keep = new Set(target.map((o) => o.id));
-      void removeObjectRows(other.filter((o) => !keep.has(o.id)).map((o) => o.id)).then(() => putObjects(target));
+      const existed = new Set(other.map((o) => o.id));
+      // Objects present on both sides were transformed: restore only geometry so later edits
+      // (typed text, crop) survive. Objects on one side only were created/deleted: put/remove whole.
+      void (async () => {
+        await removeObjectRows(other.filter((o) => !keep.has(o.id)).map((o) => o.id));
+        await putObjects(target.filter((o) => !existed.has(o.id)));
+        for (const o of target.filter((x) => existed.has(x.id))) {
+          await updateObject(o.id, { x: o.x, y: o.y, w: o.w, h: o.h, rotation: o.rotation });
+        }
+      })();
     }
   }), [pageId, apply]);
 
@@ -168,7 +178,12 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const t = getTool();
     if (e.pointerType === "pen" && !t.penSeen) setTool({ penSeen: true });
     const action = classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
-    if (action === "navigate") return;
+    if (action === "navigate") {
+      // Native touch panning stays disabled on the surface (Chromium applies touch-action to the
+      // stylus too, which would make pen strokes scroll). Fingers scroll the notebook here instead.
+      if (e.pointerType === "touch") pans.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      return;
+    }
     const drawTool = t.tool === "pen" || t.tool === "highlighter" || t.tool === "shape";
     const kind = action === "erase" || t.tool === "eraser" ? "erase" : drawTool ? "stroke" : t.tool === "lasso" ? "lasso" : null;
     if (!kind) return;
@@ -186,6 +201,16 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   const onMove = (ev: React.PointerEvent) => {
     const a = active.current;
     const e = ev.nativeEvent;
+    const pan = pans.current.get(e.pointerId);
+    if (pan) {
+      // one finger scrolls; two fingers are a pinch (handled by the notebook's zoom)
+      if (pans.current.size === 1) {
+        const scroller = surface.current?.closest(".nb-scroll") as HTMLElement | null;
+        scroller?.scrollBy({ left: -(e.clientX - pan.x), top: -(e.clientY - pan.y) });
+      }
+      pans.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      return;
+    }
     if (!a || a.id !== e.pointerId) return;
     const now = performance.now();
     for (const c of coalesced(e)) {
@@ -220,6 +245,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   };
 
   const finish = async (ev: React.PointerEvent) => {
+    if (pans.current.delete(ev.nativeEvent.pointerId)) return;
     const a = active.current;
     if (!a || a.id !== ev.nativeEvent.pointerId) return;
     active.current = null;
@@ -292,7 +318,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
 
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
 
-  const touchAction = tool.tool === "hand" ? "auto" : tool.penSeen ? "pan-x pan-y" : "none";
+  const touchAction = tool.tool === "hand" ? "auto" : "none";
   return (
     <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined} style={{ width, height, touchAction, pointerEvents: disabled ? "none" : undefined }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>

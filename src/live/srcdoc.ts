@@ -26,10 +26,11 @@ function meta(allowNetwork: boolean): string {
 
 function htmlDoc(source: string, allowNetwork: boolean): string {
   const m = meta(allowNetwork);
-  let out: string;
-  if (/<head[\s>]/i.test(source)) out = source.replace(/<head(\s[^>]*)?>/i, (h) => h + m);
-  else if (/<html[\s>]/i.test(source)) out = source.replace(/<html(\s[^>]*)?>/i, (h) => `${h}<head>${m}</head>`);
-  else out = `<!DOCTYPE html><html><head>${m}</head><body>${source}</body></html>`;
+  // The CSP must be the very first thing parsed: anything placed before it (a stray <script>, or a
+  // "<head>" inside a comment that a regex would match) would run uncovered. The parser hoists a
+  // leading <meta> into the implicit <head>; the artifact's own <html>/<head> tags then merge into it.
+  const body = source.replace(/^\s*<!doctype[^>]*>/i, "");
+  const out = /<html[\s>]/i.test(body) ? `<!DOCTYPE html>${m}${body}` : `<!DOCTYPE html>${m}<body>${body}</body>`;
   return /<\/body>/i.test(out) ? out.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${HEIGHT}</body>`) : out + HEIGHT;
 }
 

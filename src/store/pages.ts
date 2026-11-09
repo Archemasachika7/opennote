@@ -87,10 +87,13 @@ export async function deletePage(pageId: string): Promise<void> {
     const p = await db.pages.get(pageId);
     if (!p) return;
     const objs = await db.objects.where("pageId").equals(pageId).toArray();
-    const blobIds = objs.map((o) => o.blobId).filter((x): x is string => !!x);
+    await db.objects.where("pageId").equals(pageId).delete();
+    // Duplicated pages share image blobs: only delete blobs no remaining object references.
+    const candidates = [...new Set(objs.map((o) => o.blobId).filter((x): x is string => !!x))];
+    const stillUsed = new Set((await db.objects.filter((o) => !!o.blobId && candidates.includes(o.blobId)).toArray()).map((o) => o.blobId));
+    const blobIds = candidates.filter((b) => !stillUsed.has(b));
     if (p.kind === "html" && p.snapshotBlobId) blobIds.push(p.snapshotBlobId);
     await db.blobs.bulkDelete(blobIds);
-    await db.objects.where("pageId").equals(pageId).delete();
     await db.strokes.where("pageId").equals(pageId).delete();
     await db.pages.delete(pageId);
     const nb = await db.notebooks.get(p.notebookId);

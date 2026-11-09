@@ -95,3 +95,20 @@ describe("buildSrcdoc", () => {
     expect(buildSrcdoc({ source: "<p/>", type: "html", allowNetwork: false })).toContain("opennote:height");
   });
 });
+
+describe("CSP placement cannot be bypassed", () => {
+  const head = '<!DOCTYPE html><meta http-equiv="Content-Security-Policy"';
+  it("a script before <html> is still covered", () => {
+    const out = buildSrcdoc({ source: "<script>fetch('https://x')</script><html><head></head><body></body></html>", type: "html", allowNetwork: false });
+    expect(out.startsWith(head)).toBe(true);
+  });
+  it("a <head> inside a leading comment does not swallow the CSP", () => {
+    const out = buildSrcdoc({ source: "<!-- <head> --><html><head><title>t</title></head><body>x</body></html>", type: "html", allowNetwork: false });
+    expect(out.startsWith(head)).toBe(true);
+    expect(new DOMParser().parseFromString(out, "text/html").querySelector('meta[http-equiv="Content-Security-Policy"]')).not.toBeNull();
+  });
+  it("an existing doctype is not duplicated", () => {
+    const out = buildSrcdoc({ source: "<!doctype html><html><body>x</body></html>", type: "html", allowNetwork: false });
+    expect(out.match(/<!doctype/gi)).toHaveLength(1);
+  });
+});

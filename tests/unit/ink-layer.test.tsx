@@ -128,3 +128,13 @@ it("after a pen is seen the surface still blocks native panning, and finger drag
   expect(scrollBy).toHaveBeenCalledWith({ left: -0, top: 60 });
   expect(await getStrokes(pageId)).toHaveLength(1);
 });
+
+it("never requests a desynchronized canvas (renders opaque black on some Windows GPUs)", async () => {
+  const spy = vi.spyOn(HTMLCanvasElement.prototype, "getContext");
+  const { getByTestId } = render(layer());
+  draw(getByTestId("ink-surface"), hline(80));
+  await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
+  const opts = spy.mock.calls.map((c) => c[1] as { desynchronized?: boolean } | undefined);
+  expect(opts.some((o) => o?.desynchronized)).toBe(false);
+  spy.mockRestore();
+});

@@ -49,7 +49,9 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const w = Math.round(width * dpr);
     const h = Math.round(height * dpr);
     if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-    const ctx = c.getContext("2d", c === wet.current ? { desynchronized: true } : undefined);
+    // No `desynchronized: true`: on some Windows GPU drivers a desynchronized canvas is composited
+    // as an opaque layer, turning the whole transparent page black once it is first drawn on.
+    const ctx = c.getContext("2d");
     ctx?.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     return ctx;
   }, [width, height, scale]);

@@ -175,6 +175,25 @@ pointer is seen, `touch` pointers never draw; touch = scroll / pinch-zoom.
 - Known, accepted limit: a network-enabled visualiser can make outbound
   requests; it still cannot access notebook data.
 
+### 6.1 Artifact types accepted by Paste → Save (v1)
+
+| Detected as | Rule | How it runs |
+|---|---|---|
+| **HTML** | starts with `<!DOCTYPE`/`<html`, or contains `<body`/`<script` | `srcdoc` as-is (+ CSP) |
+| **SVG** | starts with `<svg` | wrapped in a minimal HTML document |
+| **React/JSX** | contains `export default` / `import React` / JSX + a component | transpiled **inside the sandbox** with a bundled `@babel/standalone`; React + ReactDOM UMD builds bundled with the app (offline, ~3 MB, cached once) and injected as inline scripts; the default export is mounted into `#root` |
+
+- User can override detection with a type selector in the Paste sheet.
+- React imports: `react`, `react-dom` resolve to the bundled copies. Other bare
+  imports (e.g. `recharts`, `lucide-react`, `three`) are rewritten to `https://esm.sh/<pkg>`
+  and require the page's **network toggle**; the Paste sheet turns it on automatically
+  when such imports are found and says so.
+- Tailwind class usage (common in Claude artifacts) is supported by injecting the
+  Tailwind Play CDN script when the network toggle is on; offline, a bundled
+  precompiled utility stylesheet covers common classes.
+- Transpile errors show in the preview pane with line numbers; Save stays enabled
+  (the source is kept and can be fixed later).
+
 ## 7. Load & performance budget
 
 **Assumed heavy user:** 100 notebooks × 150 pages = 15,000 pages; 10% HTML.

@@ -9,7 +9,9 @@ import { PageList } from "./PageList";
 import { PageFrame } from "./PageFrame";
 import { useVisiblePages } from "./useVisiblePages";
 import { usePinchZoom } from "./usePinchZoom";
-import { sendCommand } from "./tool";
+import { sendCommand, setTool, useTool } from "./tool";
+import { addImage, pasteImages } from "../ink/objects";
+import { platform } from "../platform/port";
 import type { InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
@@ -54,6 +56,28 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, [pages, current]);
+
+  const [tool] = useTool();
+  const curPage = pages[current];
+  useEffect(() => {
+    if (tool.tool !== "image") return;
+    setTool({ tool: "lasso" });
+    if (!curPage || curPage.kind !== "ink") return;
+    void platform.openFile(["image/*"]).then((f) => { if (f) void addImage(curPage.id, f); });
+  }, [tool.tool, curPage]);
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, [contenteditable=true]")) return;
+      const files = [...(e.clipboardData?.files ?? [])].filter((x) => x.type.startsWith("image/"));
+      if (files.length === 0 || !curPage || curPage.kind !== "ink") return;
+      e.preventDefault();
+      void pasteImages(files, curPage.id);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [curPage]);
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setLiveInsertAt(index); return; }

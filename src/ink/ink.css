@@ -1,2 +1,22 @@
 .ink-surface { position: absolute; inset: 0; user-select: none; -webkit-user-select: none; }
 .ink-canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+.object-layer { position: absolute; inset: 0; }
+.obj { position: absolute; transform-origin: center; }
+.obj-clip { position: absolute; inset: 0; overflow: hidden; }
+.obj-clip img { position: absolute; max-width: none; user-select: none; }
+.obj-image.cropping { outline: 1px dashed var(--accent); pointer-events: auto; }
+.crop-h { position: absolute; background: var(--accent); border-radius: 2px; pointer-events: auto; touch-action: none; }
+.crop-n, .crop-s { left: 50%; width: 36px; height: 6px; margin-left: -18px; cursor: ns-resize; }
+.crop-n { top: -3px; } .crop-s { bottom: -3px; }
+.crop-e, .crop-w { top: 50%; width: 6px; height: 36px; margin-top: -18px; cursor: ew-resize; }
+.crop-e { right: -3px; } .crop-w { left: -3px; }
+.obj-text { resize: none; border: 1px dashed transparent; background: transparent; outline: none; font-family: var(--font-ui);
+  line-height: 1.35; padding: 4px 6px; overflow: hidden; }
+.obj-text:focus { border-color: var(--line); }
+.sel { position: absolute; border: 1px dashed var(--accent); cursor: move; touch-action: none; pointer-events: auto; }
+.sel-scale { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: var(--accent); border-radius: 2px; cursor: nwse-resize; }
+.sel-rot { position: absolute; left: 50%; top: -30px; margin-left: -11px; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--surface); border: 1px solid var(--line); cursor: grab; }
+.sel-bar { position: absolute; left: 0; top: calc(100% + 8px); display: flex; gap: 2px; padding: 2px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); cursor: default; }
+.ink-page { position: absolute; inset: 0; }

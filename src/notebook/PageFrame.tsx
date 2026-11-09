@@ -1,6 +1,6 @@
 import type { Notebook, Page } from "../store/schema";
 import { PAGE_SIZE } from "../store/schema";
-import { InkLayer } from "../ink/InkLayer";
+import { InkPage } from "../ink/InkPage";
 
 /** Renders a page body by kind. Text/Live renderers are plugged in by later tasks. */
 export function PageFrame({ page, notebook, mounted, width }: { page: Page; notebook: Notebook; mounted: boolean; width: number }) {
@@ -9,7 +9,7 @@ export function PageFrame({ page, notebook, mounted, width }: { page: Page; note
   const paperClass = `paper paper-${notebook.paper} tpl-${page.kind === "ink" ? page.template : "blank"}`;
   return (
     <div className={paperClass} style={{ width, height, ["--s" as string]: scale }} data-kind={page.kind}>
-      {mounted && page.kind === "ink" && <InkLayer pageId={page.id} width={width} height={height} paper={notebook.paper} />}
+      {mounted && page.kind === "ink" && <InkPage pageId={page.id} width={width} height={height} paper={notebook.paper} />}
     </div>
   );
 }

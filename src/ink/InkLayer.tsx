@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef } from "react";
-import { PAGE_SIZE, type Paper } from "../store/schema";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
+import { putObjects, removeObjectRows } from "./objects";
+import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selection, type Xf } from "./selection";
+import { SelectionOverlay } from "./SelectionOverlay";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, setTool, useTool } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted } from "./input";
@@ -18,11 +21,14 @@ export const historyFor = (pageId: string): History => {
   return h;
 };
 
-type Active = { id: number; kind: "stroke" | "erase"; pts: number[]; start: number; lastMove: number; pen: boolean };
+type Active = { id: number; kind: "stroke" | "erase" | "lasso"; pts: number[]; start: number; lastMove: number; pen: boolean };
 
-export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWidth = PAGE_SIZE.w }: {
+export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWidth = PAGE_SIZE.w, objects = [], onPreviewObjects, disabled, onCropRequest }: {
   pageId: string; width: number; height: number; paper: Paper; inputFilter?: (e: PointerEvent) => boolean; logicalWidth?: number;
+  objects?: PageObject[]; onPreviewObjects?: (o: PageObject[] | null) => void; disabled?: boolean; onCropRequest?: (id: string) => void;
 }) {
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [previewXf, setPreviewXf] = useState<Xf>(IDENTITY);
   const [tool] = useTool();
   const surface = useRef<HTMLDivElement>(null);
   const dry = useRef<HTMLCanvasElement>(null);
@@ -52,14 +58,17 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     return p;
   };
 
+  const override = useRef<{ ids: Set<string>; m: Xf } | null>(null);
   const redrawDry = useCallback(() => {
     const ctx = setup(dry.current);
     if (!ctx) return;
     performance.mark?.("dry-start");
     ctx.clearRect(0, 0, logicalWidth, logicalH);
-    const all = [...strokes.current.values()];
-    for (const s of all) if (s.tool === "highlighter") paintStroke(ctx, s, paper, pathOf(s));
-    for (const s of all) if (s.tool !== "highlighter") paintStroke(ctx, s, paper, pathOf(s));
+    const ov = override.current;
+    const all = [...strokes.current.values()].map((s) => (ov && ov.ids.has(s.id) ? xfStroke(s, ov.m) : s));
+    const pathFor = (s: Stroke) => (ov && ov.ids.has(s.id) ? strokePath(s) : pathOf(s));
+    for (const s of all) if (s.tool === "highlighter") paintStroke(ctx, s, paper, pathFor(s));
+    for (const s of all) if (s.tool !== "highlighter") paintStroke(ctx, s, paper, pathFor(s));
     performance.mark?.("dry-end");
     try { performance.measure?.("dry-redraw", "dry-start", "dry-end"); } catch { /* unsupported */ }
   }, [setup, paper, logicalWidth, logicalH]);
@@ -89,7 +98,13 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const h = historyFor(pageId);
     const op: Op | null = c === "undo" ? h.undo() : h.redo();
     if (!op) return;
+    setSelection(null);
     void (c === "undo" ? apply(op.add, op.remove) : apply(op.remove, op.add));
+    if (op.objects) {
+      const [target, other] = c === "undo" ? [op.objects.before, op.objects.after] : [op.objects.after, op.objects.before];
+      const keep = new Set(target.map((o) => o.id));
+      void removeObjectRows(other.filter((o) => !keep.has(o.id)).map((o) => o.id)).then(() => putObjects(target));
+    }
   }), [pageId, apply]);
 
   const toLogical = (e: PointerEvent): [number, number] => {
@@ -119,6 +134,19 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       paintStroke(ctx, currentStroke(a, extra), paper);
       return;
     }
+    if (a.kind === "lasso") {
+      ctx.save();
+      ctx.strokeStyle = "#7C5CFF";
+      ctx.lineWidth = 2 / scale;
+      ctx.setLineDash([8 / scale, 6 / scale]);
+      ctx.beginPath();
+      for (let i = 0; i < a.pts.length; i += 2) {
+        if (i === 0) ctx.moveTo(a.pts[i], a.pts[i + 1]); else ctx.lineTo(a.pts[i], a.pts[i + 1]);
+      }
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
     ctx.save();
     ctx.strokeStyle = "rgba(154,157,171,0.6)";
     ctx.lineWidth = ERASER_RADIUS * 2;
@@ -140,8 +168,9 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const action = classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
     if (action === "navigate") return;
     const drawTool = t.tool === "pen" || t.tool === "highlighter" || t.tool === "shape";
-    const kind = action === "erase" || t.tool === "eraser" ? "erase" : drawTool ? "stroke" : null;
+    const kind = action === "erase" || t.tool === "eraser" ? "erase" : drawTool ? "stroke" : t.tool === "lasso" ? "lasso" : null;
     if (!kind) return;
+    if (selection) setSelection(null);
     e.preventDefault();
     surface.current?.setPointerCapture?.(e.pointerId);
     const now = performance.now();
@@ -196,6 +225,11 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
     setup(wet.current)?.clearRect(0, 0, logicalWidth, logicalH);
     if (a.kind === "erase") { await eraseWith(a); return; }
+    if (a.kind === "lasso") {
+      const sel = selectWithLasso(a.pts, strokes.current.values(), objects);
+      setSelection(sel.strokeIds.length || sel.objectIds.length ? sel : null);
+      return;
+    }
     let s = currentStroke(a);
     if (getTool().tool === "shape" && performance.now() - a.lastMove >= SNAP_HOLD_MS) {
       const snapped = snapShape(s.points);
@@ -208,12 +242,65 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     await putStroke(pageId, s);
   };
 
+  const selStrokes = selection ? selection.strokeIds.map((id) => strokes.current.get(id)).filter((x): x is Stroke => !!x) : [];
+  const selObjects = selection ? objects.filter((o) => selection.objectIds.includes(o.id)) : [];
+  const selBox = selection ? selectionBox(selStrokes, selObjects) : null;
+
+  const preview = (m: Xf) => {
+    setPreviewXf(m);
+    override.current = { ids: new Set(selStrokes.map((s) => s.id)), m };
+    redrawDry();
+    onPreviewObjects?.(selObjects.map((o) => xfObject(o, m)));
+  };
+
+  const commit = async (m: Xf) => {
+    override.current = null;
+    setPreviewXf(IDENTITY);
+    const nextStrokes = selStrokes.map((s) => xfStroke(s, m));
+    const nextObjects = selObjects.map((o) => xfObject(o, m));
+    historyFor(pageId).push({ remove: selStrokes, add: nextStrokes, objects: { before: selObjects, after: nextObjects } });
+    await putObjects(nextObjects);
+    onPreviewObjects?.(null);
+    await apply(selStrokes, nextStrokes);
+  };
+
+  const deleteSel = async () => {
+    historyFor(pageId).push({ remove: selStrokes, add: [], objects: { before: selObjects, after: [] } });
+    setSelection(null);
+    await removeObjectRows(selObjects.map((o) => o.id));
+    await apply(selStrokes, []);
+  };
+
+  const duplicateSel = async () => {
+    const off = { ...IDENTITY, dx: 24, dy: 24 };
+    const sCopies = selStrokes.map((s) => ({ ...xfStroke(s, off), id: crypto.randomUUID() }));
+    const oCopies = selObjects.map((o) => ({ ...xfObject(o, off), id: crypto.randomUUID() }));
+    historyFor(pageId).push({ remove: [], add: sCopies, objects: { before: [], after: oCopies } });
+    await putObjects(oCopies);
+    await apply([], sCopies);
+    setSelection({ strokeIds: sCopies.map((s) => s.id), objectIds: oCopies.map((o) => o.id) });
+  };
+
+  const recolorSel = async () => {
+    const t = getTool();
+    const next = selStrokes.map((s) => ({ ...s, color: t.color, paletteIndex: t.paletteIndex ?? undefined }));
+    historyFor(pageId).push({ remove: selStrokes, add: next });
+    await apply(selStrokes, next);
+  };
+
+  const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
+
   const touchAction = tool.tool === "hand" ? "auto" : tool.penSeen ? "pan-x pan-y" : "none";
   return (
-    <div ref={surface} className="ink-surface" data-testid="ink-surface" style={{ width, height, touchAction }}
+    <div ref={surface} className="ink-surface" data-testid="ink-surface" style={{ width, height, touchAction, pointerEvents: disabled ? "none" : undefined }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
       <canvas ref={dry} className="ink-canvas" style={{ width, height }} />
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />
+      {selBox && (
+        <SelectionOverlay box={selBox} scale={scale} xf={previewXf} onPreview={preview} onCommit={commit}
+          onDelete={deleteSel} onDuplicate={duplicateSel} onRecolor={recolorSel}
+          onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined} />
+      )}
     </div>
   );
 }

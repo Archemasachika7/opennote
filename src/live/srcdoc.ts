@@ -17,7 +17,7 @@ export function buildCsp({ allowNetwork }: { allowNetwork: boolean }): string {
   ].join("; ");
 }
 
-const HEIGHT = `<script>(function(){function r(){parent.postMessage({type:"opennote:height",h:Math.ceil(document.documentElement.scrollHeight)},"*")}if(window.ResizeObserver)new ResizeObserver(r).observe(document.documentElement);addEventListener("load",r);r();})();</script>`;
+const HEIGHT = `<script>(function(){function r(){parent.postMessage({type:"opennote:height",h:Math.ceil(document.documentElement.scrollHeight)},"*")}if(window.ResizeObserver)new ResizeObserver(r).observe(document.documentElement);addEventListener("load",r);r();function p(e){if(e.pointerType==="pen")parent.postMessage({type:"opennote:pen"},"*")}["pointerover","pointermove","pointerdown"].forEach(function(t){addEventListener(t,p,true)});})();</script>`;
 const BASE_CSS = "<style>html,body{margin:0}body{font-family:system-ui,sans-serif}.on-error{margin:16px;padding:12px 14px;white-space:pre-wrap;font:13px/1.5 ui-monospace,monospace;color:#FF6B6B;background:#1E2028;border-radius:6px}</style>";
 
 function meta(allowNetwork: boolean): string {

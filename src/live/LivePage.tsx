@@ -5,6 +5,7 @@ import { updatePage } from "../store/pages";
 import { buildSrcdoc } from "./srcdoc";
 import { loadVendor } from "./vendor";
 import { liveFrames } from "./registry";
+import { useAnnotate } from "../ink/Annotatable";
 import "./live.css";
 
 export const LIVE_BAR = 36;
@@ -22,6 +23,7 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
   const [doc, setDoc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const { penActivity } = useAnnotate();
   const active = useSyncExternalStore(liveFrames.subscribe, () => liveFrames.active().includes(page.id));
 
   useEffect(() => {
@@ -46,13 +48,14 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
     const onMsg = (e: MessageEvent) => {
       if (!frame.current || e.source !== frame.current.contentWindow) return;
       const d = e.data as { type?: string; h?: unknown };
+      if (d?.type === "opennote:pen") { penActivity(); return; }
       if (d?.type !== "opennote:height" || typeof d.h !== "number" || !Number.isFinite(d.h)) return;
       const logical = clampHeight(Math.ceil(d.h / scale + LIVE_BAR / scale));
       if (Math.abs(logical - page.height) > 4) void updatePage(page.id, { height: logical });
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [scale, page.id, page.height]);
+  }, [scale, page.id, page.height, penActivity]);
 
   const run = () => { setStopped(false); liveFrames.request(page.id, Number.MAX_SAFE_INTEGER); };
   return (

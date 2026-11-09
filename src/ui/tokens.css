@@ -1,0 +1,32 @@
+/* Midnight Studio — spec §9 */
+:root {
+  --bg: #121318;
+  --surface: #1a1c23;
+  --surface-2: #22252e;
+  --page-dark: #1e2028;
+  --page-light: #f3f1ec;
+  --line: #2a2d37;
+  --text: #e8e9ee;
+  --text-dim: #9a9dab;
+  --accent: #7c5cff;
+  --accent-ink: #ffffff;
+  --live: #3ddc97;
+  --danger: #ff6b6b;
+  --radius: 6px;
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-title: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f4f4f6;
+  --surface: #ffffff;
+  --surface-2: #eceef2;
+  --line: #d9dbe2;
+  --text: #16171c;
+  --text-dim: #5d6070;
+  --accent: #5b3df5;
+  --live: #11a86b;
+  --danger: #d33a3a;
+  color-scheme: light;
+}

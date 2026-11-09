@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { ToastHost } from "./ui/Toast";
 import { LibraryView } from "./library/LibraryView";
+import { NotebookView } from "./notebook/NotebookView";
 
 export type Route = { name: "library" } | { name: "notebook"; id: string; pageId?: string };
 
@@ -36,7 +37,7 @@ export function App() {
     <>
       {route.name === "library"
         ? <LibraryView />
-        : <main style={{ padding: 24 }}><h1>Notebook</h1></main>}
+        : <NotebookView key={route.id} id={route.id} pageId={route.pageId} />}
       <ToastHost />
     </>
   );

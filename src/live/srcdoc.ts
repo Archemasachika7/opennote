@@ -24,22 +24,32 @@ function meta(allowNetwork: boolean): string {
   return `<meta http-equiv="Content-Security-Policy" content="${buildCsp({ allowNetwork })}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">`;
 }
 
-function htmlDoc(source: string, allowNetwork: boolean): string {
+/** For PDF export: the bundled html2canvas plus a handler that answers {type:"opennote:capture"} with a JPEG. */
+function captureScripts(lib: string): string {
+  const handler = `addEventListener("message",function(e){if(!e.data||e.data.type!=="opennote:capture")return;` +
+    `html2canvas(document.body,{backgroundColor:"#ffffff",scale:1.5,logging:false,useCORS:false}).then(function(c){` +
+    `parent.postMessage({type:"opennote:capture-result",data:c.toDataURL("image/jpeg",0.9)},"*")}).catch(function(err){` +
+    `parent.postMessage({type:"opennote:capture-result",error:String(err)},"*")})});`;
+  return `<script>${scriptSafe(lib)}</script><script>${handler}</script>`;
+}
+
+function htmlDoc(source: string, allowNetwork: boolean, tail = HEIGHT): string {
   const m = meta(allowNetwork);
   // The CSP must be the very first thing parsed: anything placed before it (a stray <script>, or a
   // "<head>" inside a comment that a regex would match) would run uncovered. The parser hoists a
   // leading <meta> into the implicit <head>; the artifact's own <html>/<head> tags then merge into it.
   const body = source.replace(/^\s*<!doctype[^>]*>/i, "");
   const out = /<html[\s>]/i.test(body) ? `<!DOCTYPE html>${m}${body}` : `<!DOCTYPE html>${m}<body>${body}</body>`;
-  return /<\/body>/i.test(out) ? out.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${HEIGHT}</body>`) : out + HEIGHT;
+  return /<\/body>/i.test(out) ? out.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${tail}</body>`) : out + tail;
 }
 
-export function buildSrcdoc(opts: { source: string; type: ArtifactType; allowNetwork: boolean; vendor?: Vendor }): string {
+export function buildSrcdoc(opts: { source: string; type: ArtifactType; allowNetwork: boolean; vendor?: Vendor; capture?: string }): string {
   const source = stripFence(opts.source);
   const m = meta(opts.allowNetwork);
-  if (opts.type === "html") return htmlDoc(source, opts.allowNetwork);
+  const extra = opts.capture ? captureScripts(opts.capture) : "";
+  if (opts.type === "html") return htmlDoc(source, opts.allowNetwork, HEIGHT + extra);
   if (opts.type === "svg") {
-    return `<!DOCTYPE html><html><head>${m}${BASE_CSS}<style>svg{max-width:100%;height:auto;display:block}</style></head><body>${source}${HEIGHT}</body></html>`;
+    return `<!DOCTYPE html><html><head>${m}${BASE_CSS}<style>svg{max-width:100%;height:auto;display:block}</style></head><body>${source}${HEIGHT}${extra}</body></html>`;
   }
   const v = opts.vendor;
   if (!v) throw new Error("React runtime not loaded");
@@ -50,5 +60,5 @@ export function buildSrcdoc(opts: { source: string; type: ArtifactType; allowNet
   const height = HEIGHT.replace(/^<script>|<\/script>$/g, "");
   return `<!DOCTYPE html><html><head>${m}${BASE_CSS}${tailwind}</head><body><div id="root"></div>` +
     `<script>${scriptSafe(v.react)}</script><script>${scriptSafe(v.reactDom)}</script><script>${scriptSafe(v.babel)}</script>` +
-    `<script>${boot}\n${height}</script></body></html>`;
+    `<script>${boot}\n${height}</script>${extra}</body></html>`;
 }

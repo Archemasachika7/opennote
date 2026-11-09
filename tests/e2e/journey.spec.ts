@@ -48,6 +48,11 @@ test("draw, add text, smart-paste a React artifact, reload: everything is still 
   const thumbs = page.getByTestId("thumb");
   await expect(thumbs).toHaveCount(3);
   await expect(page.locator("[data-testid=thumb][data-live=true]")).toHaveCount(1);
+  // pages mount only near the viewport: bring each into view until the text page shows up
+  for (const w of await page.locator("section.page-wrap").all()) {
+    await w.scrollIntoViewIfNeeded();
+    if (await page.locator(".text-doc").count()) break;
+  }
   await expect(page.locator(".text-doc")).toContainText("Lecture 4 notes");
   const strokes = await page.evaluate(() => new Promise<number>((resolve) => {
     const req = indexedDB.open("opennote");

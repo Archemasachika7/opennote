@@ -13,6 +13,8 @@ import { sendCommand, setTool, useTool } from "./tool";
 import { addImage, pasteImages } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
+import { exportPagesPdf } from "../io/exportPdf";
+import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
 import { useSmartPaste } from "../live/useSmartPaste";
@@ -110,6 +112,20 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   }, []);
   useSmartPaste(onSmartPaste);
 
+  async function exportPdf(list: Page[], name: string) {
+    if (!notebook || list.length === 0) return;
+    toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} to PDF...`);
+    try {
+      const r = await exportPagesPdf(list, notebook);
+      const safe = name.replace(/[<>:"/|?*]+/g, "-").trim() || "notebook";
+      await platform.saveFile(`${safe}.pdf`, new Blob([r.bytes as BlobPart], { type: "application/pdf" }));
+      toast(`PDF saved (${r.pdfPages} ${r.pdfPages === 1 ? "page" : "pages"})` +
+        (r.livesAsCards ? ` - ${r.livesAsCards} live ${r.livesAsCards === 1 ? "page" : "pages"} shown as a card` : ""));
+    } catch (e) {
+      toast(`PDF export failed: ${String(e)}`);
+    }
+  }
+
   async function saveLive(d: LiveDraft) {
     const s = sheet;
     setSheet(null);
@@ -123,7 +139,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const cur = pages[current];
   return (
     <div className="nb-view">
-      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind}
+      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind} onExportPdf={() => exportPdf(pages, notebook.title)}
         onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
       <div className="nb-body">
         <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}
@@ -137,6 +153,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
               )}
               onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
               onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
+              onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>
         </div>

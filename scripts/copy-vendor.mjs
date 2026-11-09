@@ -6,6 +6,7 @@ const files = {
   "react.js": "node_modules/react/umd/react.production.min.js",
   "react-dom.js": "node_modules/react-dom/umd/react-dom.production.min.js",
   "babel.js": "node_modules/@babel/standalone/babel.min.js",
+  "html2canvas.js": "node_modules/html2canvas/dist/html2canvas.min.js",
 };
 mkdirSync("public/vendor", { recursive: true });
 for (const [out, src] of Object.entries(files)) copyFileSync(src, `public/vendor/${out}`);

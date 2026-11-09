@@ -14,9 +14,9 @@ import type { PenVariant } from "../ink/model";
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
 export const DEFAULT_COLORS = ["#E8E9EE", "#7C5CFF", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
 
-export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind }: {
+export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind, onExportPdf }: {
   notebook: Notebook; zoom: number; setZoom: (z: number) => void; onUndo: () => void; onRedo: () => void; palette?: string[];
-  currentKind?: "ink" | "text" | "html";
+  currentKind?: "ink" | "text" | "html"; onExportPdf?: () => void;
 }) {
   const [t, set] = useTool();
   const [menu, setMenu] = useState(false);
@@ -99,6 +99,7 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
         <button className="btn ghost icon" aria-label="Notebook options" onClick={() => setMenu(true)}><MoreHorizontal {...ICON} /></button>
         {menu && (
           <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} items={[
+            ...(onExportPdf ? [{ label: "Export PDF", onSelect: onExportPdf }] : []),
             { label: notebook.paper === "dark" ? "Light paper" : "Dark paper", onSelect: () => updateNotebook(notebook.id, { paper: notebook.paper === "dark" ? "light" : "dark" }) },
           ]} />
         )}

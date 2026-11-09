@@ -112,3 +112,14 @@ describe("CSP placement cannot be bypassed", () => {
     expect(out.match(/<!doctype/gi)).toHaveLength(1);
   });
 });
+
+describe("capture-enabled documents (PDF export)", () => {
+  it("include the capture library and a capture handler only when asked", () => {
+    const plain = buildSrcdoc({ source: "<p>x</p>", type: "html", allowNetwork: false });
+    expect(plain).not.toContain("opennote:capture");
+    const cap = buildSrcdoc({ source: "<p>x</p>", type: "html", allowNetwork: false, capture: "/*H2C*/" });
+    expect(cap).toContain("/*H2C*/");
+    expect(cap).toContain("opennote:capture-result");
+    expect(cap.indexOf("Content-Security-Policy")).toBeLessThan(cap.indexOf("/*H2C*/"));
+  });
+});

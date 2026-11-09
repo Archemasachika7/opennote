@@ -56,7 +56,7 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
 
   const run = () => { setStopped(false); liveFrames.request(page.id, Number.MAX_SAFE_INTEGER); };
   return (
-    <div className="live">
+    <div className="live-page">
       <div className="live-bar">
         <span className="live-tag mono">LIVE</span>
         <span className="live-title">{page.title}</span>

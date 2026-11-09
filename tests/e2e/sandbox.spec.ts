@@ -5,6 +5,8 @@ test("hostile artifact cannot touch the app or its storage", async ({ page }) =>
   await newNotebook(page);
   const url = page.url();
   await addLivePage(page, fixture("hostile.html"));
+  // regression: the live page section must stay in the page column (a .live class collision once made it absolute)
+  await expect(page.locator("section.page-wrap.live")).toHaveCSS("position", "static");
   const frame = page.frameLocator("iframe[title=Hostile]");
   await expect(frame.locator("#r-top")).toBeVisible();
   await expect(frame.locator("#r-parent")).toHaveText("parent: BLOCKED");
@@ -18,7 +20,7 @@ test("hostile artifact cannot touch the app or its storage", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "OpenNote" })).toBeVisible();
 });
 
-test.fixme("an artifact stuck in an infinite loop can be stopped", async ({ page }) => {
+test("an artifact stuck in an infinite loop can be stopped", async ({ page }) => {
   await newNotebook(page);
   await addLivePage(page, fixture("loop.html"));
   await expect(page.locator("iframe[title=Loop]")).toBeAttached();

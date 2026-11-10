@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState, useSyncExternalStore } from "react";
 import { ToastHost } from "./ui/Toast";
 import { LibraryView } from "./library/LibraryView";
+import { LandingPage } from "./landing/LandingPage";
 import { SettingsSheet } from "./ui/SettingsSheet";
 import { CommandPalette } from "./ui/CommandPalette";
 import { useLive } from "./store/useLive";
@@ -11,24 +12,38 @@ const NotebookView = lazy(() => import("./notebook/NotebookView").then((m) => ({
 const WhiteboardView = lazy(() => import("./board/WhiteboardView").then((m) => ({ default: m.WhiteboardView })));
 const StudySetView = lazy(() => import("./study/StudySetView").then((m) => ({ default: m.StudySetView })));
 
-export type Route = { name: "library" } | { name: "notebook"; id: string; pageId?: string };
+export type Route =
+  | { name: "landing" }
+  | { name: "library" }
+  | { name: "notebook"; id: string; pageId?: string };
 
 function parse(hash: string): Route {
+  if (hash === "" || hash === "#" || hash === "#/welcome" || hash === "#/home") {
+    return { name: "landing" };
+  }
   const m = /^#\/nb\/([^/?]+)(?:\?p=([^&]+))?/.exec(hash);
   if (!m) return { name: "library" };
-  return m[2] ? { name: "notebook", id: decodeURIComponent(m[1]), pageId: decodeURIComponent(m[2]) }
+  return m[2]
+    ? { name: "notebook", id: decodeURIComponent(m[1]), pageId: decodeURIComponent(m[2]) }
     : { name: "notebook", id: decodeURIComponent(m[1]) };
 }
 
 let cached: { hash: string; route: Route } | null = null;
+const routeListeners = new Set<() => void>();
+
 function snapshot(): Route {
   const hash = window.location.hash;
   if (!cached || cached.hash !== hash) cached = { hash, route: parse(hash) };
   return cached.route;
 }
+
 function subscribe(f: () => void) {
+  routeListeners.add(f);
   window.addEventListener("hashchange", f);
-  return () => window.removeEventListener("hashchange", f);
+  return () => {
+    routeListeners.delete(f);
+    window.removeEventListener("hashchange", f);
+  };
 }
 
 export function useRoute(): Route {
@@ -37,6 +52,7 @@ export function useRoute(): Route {
 
 export function navigate(path: string): void {
   window.location.hash = path.startsWith("#") ? path : `#${path}`;
+  routeListeners.forEach((f) => f());
 }
 
 /** Opens a document in the view for its type: notebook, whiteboard or study set. */
@@ -94,7 +110,12 @@ export function App() {
 
   return (
     <>
-      {route.name === "library" ? (
+      {route.name === "landing" ? (
+        <LandingPage
+          onOpenPalette={() => setPaletteOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      ) : route.name === "library" ? (
         <LibraryView onOpenSettings={() => setSettingsOpen(true)} onOpenPalette={() => setPaletteOpen(true)} />
       ) : (
         <DocView key={route.id} id={route.id} pageId={route.pageId} onOpenSettings={() => setSettingsOpen(true)} />
@@ -105,7 +126,7 @@ export function App() {
         onClose={() => setPaletteOpen(false)}
         onNavigate={navigate}
         onOpenSettings={() => setSettingsOpen(true)}
-        inNotebook={route.name !== "library"}
+        inNotebook={route.name === "notebook"}
       />
       <ToastHost />
     </>

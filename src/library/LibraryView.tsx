@@ -6,7 +6,7 @@ import { navigate } from "../App";
 import { db, type Notebook } from "../store/schema";
 import {
   createNotebook, deleteNotebook, listNotebooks, moveNotebooks, purgeTrash, renameNotebook, restoreNotebook,
-  toggleFavorite, trashNotebook, type LibrarySort,
+  setFavorite, toggleFavorite, trashNotebook, type LibrarySort,
 } from "../store/notebooks";
 import { createFolder, listFolders } from "../store/folders";
 import { searchAll, type SearchHit } from "../store/search";
@@ -143,7 +143,7 @@ export function LibraryView() {
                       <option value="__none">Unfiled</option>
                       {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
-                    <button className="btn" disabled={!ids.length} onClick={async () => { for (const id of ids) await toggleFavorite(id); endSelect(); }}>
+                    <button className="btn" disabled={!ids.length} onClick={async () => { await setFavorite(ids, true); endSelect(); }}>
                       <Star {...I} />Favourite</button>
                     <button className="btn" disabled={!ids.length} aria-label="Move selected to Trash"
                       onClick={async () => { for (const id of ids) await trashNotebook(id); endSelect(); }}><Trash2 {...I} />Trash</button>

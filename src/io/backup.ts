@@ -1,10 +1,12 @@
 import { strToU8, strFromU8, unzipSync, zipSync } from "fflate";
-import { db, newId, now, type Notebook, type Page, type PageObject } from "../store/schema";
+import { db, newId, now, MAX_HTML_BYTES, type Notebook, type Page, type PageObject } from "../store/schema";
 import type { Stroke } from "../ink/model";
 
 export const BACKUP_EXT = ".opennote";
 export const BACKUP_FORMAT = 1;
 const NOT_BACKUP = "This file is not an OpenNote backup.";
+const MAX_BACKUP_BYTES = 1024 * 1024 * 1024; // 1 GB file
+const MAX_ENTRY_BYTES = 256 * 1024 * 1024; // any single unzipped entry
 
 type StrokeJson = Omit<Stroke, "points"> & { points: number[] };
 type Manifest = {
@@ -49,7 +51,9 @@ function readManifest(files: Record<string, Uint8Array>): Manifest {
   if (!raw) throw new Error(NOT_BACKUP);
   let m: Manifest;
   try { m = JSON.parse(strFromU8(raw)) as Manifest; } catch { throw new Error(NOT_BACKUP); }
-  if (m.format !== "opennote" || !m.notebook || !Array.isArray(m.pages)) throw new Error(NOT_BACKUP);
+  const lists = [m.pages, m.strokes, m.objects, m.blobs, m.notebook?.pageIds, m.notebook?.bookmarks];
+  if (m.format !== "opennote" || !m.notebook || !lists.every(Array.isArray)) throw new Error(NOT_BACKUP);
+  if (m.pages.some((p) => p.kind === "html" && typeof p.source === "string" && p.source.length > MAX_HTML_BYTES)) throw new Error(NOT_BACKUP);
   if (m.formatVersion > BACKUP_FORMAT) throw new Error("This backup was made by a newer OpenNote. Please update the app.");
   return m;
 }
@@ -57,10 +61,17 @@ function readManifest(files: Record<string, Uint8Array>): Manifest {
 /** Import a .opennote file as a NEW notebook (never overwrites). All-or-nothing. */
 export async function importBackup(file: Blob): Promise<Notebook> {
   let files: Record<string, Uint8Array>;
-  try { files = unzipSync(new Uint8Array(await file.arrayBuffer())); } catch { throw new Error(NOT_BACKUP); }
+  if (file.size > MAX_BACKUP_BYTES) throw new Error("This backup is too large to import.");
+  try {
+    // only the manifest and pictures; refuse oversized entries (zip bombs)
+    files = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+      filter: (f) => (f.name === "manifest.json" || f.name.startsWith("blobs/")) && f.originalSize <= MAX_ENTRY_BYTES,
+    });
+  } catch { throw new Error(NOT_BACKUP); }
   const m = readManifest(files);
   const pageMap = new Map(m.pages.map((p) => [p.id, newId()]));
-  const blobMap = new Map(m.blobs.map((b) => [b.id, newId()]));
+  // only pictures actually inside the file get mapped; a missing one is dropped, never pointed at a local blob
+  const blobMap = new Map(m.blobs.filter((b) => files[`blobs/${b.id}`]).map((b) => [b.id, newId()]));
   const t = now();
   const nb: Notebook = {
     ...m.notebook, id: newId(), trashedAt: null, folderId: null, createdAt: t, updatedAt: t,
@@ -69,7 +80,12 @@ export async function importBackup(file: Blob): Promise<Notebook> {
   };
   const pages = m.pages.map((p) => {
     const copy = { ...p, id: pageMap.get(p.id)!, notebookId: nb.id } as Page;
-    if (copy.kind === "ink" && copy.background) copy.background = { ...copy.background, blobId: blobMap.get(copy.background.blobId) ?? copy.background.blobId };
+    if (copy.kind === "ink" && copy.background) {
+      const mapped = blobMap.get(copy.background.blobId);
+      if (mapped) copy.background = { ...copy.background, blobId: mapped }; else delete copy.background;
+    }
+    // a shared file must not switch internet on for live pages: the user decides that per page
+    if (copy.kind === "html") { copy.allowNetwork = false; delete copy.snapshotBlobId; }
     return copy;
   });
   await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs], async () => {
@@ -84,8 +100,8 @@ export async function importBackup(file: Blob): Promise<Notebook> {
       return { id, pageId: pageMap.get(s.pageId)!, stroke: { ...s.stroke, id, points: new Float32Array(s.stroke.points) } };
     }));
     await db.objects.bulkAdd(m.objects.filter((o) => pageMap.has(o.pageId)).map((o) => ({
-      ...o, id: newId(), pageId: pageMap.get(o.pageId)!, blobId: o.blobId ? blobMap.get(o.blobId) ?? o.blobId : undefined,
-    })));
+      ...o, id: newId(), pageId: pageMap.get(o.pageId)!, blobId: o.blobId ? blobMap.get(o.blobId) : undefined,
+    })).filter((o) => o.kind !== "image" || o.blobId));
   });
   return nb;
 }

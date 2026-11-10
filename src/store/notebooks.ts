@@ -1,4 +1,4 @@
-import { db, newId, now, PAGE_SIZE, type Notebook, type Paper } from "./schema";
+import { db, newId, now, PAGE_SIZE, unreferencedBlobs, type Notebook, type Paper } from "./schema";
 
 const COVERS = ["#F5A524", "#3DDC97", "#FF8A5B", "#5BB8FF", "#4FD1C5", "#E8697A"];
 
@@ -32,14 +32,14 @@ export async function deleteNotebook(id: string): Promise<void> {
     const pageIds = (await db.pages.where("notebookId").equals(id).primaryKeys()) as string[];
     const objs = await db.objects.where("pageId").anyOf(pageIds).toArray();
     const pages = await db.pages.bulkGet(pageIds);
-    const blobIds = [
+    const candidates = [
       ...objs.map((o) => o.blobId),
-      ...pages.map((p) => (p && p.kind === "html" ? p.snapshotBlobId : undefined)),
+      ...pages.map((p) => (p && p.kind === "html" ? p.snapshotBlobId : p && p.kind === "ink" ? p.background?.blobId : undefined)),
     ].filter((x): x is string => !!x);
-    await db.blobs.bulkDelete(blobIds);
     await db.objects.where("pageId").anyOf(pageIds).delete();
     await db.strokes.where("pageId").anyOf(pageIds).delete();
     await db.pages.bulkDelete(pageIds);
+    await db.blobs.bulkDelete(await unreferencedBlobs(candidates));
     await db.notebooks.delete(id);
   });
 }
@@ -64,6 +64,11 @@ export async function listNotebooks(opts: { folderId?: string | null; sort?: Lib
 export async function toggleFavorite(id: string): Promise<void> {
   const nb = await db.notebooks.get(id);
   if (nb) await db.notebooks.update(id, { favorite: !nb.favorite });
+}
+
+/** Bulk favourite: set every given notebook to the same state. */
+export async function setFavorite(ids: string[], favorite: boolean): Promise<void> {
+  await db.transaction("rw", db.notebooks, async () => { for (const id of ids) await db.notebooks.update(id, { favorite }); });
 }
 
 /** Delete = move to Trash (restorable). `at` is only for tests. */

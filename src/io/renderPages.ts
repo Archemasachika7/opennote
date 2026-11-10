@@ -133,7 +133,7 @@ export async function renderTextPage(page: TextPage, nb: Notebook): Promise<Page
         const base = FONT[l.style];
         const size = Number(/(\d+)px/.exec(base)?.[1] ?? 30);
         const space = (() => { ctx.font = base; return ctx.measureText(" ").width; })();
-        for (const r of l.runs) {
+        for (const [k, r] of l.runs.entries()) {
           const weight = r.bold || l.style.startsWith("h") ? "600 " : "";
           ctx.font = `${r.italic || l.style === "quote" ? "italic " : ""}${weight}${base.replace(/^(italic )?(600 )?/, "")}`;
           const wpx = ctx.measureText(r.text).width;
@@ -145,7 +145,7 @@ export async function renderTextPage(page: TextPage, nb: Notebook): Promise<Page
             const ly = r.underline ? y + size + 2 : y + size * 0.55;
             ctx.beginPath(); ctx.moveTo(cx, ly); ctx.lineTo(cx + wpx, ly); ctx.stroke();
           }
-          cx += wpx + space;
+          cx += wpx + (l.runs[k + 1]?.joined ? 0 : space);
         }
         continue;
       }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Notebook, Page } from "../store/schema";
-import { getNotebook, toggleBookmark } from "../store/notebooks";
+import { getNotebook, restoreNotebook, toggleBookmark } from "../store/notebooks";
+import { navigate } from "../App";
 import { deletePage, duplicatePage, getPages, insertPage, movePage, updatePage } from "../store/pages";
 import { useLive } from "../store/useLive";
 import { Toolbar } from "./Toolbar";
@@ -171,15 +172,30 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   }
 
   if (!notebook) return <main className="nb-loading dim">Loading...</main>;
+  if (notebook.trashedAt) {
+    // a trashed notebook is not editable (it would be purged anyway); offer to restore it
+    return (
+      <main className="nb-trashed">
+        <h2>&ldquo;{notebook.title}&rdquo; is in Trash.</h2>
+        <p className="dim">Restore it to keep working on it. Items in Trash are deleted after 30 days.</p>
+        <div className="row-end" style={{ justifyContent: "center" }}>
+          <button className="btn" onClick={() => navigate("/")}>Back to library</button>
+          <button className="btn primary" onClick={() => restoreNotebook(notebook.id)}>Restore</button>
+        </div>
+      </main>
+    );
+  }
   const cur = pages[current];
   return (
     <div className="nb-view">
       <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind} onExportPdf={() => exportPdf(pages, notebook.title)}
         onExportOptions={() => setExporting(true)}
         onExportBackup={async () => {
-          const blob = await exportBackup(notebook.id);
-          await platform.saveFile(`${safeName(notebook.title)}${BACKUP_EXT}`, blob);
-          toast("Backup saved");
+          try {
+            const blob = await exportBackup(notebook.id);
+            await platform.saveFile(`${safeName(notebook.title)}${BACKUP_EXT}`, blob);
+            toast("Backup saved");
+          } catch (e) { toast(`Backup failed: ${e instanceof Error ? e.message : String(e)}`); }
         }}
         onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
       <div className="nb-body">

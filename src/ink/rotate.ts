@@ -4,6 +4,7 @@ import { getStrokes, replaceStrokes } from "../store/strokes";
 import { getObjects, putObjects } from "./objects";
 import { STRIDE } from "./model";
 import { notifyPageChanged } from "./pageEvents";
+import { clearHistory } from "./history";
 
 /**
  * Rotate an ink page 90 degrees clockwise. Pages keep the app's fixed logical width, so the turned
@@ -17,6 +18,8 @@ export async function rotatePage(pageId: string): Promise<void> {
   const k = W / H;
   const map = (x: number, y: number): [number, number] => [(H - y) * k, x * k];
 
+  await db.transaction("rw", [db.strokes, db.objects, db.pages, db.notebooks], async () => {
+  // read inside the transaction so a stroke saved meanwhile is rotated too
   const strokes = await getStrokes(pageId);
   const turned = strokes.map((s) => {
     const pts = new Float32Array(s.points);
@@ -31,10 +34,11 @@ export async function rotatePage(pageId: string): Promise<void> {
   });
   const background: InkPage["background"] = p.background ? { ...p.background, rotation: ((p.background.rotation ?? 0) + 90) % 360 } : undefined;
 
-  await db.transaction("rw", [db.strokes, db.objects, db.pages, db.notebooks], async () => {
     await replaceStrokes(pageId, strokes.map((s) => s.id), turned);
     await putObjects(objects);
     await updatePage(pageId, { size: { w: W, h: Math.round(W * k) }, ...(background ? { background } : {}) });
   });
+  // earlier undo steps hold unrotated coordinates; replaying them would corrupt the page
+  clearHistory(pageId);
   notifyPageChanged(pageId);
 }

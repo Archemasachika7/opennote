@@ -1,6 +1,9 @@
 export type TextStyle = "h1" | "h2" | "h3" | "p" | "code" | "quote" | "hr" | "table";
 /** A word with its formatting (spaces between runs are implied). */
-export type Run = { text: string; color?: string; highlight?: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean };
+/** `joined`: no space before this run (formatting changed mid-word, e.g. "un**believ**able"). */
+export type Run = { text: string; color?: string; highlight?: string; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; joined?: boolean };
+/** Text of runs with spaces only where the source had them. */
+export const runsText = (runs: Run[]): string => runs.map((r, i) => (i > 0 && !r.joined ? " " : "") + r.text).join("");
 export type Line = { text: string; style: TextStyle; prefix?: string; indent: number; y: number; runs?: Run[]; cells?: string[]; header?: boolean };
 type Mark = { type: string; attrs?: Record<string, unknown> };
 type Node = { type?: string; text?: string; attrs?: Record<string, unknown>; content?: Node[]; marks?: Mark[] };
@@ -9,6 +12,7 @@ export const LINE_HEIGHT: Record<TextStyle, number> = { h1: 64, h2: 52, h3: 44, 
 
 function runsOf(n: Node): Run[] {
   const out: Run[] = [];
+  let prevEndsWithSpace = false;
   const walk = (x: Node) => {
     if (typeof x.text === "string") {
       const style: Omit<Run, "text"> = {};
@@ -20,7 +24,11 @@ function runsOf(n: Node): Run[] {
         if (m.type === "textStyle" && typeof m.attrs?.color === "string") style.color = m.attrs.color as string;
         if (m.type === "highlight") style.highlight = typeof m.attrs?.color === "string" ? (m.attrs.color as string) : "#F2C94C";
       }
-      for (const w of x.text.split(/\s+/).filter(Boolean)) out.push({ text: w, ...style });
+      const words = x.text.split(/\s+/).filter(Boolean);
+      const gluedToPrev = out.length > 0 && !prevEndsWithSpace && !/^\s/.test(x.text);
+      words.forEach((w, k) => out.push({ text: w, ...style, ...(k === 0 && gluedToPrev ? { joined: true } : {}) }));
+      if (words.length) prevEndsWithSpace = /\s$/.test(x.text);
+      else if (x.text.length) prevEndsWithSpace = true;
     }
     x.content?.forEach(walk);
   };
@@ -32,8 +40,10 @@ function wrapRuns(runs: Run[], width: number, measure: (s: string, style: TextSt
   const lines: Run[][] = [[]];
   let text = "";
   for (const r of runs) {
-    const next = text ? text + " " + r.text : r.text;
-    if (text && measure(next, style) > width) { lines.push([r]); text = r.text; } else { lines[lines.length - 1].push(r); text = next; }
+    const next = text ? text + (r.joined ? "" : " ") + r.text : r.text;
+    // a joined piece wraps with its word only if the word started on this line; at a line start it is not "joined"
+    if (text && !r.joined && measure(next, style) > width) { lines.push([{ ...r, joined: undefined }]); text = r.text; }
+    else { lines[lines.length - 1].push(r); text = next; }
   }
   return lines;
 }
@@ -64,7 +74,7 @@ export function layoutText(doc: unknown, opts: { width: number; height: number; 
       const runs = runsOf(n);
       if (runs.length === 0) { flat.push({ text: "", style, indent, prefix }); return; }
       wrapRuns(runs, opts.width - indent, opts.measure, style).forEach((line, i) =>
-        flat.push({ text: line.map((r) => r.text).join(" "), runs: line, style, indent, prefix: i === 0 ? prefix : undefined }));
+        flat.push({ text: runsText(line), runs: line, style, indent, prefix: i === 0 ? prefix : undefined }));
     };
     switch (n.type) {
       case "heading": addRich((`h${Math.min(3, Number(n.attrs?.level ?? 1))}`) as TextStyle); break;

@@ -93,3 +93,13 @@ class OpenNoteDB extends Dexie {
 export const db = new OpenNoteDB();
 export const newId = (): string => crypto.randomUUID();
 export const now = (): number => Date.now();
+
+/** Of the given blob ids, those no object or page background references any more (safe to delete). */
+export async function unreferencedBlobs(candidates: string[]): Promise<string[]> {
+  const want = new Set(candidates);
+  if (want.size === 0) return [];
+  const used = new Set<string>();
+  await db.objects.each((o) => { if (o.blobId && want.has(o.blobId)) used.add(o.blobId); });
+  await db.pages.each((p) => { if (p.kind === "ink" && p.background && want.has(p.background.blobId)) used.add(p.background.blobId); });
+  return [...want].filter((b) => !used.has(b));
+}

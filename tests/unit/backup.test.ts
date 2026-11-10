@@ -43,7 +43,7 @@ it("export then import makes a full copy with new ids", async () => {
   const blob = (await db.blobs.get(o.blobId!))!.data;
   expect(Array.from(new Uint8Array(await blob.arrayBuffer()))).toEqual([1, 2, 3, 250]);
   expect(pages[1]).toMatchObject({ doc: { type: "doc" } });
-  expect(pages[2]).toMatchObject({ source: "<p>live</p>", allowNetwork: true });
+  expect(pages[2]).toMatchObject({ source: "<p>live</p>", allowNetwork: false }); // imports never switch internet on
   expect((await listNotebooks()).length).toBe(2);
 });
 

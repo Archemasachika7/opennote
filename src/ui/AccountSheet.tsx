@@ -109,7 +109,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
               <form className="acct-form" onSubmit={submitCode}>
                 <h3 className="acct-title">Check your email</h3>
                 <p className="dim small acct-lede">
-                  We sent a 6-digit code to <strong className="acct-email">{auth.email}</strong>.
+                  We sent a code to <strong className="acct-email">{auth.email}</strong>.
                 </p>
                 <OtpInput value={code} onChange={setCode} autoFocus disabled={busy} />
                 <button type="submit" className="btn primary acct-wide" disabled={!isValidCode(code) || busy}>Sign in</button>

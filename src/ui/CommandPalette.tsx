@@ -90,6 +90,13 @@ export function CommandPalette({ open, onClose, onNavigate, onOpenSettings, inNo
         icon: <Settings {...I} />,
         run: () => onOpenSettings(),
       },
+      {
+        id: "go-welcome",
+        label: "Open Product Overview",
+        sub: "Interactive studio landing page & playground",
+        icon: <Sparkles {...I} />,
+        run: () => onNavigate("/welcome"),
+      },
     ];
     const term = q.trim().toLowerCase();
     return term ? list.filter((a) => a.label.toLowerCase().includes(term) || (a.sub?.toLowerCase().includes(term) ?? false)) : list;

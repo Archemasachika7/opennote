@@ -163,7 +163,18 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
       )}
 
       <header className="lib-header">
-        <h1 className="wordmark">OpenNote</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: "auto" }}>
+          <h1 className="wordmark" style={{ marginRight: 0 }}>OpenNote</h1>
+          <button
+            type="button"
+            className="btn ghost"
+            aria-label="Product overview"
+            title="View OpenNote overview & interactive playground"
+            style={{ height: 24, padding: "0 8px", fontSize: 11.5, color: "var(--text-dim)" }}
+            onClick={() => navigate("/welcome")}>
+            Overview
+          </button>
+        </div>
         <label className="lib-search">
           <Search {...I} aria-hidden />
           <input

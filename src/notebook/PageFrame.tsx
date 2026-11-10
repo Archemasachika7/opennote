@@ -4,20 +4,8 @@ import { InkPage } from "../ink/InkPage";
 import { TextPage } from "../text/TextPage";
 import { LivePage, LIVE_BAR } from "../live/LivePage";
 import { Annotatable } from "../ink/Annotatable";
-import { useEffect, useState } from "react";
-import { getBlob } from "../ink/objects";
+import { useBlobUrl } from "../ui/useBlobUrl";
 
-function useBlobUrl(blobId?: string): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let made: string | null = null;
-    let alive = true;
-    if (blobId) void getBlob(blobId).then((b) => { if (b && alive) { made = URL.createObjectURL(b); setUrl(made); } });
-    else setUrl(null);
-    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
-  }, [blobId]);
-  return url;
-}
 
 /** Renders a page body by kind. Text/Live renderers are plugged in by later tasks. */
 export function PageFrame({ page, notebook, mounted, width, priority = 0, onEditLive }: {

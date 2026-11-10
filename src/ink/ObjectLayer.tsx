@@ -1,18 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { PageObject } from "../store/schema";
-import { getBlob, updateObject, addTextBox } from "./objects";
+import { updateObject, addTextBox } from "./objects";
+import { useBlobUrl } from "../ui/useBlobUrl";
 import { tryCapture } from "./input";
 
-function useBlobUrl(blobId?: string): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let u: string | null = null;
-    let alive = true;
-    if (blobId) void getBlob(blobId).then((b) => { if (b && alive) { u = URL.createObjectURL(b); setUrl(u); } });
-    return () => { alive = false; if (u) URL.revokeObjectURL(u); };
-  }, [blobId]);
-  return url;
-}
 
 type Crop = { x: number; y: number; w: number; h: number };
 const FULL: Crop = { x: 0, y: 0, w: 1, h: 1 };

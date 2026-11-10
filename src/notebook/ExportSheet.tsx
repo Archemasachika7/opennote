@@ -12,9 +12,12 @@ export function ExportSheet({ open, onClose, total, current, onExport }: {
   const [which, setWhich] = useState<"all" | "current" | "range">("all");
   const [range, setRange] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const empty = total <= 0;
+
   const go = () => {
+    if (empty) return;
     try {
-      const indices = which === "all" ? [...Array(total).keys()] : which === "current" ? [current] : parsePageRange(range, total);
+      const indices = which === "all" ? [...Array(total).keys()] : which === "current" ? [Math.min(current, total - 1)] : parsePageRange(range, total);
       setError(null);
       onExport({ format, indices });
     } catch (e) {
@@ -23,25 +26,32 @@ export function ExportSheet({ open, onClose, total, current, onExport }: {
   };
   return (
     <Sheet open={open} onClose={onClose} title="Export" width={460}>
-      <fieldset className="opt-group">
-        <legend>Format</legend>
-        <label><input type="radio" name="fmt" checked={format === "pdf"} onChange={() => setFormat("pdf")} />PDF document</label>
-        <label><input type="radio" name="fmt" checked={format === "jpg"} onChange={() => setFormat("jpg")} />JPG images</label>
-      </fieldset>
-      <fieldset className="opt-group">
-        <legend>Pages</legend>
-        <label><input type="radio" name="which" checked={which === "all"} onChange={() => setWhich("all")} />All ({total})</label>
-        <label><input type="radio" name="which" checked={which === "current"} onChange={() => setWhich("current")} />Current page ({current + 1})</label>
-        <label className="range-row">
-          <input type="radio" name="which" aria-label="Pages" checked={which === "range"} onChange={() => setWhich("range")} />
-          <input className="input" aria-label="Page range" placeholder="e.g. 2-5, 8" value={range}
-            onFocus={() => setWhich("range")} onChange={(e) => setRange(e.target.value)} />
-        </label>
-      </fieldset>
+      {empty ? (
+        <p className="dim">Add at least one page before exporting.</p>
+      ) : (
+        <>
+          <fieldset className="opt-group">
+            <legend>Format</legend>
+            <label><input type="radio" name="fmt" checked={format === "pdf"} onChange={() => setFormat("pdf")} />PDF document</label>
+            <label><input type="radio" name="fmt" checked={format === "jpg"} onChange={() => setFormat("jpg")} />JPG images</label>
+          </fieldset>
+          <fieldset className="opt-group">
+            <legend>Pages</legend>
+            <label><input type="radio" name="which" checked={which === "all"} onChange={() => setWhich("all")} />All ({total})</label>
+            <label><input type="radio" name="which" checked={which === "current"} onChange={() => setWhich("current")} />Current page ({Math.min(current + 1, total)})</label>
+            <label className="range-row">
+              <input type="radio" name="which" aria-label="Pages" checked={which === "range"} onChange={() => setWhich("range")} />
+              <input className="input" aria-label="Page range" placeholder="e.g. 2-5, 8" value={range}
+                onFocus={() => setWhich("range")} onChange={(e) => setRange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); go(); } }} />
+            </label>
+          </fieldset>
+        </>
+      )}
       {error && <p className="paste-err" role="alert">{error}</p>}
       <div className="row-end">
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" onClick={go}>Export</button>
+        <button className="btn primary" disabled={empty} onClick={go}>Export</button>
       </div>
     </Sheet>
   );

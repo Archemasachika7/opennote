@@ -1,6 +1,6 @@
 import { db, newId, now, PAGE_SIZE, unreferencedBlobs, type DocKind, type Notebook, type Paper } from "./schema";
 
-const COVERS = ["#F5A524", "#3DDC97", "#FF8A5B", "#5BB8FF", "#4FD1C5", "#E8697A"];
+export const COVERS = ["#F5A524", "#3DDC97", "#FF8A5B", "#5BB8FF", "#4FD1C5", "#E8697A"];
 
 export async function createNotebook(input: { title: string; folderId?: string | null; paper?: Paper; kind?: DocKind }): Promise<Notebook> {
   const t = now();

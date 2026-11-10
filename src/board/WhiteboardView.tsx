@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Focus, Map as MapIcon, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import type { InkPage, Notebook, Page, PageObject, Template } from "../store/schema";
 import { getNotebook, restoreNotebook } from "../store/notebooks";
-import { deletePage, getPages, insertBoard, movePage, updatePage } from "../store/pages";
+import { deletePageWithUndo, getPages, insertBoard, movePage, restoreDeletedPage, updatePage } from "../store/pages";
 import { useLive } from "../store/useLive";
 import { navigate } from "../App";
 import { Toolbar } from "../notebook/Toolbar";
 import { ExportSheet, type ExportRequest } from "../notebook/ExportSheet";
 import { safeName } from "../notebook/NotebookView";
+import { useStudioShortcuts } from "../notebook/useStudioShortcuts";
 import { sendCommand, setTool, useTool } from "../notebook/tool";
 import { InkLayer } from "../ink/InkLayer";
 import { ObjectLayer } from "../ink/ObjectLayer";
@@ -71,8 +72,8 @@ function useElementSize(ref: React.RefObject<HTMLElement | null>): { w: number; 
 }
 
 /** A whiteboard: a list of boards, each an infinite canvas with pan, zoom and a minimap. */
-export function WhiteboardView({ id, pageId }: { id: string; pageId?: string }) {
-  const notebook = useLive(() => getNotebook(id), [id], undefined as Notebook | undefined);
+export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pageId?: string; onOpenSettings?: () => void }) {
+  const notebook = useLive(async () => (await getNotebook(id)) ?? null, [id], undefined as Notebook | null | undefined);
   const pages = useLive(() => getPages(id), [id], null as Page[] | null);
   const boards = (pages ?? []).filter((p): p is InkPage => p.kind === "ink");
   const [currentId, setCurrentId] = useState<string | undefined>(pageId);
@@ -80,8 +81,26 @@ export function WhiteboardView({ id, pageId }: { id: string; pageId?: string }) 
   const [exporting, setExporting] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !(typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth < 640));
 
-  if (!notebook) return <main className="nb-loading dim">Loading...</main>;
+  useStudioShortcuts({
+    onUndo: () => board && sendCommand("undo", board.id),
+    onRedo: () => board && sendCommand("redo", board.id),
+    onToggleSidebar: () => setSidebarOpen((v) => !v),
+  });
+
+  if (notebook === undefined) return <main className="nb-loading dim">Loading...</main>;
+  if (notebook === null) {
+    return (
+      <main className="nb-missing">
+        <h2>Whiteboard not found</h2>
+        <p className="dim">This whiteboard does not exist on this device or may have been deleted.</p>
+        <div className="row-end" style={{ justifyContent: "center" }}>
+          <button className="btn primary" onClick={() => navigate("/")}>Back to library</button>
+        </div>
+      </main>
+    );
+  }
   if (notebook.trashedAt) {
     return (
       <main className="nb-trashed">
@@ -116,11 +135,23 @@ export function WhiteboardView({ id, pageId }: { id: string; pageId?: string }) 
 
   return (
     <div className="nb-view wb-view" data-testid="whiteboard">
-      <BoardChrome notebook={notebook} board={board} onExportOptions={() => setExporting(true)}
-        onExportPdf={() => runExport({ format: "pdf", indices: boards.map((_, i) => i) } as ExportRequest)} />
+      <BoardChrome
+        notebook={notebook}
+        board={board}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onOpenSettings={onOpenSettings}
+        onExportOptions={() => setExporting(true)}
+        onExportPdf={() => runExport({ format: "pdf", indices: boards.map((_, i) => i) } as ExportRequest)}
+      />
       <div className="nb-body">
-        <BoardList boards={boards} current={board?.id} onSelect={setCurrentId} notebookId={id}
-          onLayers={() => setLayersOpen(true)} />
+        {sidebarOpen && (
+          <>
+            <div className="nb-drawer-backdrop" aria-hidden onClick={() => setSidebarOpen(false)} />
+            <BoardList boards={boards} current={board?.id} onSelect={setCurrentId} notebookId={id}
+              onLayers={() => setLayersOpen(true)} />
+          </>
+        )}
         {board ? (
           <BoardStage key={board.id} board={board} notebook={notebook} showMap={showMap} onToggleMap={() => setShowMap((s) => !s)} />
         ) : <div className="wb-empty dim">{pages ? "No boards. Add one on the left." : "Loading..."}</div>}
@@ -134,8 +165,9 @@ export function WhiteboardView({ id, pageId }: { id: string; pageId?: string }) 
 }
 
 /** The toolbar for the current board (zoom lives in the stage, so the toolbar reads it from there). */
-function BoardChrome({ notebook, board, onExportPdf, onExportOptions }: {
-  notebook: Notebook; board?: InkPage; onExportPdf: () => void; onExportOptions: () => void;
+function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSettings, onExportPdf, onExportOptions }: {
+  notebook: Notebook; board?: InkPage; sidebarOpen: boolean; onToggleSidebar: () => void; onOpenSettings?: () => void;
+  onExportPdf: () => void; onExportOptions: () => void;
 }) {
   const [zoom, setZoomState] = useState(() => (board ? loadView(board.id).zoom : 1));
   useEffect(() => {
@@ -144,16 +176,26 @@ function BoardChrome({ notebook, board, onExportPdf, onExportOptions }: {
     return () => window.removeEventListener("opennote:board-zoom", on);
   }, []);
   return (
-    <Toolbar notebook={notebook} zoom={zoom} palette={inkPalette(notebook.paper)} currentKind="ink"
+    <Toolbar
+      notebook={notebook}
+      zoom={zoom}
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={onToggleSidebar}
+      onOpenSettings={onOpenSettings}
+      palette={inkPalette(notebook.paper)}
+      currentKind="ink"
       setZoom={(z) => window.dispatchEvent(new CustomEvent("opennote:board-set-zoom", { detail: z }))}
-      onExportPdf={onExportPdf} onExportOptions={onExportOptions}
+      onExportPdf={onExportPdf}
+      onExportOptions={onExportOptions}
       onExportBackup={async () => {
         try {
           await platform.saveFile(`${safeName(notebook.title)}${BACKUP_EXT}`, await exportBackup(notebook.id));
           toast("Backup saved");
         } catch (e) { toast(`Backup failed: ${e instanceof Error ? e.message : String(e)}`); }
       }}
-      onUndo={() => board && sendCommand("undo", board.id)} onRedo={() => board && sendCommand("redo", board.id)} />
+      onUndo={() => board && sendCommand("undo", board.id)}
+      onRedo={() => board && sendCommand("redo", board.id)}
+    />
   );
 }
 
@@ -170,7 +212,7 @@ function BoardList({ boards, current, onSelect, notebookId, onLayers }: {
             {renaming === b.id ? (
               <input className="input" aria-label="Board name" autoFocus defaultValue={b.title ?? `Board ${i + 1}`}
                 onBlur={(e) => { const v = e.target.value.trim(); setRenaming(null); if (v) void updatePage(b.id, { title: v }); }}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setRenaming(null); }} />
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} />
             ) : (
               <button className="wb-board" aria-current={b.id === current ? "true" : undefined} aria-label={b.title ?? `Board ${i + 1}`}
                 title="Double-click to rename"
@@ -189,7 +231,15 @@ function BoardList({ boards, current, onSelect, notebookId, onLayers }: {
                   { label: "Cover all tape", onSelect: () => setAllTape(b.id, false) },
                   ...(i > 0 ? [{ label: "Move up", icon: <ArrowUp size={14} strokeWidth={1.5} />, onSelect: () => movePage(notebookId, i, i - 1) }] : []),
                   ...(i < boards.length - 1 ? [{ label: "Move down", icon: <ArrowDown size={14} strokeWidth={1.5} />, onSelect: () => movePage(notebookId, i, i + 1) }] : []),
-                  ...(boards.length > 1 ? [{ label: "Delete board", icon: <Trash2 size={14} strokeWidth={1.5} />, danger: true, onSelect: () => deletePage(b.id) }] : []),
+                  ...(boards.length > 1 ? [{
+                    label: "Delete board",
+                    icon: <Trash2 size={14} strokeWidth={1.5} />,
+                    danger: true,
+                    onSelect: async () => {
+                      const snap = await deletePageWithUndo(b.id);
+                      if (snap) toast("Board deleted", { label: "Undo", run: () => { void restoreDeletedPage(snap); } });
+                    },
+                  }] : []),
                 ]} />
               )}
             </div>
@@ -277,18 +327,6 @@ function BoardStage({ board, notebook, showMap, onToggleMap }: { board: InkPage;
       el.removeEventListener("pointercancel", up, true);
     };
   }, [setView]);
-
-  // Ctrl+Z / Ctrl+Shift+Z
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable=true]")) return;
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
-      e.preventDefault();
-      sendCommand(e.shiftKey ? "redo" : "undo", board.id);
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [board.id]);
 
   // where new pictures go: the middle of what is on screen
   const centre = useCallback(() => {

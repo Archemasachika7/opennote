@@ -28,6 +28,27 @@ export async function updateCard(id: string, patch: Partial<Pick<Card, "front" |
   await touch(c.notebookId);
 }
 
+export type DeletedCardSnapshot = { card: Card; blobs: { id: string; data: Blob }[] };
+
+export async function deleteCardWithUndo(id: string): Promise<DeletedCardSnapshot | null> {
+  const c = await db.cards.get(id);
+  if (!c) return null;
+  const ids = [c.frontImage, c.backImage].filter((x): x is string => !!x);
+  const blobs = (await db.blobs.bulkGet(ids)).filter((b): b is { id: string; data: Blob } => !!b);
+  await deleteCard(id);
+  return { card: c, blobs };
+}
+
+export async function restoreDeletedCard(snap: DeletedCardSnapshot): Promise<void> {
+  await db.transaction("rw", [db.cards, db.blobs, db.notebooks], async () => {
+    for (const b of snap.blobs) {
+      if (!(await db.blobs.get(b.id))) await db.blobs.put(b);
+    }
+    await db.cards.put(snap.card);
+    await touch(snap.card.notebookId);
+  });
+}
+
 export async function deleteCard(id: string): Promise<void> {
   await db.transaction("rw", [db.cards, db.notebooks, db.blobs, db.objects, db.pages], async () => {
     const c = await db.cards.get(id);

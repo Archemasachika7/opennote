@@ -1,0 +1,158 @@
+"use client";
+import { useEffect, useState } from "react";
+import { HardDrive, Monitor, Moon, ShieldCheck, Sun } from "lucide-react";
+import { Sheet } from "./Sheet";
+import { useTheme, type ThemeMode } from "./theme";
+import { db } from "../store/schema";
+import { platform } from "../platform/port";
+import { toast } from "./Toast";
+
+const I = { size: 15, strokeWidth: 1.5 } as const;
+
+type StorageInfo = {
+  usage: number;
+  quota: number;
+  persisted: boolean;
+  notebooks: number;
+  pages: number;
+  livePages: number;
+  cards: number;
+};
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+const SHORTCUTS: [string, [string, string][]][] = [
+  ["Navigation & Search", [
+    ["Ctrl + K", "Command palette & jump"],
+    ["/", "Focus library search"],
+    ["?", "Settings & shortcuts"],
+    ["Ctrl + \\", "Toggle pages sidebar"],
+  ]],
+  ["Studio Tools", [
+    ["P / H / E", "Pen / Highlighter / Eraser"],
+    ["L / S / T", "Lasso / Shapes / Text box"],
+    ["B / K / R", "Tape / Laser / Ruler"],
+    ["Hold Space", "Temporary Hand pan"],
+    ["[  /  ]", "Thinner / Thicker stroke"],
+    ["Ctrl + Z / Y", "Undo / Redo"],
+  ]],
+];
+
+export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [theme, setTheme] = useTheme();
+  const [info, setInfo] = useState<StorageInfo | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void (async () => {
+      const [est, persisted, notebooks, pages, livePages, cards] = await Promise.all([
+        navigator.storage?.estimate?.().catch(() => ({ usage: 0, quota: 0 })) ?? { usage: 0, quota: 0 },
+        navigator.storage?.persisted?.().catch(() => false) ?? false,
+        db.notebooks.filter((n) => !n.trashedAt).count(),
+        db.pages.count(),
+        db.pages.filter((p) => p.kind === "html").count(),
+        db.cards.count(),
+      ]);
+      if (alive) {
+        setInfo({
+          usage: est.usage ?? 0,
+          quota: est.quota ?? 0,
+          persisted: !!persisted,
+          notebooks,
+          pages,
+          livePages,
+          cards,
+        });
+      }
+    })();
+    return () => { alive = false; };
+  }, [open]);
+
+  const modes: { id: ThemeMode; label: string; icon: JSX.Element }[] = [
+    { id: "dark", label: "Dark", icon: <Moon {...I} /> },
+    { id: "light", label: "Light", icon: <Sun {...I} /> },
+    { id: "system", label: "System", icon: <Monitor {...I} /> },
+  ];
+
+  const pct = info && info.quota > 0 ? Math.min(100, Math.max(1, (info.usage / info.quota) * 100)) : 0;
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Settings & Shortcuts" width={560}>
+      <div className="settings-stack">
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3>Appearance</h3>
+            <span className="dim small">Midnight Studio palette</span>
+          </div>
+          <div className="theme-seg" role="radiogroup" aria-label="Appearance theme">
+            {modes.map((m) => (
+              <button key={m.id} type="button" role="radio" aria-checked={theme === m.id}
+                className={`btn ${theme === m.id ? "active" : "ghost"}`} onClick={() => setTheme(m.id)}>
+                {m.icon}{m.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3><HardDrive size={14} strokeWidth={1.5} style={{ verticalAlign: "-2px", marginRight: 6 }} />Device Storage</h3>
+            {info?.persisted ? (
+              <span className="persist-badge mono"><ShieldCheck size={13} strokeWidth={1.5} />Protected offline</span>
+            ) : (
+              <button type="button" className="btn" onClick={async () => {
+                const granted = await platform.requestPersistentStorage();
+                setInfo((prev) => prev ? { ...prev, persisted: granted } : prev);
+                toast(granted ? "Persistent offline storage enabled" : "Browser manages storage automatically");
+              }}>Keep offline data safe</button>
+            )}
+          </div>
+          {info && (
+            <>
+              {info.quota > 0 && (
+                <div className="meter-wrap">
+                  <div className="meter-track" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="meter-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="mono dim small">{formatBytes(info.usage)} used of {formatBytes(info.quota)}</span>
+                </div>
+              )}
+              <div className="stat-pills mono">
+                <span>{info.notebooks} notebooks</span>
+                <span>{info.pages} pages</span>
+                <span className="live-stat">{info.livePages} live</span>
+                <span>{info.cards} cards</span>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3>Keyboard Shortcuts</h3>
+            <span className="dim small">Press <kbd className="kbd mono">?</kbd> anytime</span>
+          </div>
+          <div className="shortcut-cols">
+            {SHORTCUTS.map(([heading, rows]) => (
+              <div key={heading} className="shortcut-col">
+                <span className="shortcut-heading dim">{heading}</span>
+                {rows.map(([keys, desc]) => (
+                  <div key={keys} className="shortcut-row">
+                    <span>{desc}</span>
+                    <kbd className="kbd mono">{keys}</kbd>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </Sheet>
+  );
+}

@@ -1,7 +1,8 @@
-import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PagePatch } from "./schema";
+import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PageObject, type PagePatch } from "./schema";
 import { layerOf, pageLayers, type Layer } from "../ink/layers";
 import { notifyPageChanged } from "../ink/pageEvents";
 import { clearHistory } from "../ink/history";
+import type { Stroke } from "../ink/model";
 
 export const TOO_LARGE = "Too large (max 5 MB)";
 
@@ -129,6 +130,52 @@ export async function duplicatePage(pageId: string): Promise<Page> {
       await db.notebooks.update(nb.id, { pageIds, updatedAt: t });
     }
     return copy;
+  });
+}
+
+export type DeletedPageSnapshot = {
+  page: Page;
+  index: number;
+  bookmarked: boolean;
+  strokes: { id: string; pageId: string; stroke: Stroke }[];
+  objects: PageObject[];
+  blobs: { id: string; data: Blob }[];
+};
+
+/** Snapshot a page, delete it immediately, and return a snapshot that `restoreDeletedPage` can restore. */
+export async function deletePageWithUndo(pageId: string): Promise<DeletedPageSnapshot | null> {
+  const p = await db.pages.get(pageId);
+  if (!p) return null;
+  const nb = await db.notebooks.get(p.notebookId);
+  const index = nb ? Math.max(0, nb.pageIds.indexOf(pageId)) : 0;
+  const bookmarked = nb ? nb.bookmarks.includes(pageId) : false;
+  const strokes = await db.strokes.where("pageId").equals(pageId).toArray();
+  const objects = await db.objects.where("pageId").equals(pageId).toArray();
+  const blobIds = new Set<string>();
+  for (const o of objects) if (o.blobId) blobIds.add(o.blobId);
+  if (p.kind === "ink" && p.background?.blobId) blobIds.add(p.background.blobId);
+  if (p.kind === "html" && p.snapshotBlobId) blobIds.add(p.snapshotBlobId);
+  const blobs = (await db.blobs.bulkGet([...blobIds])).filter((b): b is { id: string; data: Blob } => !!b);
+  await deletePage(pageId);
+  return { page: p, index, bookmarked, strokes, objects, blobs };
+}
+
+export async function restoreDeletedPage(snap: DeletedPageSnapshot): Promise<void> {
+  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs], async () => {
+    const nb = await db.notebooks.get(snap.page.notebookId);
+    if (!nb) return;
+    for (const b of snap.blobs) {
+      if (!(await db.blobs.get(b.id))) await db.blobs.put(b);
+    }
+    await db.pages.put(snap.page);
+    if (snap.strokes.length) await db.strokes.bulkPut(snap.strokes);
+    if (snap.objects.length) await db.objects.bulkPut(snap.objects);
+    const pageIds = nb.pageIds.filter((id) => id !== snap.page.id);
+    pageIds.splice(Math.max(0, Math.min(snap.index, pageIds.length)), 0, snap.page.id);
+    const bookmarks = snap.bookmarked && !nb.bookmarks.includes(snap.page.id)
+      ? [...nb.bookmarks, snap.page.id]
+      : nb.bookmarks;
+    await db.notebooks.update(nb.id, { pageIds, bookmarks, updatedAt: now() });
   });
 }
 

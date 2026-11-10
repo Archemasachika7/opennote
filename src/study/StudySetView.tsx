@@ -1,13 +1,16 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, ImagePlus, Plus, RotateCcw, Shuffle, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, ImagePlus, Plus, RotateCcw, Settings, Shuffle, Trash2, X } from "lucide-react";
 import { navigate } from "../App";
 import type { Card, Notebook } from "../store/schema";
 import { getNotebook, renameNotebook, restoreNotebook } from "../store/notebooks";
-import { addCard, deleteCard, listCards, moveCard, resetProgress, reviewCard, setCardImage, updateCard } from "../store/cards";
+import {
+  addCard, deleteCardWithUndo, listCards, moveCard, resetProgress, restoreDeletedCard, reviewCard, setCardImage, updateCard,
+} from "../store/cards";
 import { useLive } from "../store/useLive";
 import { useBlobUrl } from "../ui/useBlobUrl";
+import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { motionTokens, springs, useSafeMotion } from "../ui/motion";
 import { isDue, nextLabel, progressOf, type Grade } from "./srs";
@@ -17,12 +20,23 @@ const I = { size: 15, strokeWidth: 1.5 } as const;
 type Tab = "cards" | "practice" | "learn";
 
 /** A study set: write flashcards, flip through them, or learn them with spaced repetition. */
-export function StudySetView({ id }: { id: string }) {
-  const nb = useLive(() => getNotebook(id), [id], undefined as Notebook | undefined);
+export function StudySetView({ id, onOpenSettings }: { id: string; onOpenSettings?: () => void }) {
+  const nb = useLive(async () => (await getNotebook(id)) ?? null, [id], undefined as Notebook | null | undefined);
   const cards = useLive(() => listCards(id), [id], [] as Card[]);
   const [tab, setTab] = useState<Tab>("cards");
 
-  if (!nb) return <main className="nb-loading dim">Loading...</main>;
+  if (nb === undefined) return <main className="nb-loading dim">Loading...</main>;
+  if (nb === null) {
+    return (
+      <main className="nb-missing">
+        <h2>Study set not found</h2>
+        <p className="dim">This study set does not exist on this device or may have been deleted.</p>
+        <div className="row-end" style={{ justifyContent: "center" }}>
+          <button className="btn primary" onClick={() => navigate("/")}>Back to library</button>
+        </div>
+      </main>
+    );
+  }
   if (nb.trashedAt) {
     return (
       <main className="nb-trashed">
@@ -44,13 +58,24 @@ export function StudySetView({ id }: { id: string }) {
           onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== nb.title) void renameNotebook(nb.id, v); }}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
         <span className="mono dim">{cards.length} {cards.length === 1 ? "card" : "cards"}</span>
-        <div className="study-tabs" role="tablist" aria-label="Mode">
+        <div className="study-tabs" role="tablist" aria-label="Mode" onKeyDown={(e) => {
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+          e.preventDefault();
+          const idx = tabs.findIndex(([t]) => t === tab);
+          const next = e.key === "ArrowRight" ? (idx + 1) % tabs.length : (idx - 1 + tabs.length) % tabs.length;
+          setTab(tabs[next][0]);
+        }}>
           {tabs.map(([t, label]) => (
             <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
               {tab === t && <motion.span layoutId="study-tab" className="mode-pill" transition={springs.snappy} />}{label}
             </button>
           ))}
         </div>
+        {onOpenSettings && (
+          <button className="btn ghost icon" aria-label="Settings" title="Settings & shortcuts (?)" onClick={onOpenSettings}>
+            <Settings {...I} />
+          </button>
+        )}
       </header>
       <main className="study-body">
         {tab === "cards" && <CardEditor setId={id} cards={cards} />}
@@ -81,6 +106,12 @@ function CardEditor({ setId, cards }: { setId: string; cards: Card[] }) {
     const c = await addCard(setId);
     setTimeout(() => (document.getElementById(`q-${c.id}`) as HTMLTextAreaElement | null)?.focus(), 30);
   };
+  const remove = async (c: Card) => {
+    const snap = await deleteCardWithUndo(c.id);
+    if (snap) {
+      toast("Card deleted", { label: "Undo", run: () => { void restoreDeletedCard(snap); } });
+    }
+  };
   return (
     <section className="card-editor">
       {cards.length === 0 && (
@@ -109,13 +140,13 @@ function CardEditor({ setId, cards }: { setId: string; cards: Card[] }) {
               <button className="btn ghost icon" aria-label={`Add picture to answer ${i + 1}`} title="Picture on the answer" onClick={() => pick(c, "back")}><ImagePlus {...I} /></button>
               <button className="btn ghost icon" aria-label={`Move card ${i + 1} up`} disabled={i === 0} onClick={() => moveCard(setId, i, i - 1)}><ArrowUp {...I} /></button>
               <button className="btn ghost icon" aria-label={`Move card ${i + 1} down`} disabled={i === cards.length - 1} onClick={() => moveCard(setId, i, i + 1)}><ArrowDown {...I} /></button>
-              <button className="btn ghost icon" aria-label={`Delete card ${i + 1}`} onClick={() => deleteCard(c.id)}><Trash2 {...I} /></button>
+              <button className="btn ghost icon" aria-label={`Delete card ${i + 1}`} onClick={() => remove(c)}><Trash2 {...I} /></button>
             </div>
           </li>
         ))}
       </ol>
       <div className="row-end">
-        <span className="dim small">Ctrl+Enter in the last answer adds a card</span>
+        <span className="dim small" style={{ alignSelf: "center" }}>Ctrl+Enter in the last answer adds a card</span>
         <button className="btn primary" onClick={add}><Plus {...I} />Add card</button>
       </div>
     </section>
@@ -190,6 +221,7 @@ const GRADES: { g: Grade; label: string; key: string }[] = [
 function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   const [shown, setShown] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const due = useMemo(() => cards.filter((c) => isDue(c.srs, now)).sort((a, b) => a.srs.due - b.srs.due), [cards, now]);
   const card = due[0];
   const prog = progressOf(cards.map((c) => c.srs));
@@ -261,7 +293,19 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
           <h2>All caught up</h2>
           <p className="dim">Next card is due {formatWhen(next, now)}.</p>
           <div className="row-end" style={{ justifyContent: "center" }}>
-            <button className="btn" onClick={() => resetProgress(setId)}><RotateCcw {...I} />Start over</button>
+            {confirmReset ? (
+              <>
+                <button className="btn" onClick={() => setConfirmReset(false)}>Cancel</button>
+                <button className="btn danger" onClick={async () => {
+                  await resetProgress(setId);
+                  setConfirmReset(false);
+                  setNow(Date.now());
+                  toast("Learning progress reset");
+                }}>Confirm reset</button>
+              </>
+            ) : (
+              <button className="btn" onClick={() => setConfirmReset(true)}><RotateCcw {...I} />Start over</button>
+            )}
           </div>
         </div>
       )}

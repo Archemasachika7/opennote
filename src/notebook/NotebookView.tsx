@@ -35,6 +35,7 @@ import { LatencyOverlay } from "../dev/LatencyOverlay";
 import { TemplatesSheet } from "./TemplatesSheet";
 import { getEffectiveTemplate, hydratePageTemplates, setStemTemplateForPage } from "../store/templates";
 import { AudioBar } from "./AudioBar";
+import { SpeechNoteModal } from "./SpeechNoteModal";
 import { ZoomWritingWindow } from "./ZoomBox";
 import { generateCardFromSelection, generateCardsFromPageTapes } from "../study/occlusion";
 import type { Box } from "../ink/geometry";
@@ -138,6 +139,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   const [sidebarOpen, setSidebarOpen] = useState(() => !initialMobile());
   const [splitOpen, setSplitOpen] = useState(false);
   const [audioOpen, setAudioOpen] = useState(false);
+  const [speechNoteOpen, setSpeechNoteOpen] = useState(false);
   const [elementsOpen, setElementsOpen] = useState(false);
   const [templatesFor, setTemplatesFor] = useState<Page | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -357,6 +359,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         onToggleSplit={() => setSplitOpen((v) => !v)}
         audioOpen={audioOpen}
         onToggleAudio={() => setAudioOpen((v) => !v)}
+        onOpenSpeechNote={() => setSpeechNoteOpen(true)}
         onOpenElements={cur?.kind === "ink" ? () => setElementsOpen(true) : undefined}
         onOpenTemplates={cur?.kind === "ink" ? () => setTemplatesFor(cur) : undefined}
         onGenerateTapeCards={cur?.kind === "ink" ? () => void handleGenerateTapeCards(cur) : undefined}
@@ -375,7 +378,14 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         onUndo={() => cur && sendCommand("undo", cur.id)}
         onRedo={() => cur && sendCommand("redo", cur.id)}
       />
-      {audioOpen && <AudioBar notebookId={notebook.id} onClose={() => setAudioOpen(false)} />}
+      {audioOpen && (
+        <AudioBar
+          notebookId={notebook.id}
+          currentPage={cur}
+          onOpenSpeechSettings={() => setSpeechNoteOpen(true)}
+          onClose={() => setAudioOpen(false)}
+        />
+      )}
       {busyJob && (
         <div className="nb-progress" role="status">
           <span>{busyJob.label}</span>
@@ -468,6 +478,12 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         }}
       />
       <ExportSheet open={exporting} onClose={() => setExporting(false)} total={pages.length} current={current} onExport={runExport} />
+      <SpeechNoteModal
+        open={speechNoteOpen}
+        onClose={() => setSpeechNoteOpen(false)}
+        notebookId={notebook.id}
+        currentPage={cur}
+      />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
       <LayersSheet page={(pages.find((p) => p.id === layersFor && p.kind === "ink") as InkPage | undefined) ?? null} onClose={() => setLayersFor(null)} />
       <RulerOverlay />

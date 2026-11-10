@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { PenVariant } from "../ink/model";
+import type { PenVariant, ShapeMeta } from "../ink/model";
 import type { ShapeKind } from "../ink/shapes";
 import type { InkElement } from "../ink/elements";
 
@@ -13,6 +13,12 @@ export interface ToolState {
   eraseMode: "stroke" | "partial";
   shapeKind: ShapeKind | "auto";
   shapeFill: boolean;
+  /** Independent interior fill colour (`null` = match stroke border colour). */
+  shapeFillColor: string | null;
+  /** Palette index for paper-adaptive fill colour (`null` = custom hex or match stroke). */
+  shapeFillPaletteIndex: number | null;
+  /** Interior fill opacity (`0.42` tinted, `0.9` solid). */
+  shapeFillOpacity: number;
   shapeDashed: boolean;
   penGestures: boolean;
   zoomBoxOpen: boolean;
@@ -22,7 +28,9 @@ export interface ToolState {
 
 let state: ToolState = {
   tool: "pen", variant: "ball", color: "#E8E9EE", paletteIndex: 0, width: 3,
-  eraseMode: "stroke", shapeKind: "rect", shapeFill: false, shapeDashed: false,
+  eraseMode: "stroke", shapeKind: "rect",
+  shapeFill: false, shapeFillColor: null, shapeFillPaletteIndex: null, shapeFillOpacity: 0.42,
+  shapeDashed: false,
   penGestures: true, zoomBoxOpen: false, mode: "interact", penSeen: false,
 };
 const subs = new Set<() => void>();
@@ -52,4 +60,13 @@ export function sendStampElement(pageId: string, elem: InkElement): void { stamp
 export function onStampElement(f: (pageId: string, elem: InkElement) => void): () => void {
   stampSubs.add(f);
   return () => { stampSubs.delete(f); };
+}
+
+/** Live-update selected or most recently drawn shape when user tweaks fill/dashed in Toolbar. */
+export type ShapeStylePatch = Partial<Omit<ShapeMeta, "kind">> & { clearFillColor?: boolean };
+const shapeStyleSubs = new Set<(patch: ShapeStylePatch) => void>();
+export function sendShapeStylePatch(patch: ShapeStylePatch): void { shapeStyleSubs.forEach((f) => f(patch)); }
+export function onShapeStylePatch(f: (patch: ShapeStylePatch) => void): () => void {
+  shapeStyleSubs.add(f);
+  return () => { shapeStyleSubs.delete(f); };
 }

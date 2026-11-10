@@ -5,6 +5,12 @@ export type GeometricShapeKind = "line" | "arrow" | "rect" | "roundrect" | "elli
 export interface ShapeMeta {
   kind: GeometricShapeKind;
   fill?: boolean;
+  /** Independent interior fill colour (falls back to stroke colour when omitted). */
+  fillColor?: string;
+  /** Palette index for paper-adaptive interior fill (`null` = custom hex, `undefined` = follow stroke). */
+  fillPaletteIndex?: number | null;
+  /** Interior fill opacity 0..1 (defaults to 0.42 tinted; ~0.9 for solid fill). */
+  fillOpacity?: number;
   dashed?: boolean;
 }
 

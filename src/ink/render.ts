@@ -15,6 +15,15 @@ export function resolveColor(s: Pick<Stroke, "color" | "paletteIndex">, paper: P
   return s.paletteIndex !== undefined && s.paletteIndex !== null ? PALETTES[paper][s.paletteIndex] ?? s.color : s.color;
 }
 
+export function resolveFillColor(s: Pick<Stroke, "color" | "paletteIndex" | "shape">, paper: Paper): string {
+  const sh = s.shape;
+  if (sh?.fillPaletteIndex !== undefined && sh.fillPaletteIndex !== null) {
+    return PALETTES[paper][sh.fillPaletteIndex] ?? sh.fillColor ?? resolveColor(s, paper);
+  }
+  if (sh?.fillColor) return sh.fillColor;
+  return resolveColor(s, paper);
+}
+
 const VARIANTS: Record<Stroke["variant"], StrokeOptions> = {
   ball: { thinning: 0.1, smoothing: 0.5, streamline: 0.5 },
   fountain: { thinning: 0.7, smoothing: 0.6, streamline: 0.5 },
@@ -79,6 +88,7 @@ export function strokePath(s: Stroke): Path2D {
 function paintGeometricShape(ctx: CanvasRenderingContext2D, s: Stroke, paper: Paper, alphaMul = 1): void {
   const sh = s.shape!;
   const col = resolveColor(s, paper);
+  const fillCol = resolveFillColor(s, paper);
   const lw = s.tool === "highlighter" ? s.width * 4 : s.width * 2;
   const baseAlpha = (s.tool === "highlighter" ? 0.38 : 1) * alphaMul;
   const pts = s.points;
@@ -87,7 +97,7 @@ function paintGeometricShape(ctx: CanvasRenderingContext2D, s: Stroke, paper: Pa
 
   ctx.save();
   ctx.strokeStyle = col;
-  ctx.fillStyle = col;
+  ctx.fillStyle = fillCol;
   ctx.lineWidth = lw;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -114,7 +124,11 @@ function paintGeometricShape(ctx: CanvasRenderingContext2D, s: Stroke, paper: Pa
     ctx.lineTo(w2x, w2y);
     if (sh.fill) {
       ctx.closePath();
+      ctx.fillStyle = fillCol;
+      ctx.globalAlpha = baseAlpha * (sh.fillOpacity !== undefined ? Math.max(0.75, sh.fillOpacity) : 1);
       ctx.fill();
+      ctx.globalAlpha = baseAlpha;
+      ctx.strokeStyle = col;
       ctx.stroke();
     } else {
       ctx.stroke();
@@ -125,10 +139,15 @@ function paintGeometricShape(ctx: CanvasRenderingContext2D, s: Stroke, paper: Pa
 
   const path = geometricShapePath(s);
   if (sh.fill && isClosedShape(sh.kind)) {
-    ctx.globalAlpha = (s.tool === "highlighter" ? 0.2 : 0.16) * alphaMul;
+    const rawFillAlpha = sh.fillOpacity !== undefined
+      ? sh.fillOpacity
+      : s.tool === "highlighter" ? 0.28 : 0.42;
+    ctx.fillStyle = fillCol;
+    ctx.globalAlpha = Math.max(0.05, Math.min(1, rawFillAlpha)) * alphaMul;
     ctx.fill(path);
   }
   if (sh.dashed) ctx.setLineDash([lw * 2.5, lw * 1.8]);
+  ctx.strokeStyle = col;
   ctx.globalAlpha = baseAlpha;
   ctx.stroke(path);
   ctx.restore();

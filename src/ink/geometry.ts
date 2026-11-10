@@ -1,4 +1,5 @@
 import { STRIDE, type Stroke } from "./model";
+import { isClosedShape } from "./shapes";
 
 export type Box = { x: number; y: number; w: number; h: number };
 type Pt = { x: number; y: number };
@@ -58,12 +59,28 @@ export function segSegDist(a1: Pt, a2: Pt, b1: Pt, b2: Pt): number {
   return Math.min(segDist(a1, b1, b2), segDist(a2, b1, b2), segDist(b1, a1, a2), segDist(b2, a1, a2));
 }
 
+function pointInClosedPolygon(points: Float32Array, x: number, y: number): boolean {
+  const n = count(points);
+  if (n < 3) return false;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = points[i * STRIDE], yi = points[i * STRIDE + 1];
+    const xj = points[j * STRIDE], yj = points[j * STRIDE + 1];
+    const intersect = (yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 export function hitTest(s: Stroke, x: number, y: number, radius: number): boolean {
   const n = count(s.points);
   const lim = radius + s.width / 2;
   const p = { x, y };
   if (n === 1) return Math.hypot(at(s.points, 0).x - x, at(s.points, 0).y - y) <= lim;
   for (let i = 1; i < n; i++) if (segDist(p, at(s.points, i - 1), at(s.points, i)) <= lim) return true;
+  if (s.shape?.fill && isClosedShape(s.shape.kind) && pointInClosedPolygon(s.points, x, y)) {
+    return true;
+  }
   return false;
 }
 

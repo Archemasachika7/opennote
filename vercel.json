@@ -3,5 +3,5 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!assets/|vendor/|.*\\.[a-z0-9]+$).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!api/|assets/|vendor/|.*\\.[a-z0-9]+$).*)", "destination": "/index.html" }]
 }

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
+  ArrowLeft, AudioLines, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
   Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine, Presentation,
   RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut,
 } from "lucide-react";
@@ -14,7 +14,7 @@ import type { Notebook } from "../store/schema";
 import { COVERS, renameNotebook, updateNotebook } from "../store/notebooks";
 import { useAudioLiveState } from "../store/audio";
 import { Menu } from "../ui/Menu";
-import { useTool, type ToolName, type ToolState } from "./tool";
+import { sendShapeStylePatch, useTool, type ToolName, type ToolState } from "./tool";
 import { SHAPES } from "../ink/shapes";
 import type { PenVariant } from "../ink/model";
 
@@ -26,6 +26,7 @@ export function Toolbar({
   sidebarOpen, onToggleSidebar, onOpenSettings,
   splitOpen, onToggleSplit,
   audioOpen, onToggleAudio,
+  onOpenSpeechNote,
   onOpenElements, onOpenTemplates, onGenerateTapeCards,
   enableZoomBox = false,
   onExportPdf, onExportBackup, onExportOptions,
@@ -45,6 +46,7 @@ export function Toolbar({
   onToggleSplit?: () => void;
   audioOpen?: boolean;
   onToggleAudio?: () => void;
+  onOpenSpeechNote?: () => void;
   onOpenElements?: () => void;
   onOpenTemplates?: () => void;
   onGenerateTapeCards?: () => void;
@@ -67,6 +69,12 @@ export function Toolbar({
   useEffect(() => {
     if (t.paletteIndex !== null && palette[t.paletteIndex] !== t.color) set({ color: palette[t.paletteIndex] });
   }, [palette, t.paletteIndex, t.color, set]);
+
+  useEffect(() => {
+    if (t.shapeFillPaletteIndex !== null && palette[t.shapeFillPaletteIndex] && palette[t.shapeFillPaletteIndex] !== t.shapeFillColor) {
+      set({ shapeFillColor: palette[t.shapeFillPaletteIndex] });
+    }
+  }, [palette, t.shapeFillPaletteIndex, t.shapeFillColor, set]);
 
   const tools: { name: ToolName; label: string; hint: string; icon: JSX.Element }[] = [
     { name: "pen", label: "Pen", hint: "Pen (draw; hold still 0.4s to snap shape, scribble to erase) [P]", icon: <PenLine {...ICON} /> },
@@ -160,22 +168,88 @@ export function Toolbar({
             <option value="auto">Auto (hold to snap)</option>
             {SHAPES.map((s) => <option key={s.kind} value={s.kind}>{s.label}</option>)}
           </select>
-          <button
-            type="button"
-            className={`btn ghost icon ${t.shapeFill ? "active" : ""}`}
-            aria-label="Fill shape"
-            aria-pressed={t.shapeFill}
-            title="Fill shape interior / solid arrowhead"
-            onClick={() => set({ shapeFill: !t.shapeFill })}>
-            <PaintBucket {...ICON} />
-          </button>
+          <div className="shape-fill-group" role="group" aria-label="Shape fill controls">
+            <button
+              type="button"
+              className={`btn ghost icon ${t.shapeFill ? "active" : ""}`}
+              aria-label="Fill shape"
+              aria-pressed={t.shapeFill}
+              title="Toggle shape interior fill / solid arrowhead"
+              onClick={() => {
+                const nextFill = !t.shapeFill;
+                set({ shapeFill: nextFill });
+                sendShapeStylePatch({
+                  fill: nextFill,
+                  ...(nextFill && t.shapeFillColor ? { fillColor: t.shapeFillColor, fillPaletteIndex: t.shapeFillPaletteIndex } : {}),
+                  fillOpacity: t.shapeFillOpacity,
+                });
+              }}>
+              <PaintBucket {...ICON} style={t.shapeFill ? { color: t.shapeFillColor ?? t.color } : undefined} />
+            </button>
+            <div className="fill-swatches" role="group" aria-label="Fill colours">
+              <button
+                type="button"
+                className={`fill-swatch same ${t.shapeFill && t.shapeFillColor === null ? "on" : ""}`}
+                aria-label="Fill same as border"
+                title="Fill using border colour"
+                onClick={() => {
+                  set({ shapeFill: true, shapeFillColor: null, shapeFillPaletteIndex: null });
+                  sendShapeStylePatch({ fill: true, clearFillColor: true, fillOpacity: t.shapeFillOpacity });
+                }}>
+                <span style={{ background: t.color, width: 10, height: 10, borderRadius: 2, display: "block" }} />
+              </button>
+              {palette.map((c, i) => (
+                <button
+                  key={`fill-${c}`}
+                  type="button"
+                  className={`fill-swatch ${t.shapeFill && t.shapeFillPaletteIndex === i ? "on" : ""}`}
+                  style={{ background: c }}
+                  aria-label={`Fill colour ${i + 1}`}
+                  title={`Fill shape with colour ${i + 1}`}
+                  onClick={() => {
+                    set({ shapeFill: true, shapeFillColor: c, shapeFillPaletteIndex: i });
+                    sendShapeStylePatch({ fill: true, fillColor: c, fillPaletteIndex: i, fillOpacity: t.shapeFillOpacity });
+                  }}
+                />
+              ))}
+              <input
+                type="color"
+                aria-label="Custom fill colour"
+                title="Custom shape fill colour"
+                value={(t.shapeFillColor ?? t.color).length === 7 ? (t.shapeFillColor ?? t.color) : "#4fd1c5"}
+                onChange={(e) => {
+                  const hex = e.target.value;
+                  set({ shapeFill: true, shapeFillColor: hex, shapeFillPaletteIndex: null });
+                  sendShapeStylePatch({ fill: true, fillColor: hex, fillPaletteIndex: null, fillOpacity: t.shapeFillOpacity });
+                }}
+              />
+              <button
+                type="button"
+                className={`btn ghost small mono ${t.shapeFillOpacity >= 0.8 ? "active" : ""}`}
+                aria-label="Solid shape fill"
+                aria-pressed={t.shapeFillOpacity >= 0.8}
+                title={t.shapeFillOpacity >= 0.8 ? "Solid opaque fill (click for translucent tint)" : "Translucent tint fill (click for solid fill)"}
+                style={{ padding: "2px 6px", height: 24, fontSize: 11 }}
+                onClick={() => {
+                  const nextOp = t.shapeFillOpacity >= 0.8 ? 0.42 : 0.9;
+                  set({ shapeFill: true, shapeFillOpacity: nextOp });
+                  sendShapeStylePatch({ fill: true, fillOpacity: nextOp });
+                }}>
+                {t.shapeFillOpacity >= 0.8 ? "Solid" : "Tint"}
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             className={`btn ghost icon ${t.shapeDashed ? "active" : ""}`}
             aria-label="Dashed shape"
             aria-pressed={t.shapeDashed}
             title="Dashed shape outline"
-            onClick={() => set({ shapeDashed: !t.shapeDashed })}>
+            onClick={() => {
+              const nextDash = !t.shapeDashed;
+              set({ shapeDashed: nextDash });
+              sendShapeStylePatch({ dashed: nextDash });
+            }}>
             <Minus {...ICON} />
           </button>
         </>
@@ -231,6 +305,15 @@ export function Toolbar({
             <Mic {...ICON} />
           </button>
         )}
+        {onOpenSpeechNote && (
+          <button
+            className="btn ghost icon"
+            aria-label="Speech-to-text note"
+            title="Speech-to-Text Note (Sarvam AI / Voice Dictation)"
+            onClick={onOpenSpeechNote}>
+            <AudioLines {...ICON} />
+          </button>
+        )}
         {onToggleSplit && (
           <button
             className={`btn ghost icon ${splitOpen ? "active" : ""}`}
@@ -271,6 +354,11 @@ export function Toolbar({
         <button className="btn ghost icon" aria-label="Notebook options" onClick={() => setMenu(true)}><MoreHorizontal {...ICON} /></button>
         {menu && (
           <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} footer={coverFooter} items={[
+            ...(onOpenSpeechNote ? [{
+              label: "Speech-to-text note (Sarvam AI)...",
+              icon: <AudioLines size={14} strokeWidth={1.5} />,
+              onSelect: onOpenSpeechNote,
+            }] : []),
             ...(onOpenTemplates && currentKind === "ink" ? [{
               label: "Paper & STEM templates...",
               icon: <LayoutTemplate size={14} strokeWidth={1.5} />,

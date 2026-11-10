@@ -12,12 +12,13 @@ import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import {
-  Bold, Code, Columns3, Heading1, Heading2, Heading3, Highlighter, Italic, List, ListChecks, ListOrdered,
+  AudioLines, Bold, Code, Columns3, Heading1, Heading2, Heading3, Highlighter, Italic, List, ListChecks, ListOrdered,
   Minus, Palette, Quote, Rows3, Sigma, Strikethrough, Table as TableIcon, Trash2, Underline as UnderlineIcon,
 } from "lucide-react";
 import { PAGE_SIZE, type TextPage as TP } from "../store/schema";
 import { updatePage } from "../store/pages";
 import { formatLatexMath, MATH_PRESETS } from "./mathFormat";
+import { onRichTextInsert, SpeechNoteModal } from "../notebook/SpeechNoteModal";
 import "./text.css";
 
 const SAVE_MS = 400;
@@ -30,7 +31,7 @@ interface SlashItem {
   label: string;
   hint: string;
   keywords: string;
-  run: (ed: Editor, openMath: () => void) => void;
+  run: (ed: Editor, openMath: () => void, openVoice: () => void) => void;
 }
 
 const SLASH_ITEMS: SlashItem[] = [
@@ -40,6 +41,7 @@ const SLASH_ITEMS: SlashItem[] = [
   { id: "todo", label: "Task checklist", hint: "Interactive to-do items", keywords: "todo task check list", run: (ed) => ed.chain().focus().toggleTaskList().run() },
   { id: "bullet", label: "Bullet list", hint: "Unordered list", keywords: "bullet ul list", run: (ed) => ed.chain().focus().toggleBulletList().run() },
   { id: "num", label: "Numbered list", hint: "Ordered steps", keywords: "numbered ol steps", run: (ed) => ed.chain().focus().toggleOrderedList().run() },
+  { id: "voice", label: "Voice dictation (Sarvam AI)", hint: "Speech-to-text note in Indic / English", keywords: "voice speech dictate sarvam audio mic", run: (_ed, _openMath, openVoice) => openVoice() },
   { id: "math", label: "Math equation", hint: "LaTeX -> crisp scientific symbols", keywords: "math equation formula latex sigma integral", run: (_ed, openMath) => openMath() },
   { id: "callout", label: "Callout / Theorem", hint: "Highlighted theorem or key note", keywords: "callout quote theorem note", run: (ed) => ed.chain().focus().toggleBlockquote().run() },
   { id: "table", label: "Table (3x3)", hint: "Structured rows & columns", keywords: "table grid matrix", run: (ed) => ed.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
@@ -66,6 +68,7 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
   const [colours, setColours] = useState(false);
   const [slash, setSlash] = useState<{ from: number; to: number; query: string; idx: number } | null>(null);
   const [mathOpen, setMathOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [mathLatex, setMathLatex] = useState("x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}");
   const [mathBlock, setMathBlock] = useState(false);
 
@@ -109,7 +112,7 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
           if (chosen && editorRef.current) {
             editorRef.current.chain().focus().deleteRange({ from: cur.from, to: cur.to }).run();
             setSlash(null);
-            chosen.run(editorRef.current, () => setMathOpen(true));
+            chosen.run(editorRef.current, () => setMathOpen(true), () => setVoiceOpen(true));
           }
           return true;
         }
@@ -140,6 +143,18 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
   useEffect(() => () => {
     if (timer.current && editor) { clearTimeout(timer.current); void updatePage(page.id, { doc: editor.getJSON() }); }
   }, [editor, page.id]);
+
+  // Receive Speech-to-Text inserts targeted at this mounted rich text page
+  useEffect(() => onRichTextInsert((targetId, text) => {
+    if (targetId !== page.id || !editor) return false;
+    const paragraphs = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    if (!paragraphs.length) return true;
+    editor.chain().focus().insertContent(
+      paragraphs.map((p) => ({ type: "paragraph", content: [{ type: "text", text: p }] })),
+    ).run();
+    void updatePage(page.id, { doc: editor.getJSON() });
+    return true;
+  }), [editor, page.id]);
 
   const filteredSlash = useMemo(() => {
     if (!slash) return [];
@@ -199,6 +214,7 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
           <button className="btn ghost icon" aria-label="Code block" onClick={() => editor.chain().focus().toggleCodeBlock().run()}><Code {...I} /></button>
           <button className="btn ghost icon" aria-label="Horizontal rule" onClick={() => editor.chain().focus().setHorizontalRule().run()}><Minus {...I} /></button>
           <button className="btn ghost icon" aria-label="Insert math" title="Insert LaTeX math equation (/math)" onClick={() => setMathOpen((v) => !v)}><Sigma {...I} /></button>
+          <button className="btn ghost icon" aria-label="Voice dictation" title="Speech-to-Text Note (Sarvam AI / /voice)" onClick={() => setVoiceOpen(true)}><AudioLines {...I} /></button>
           <button className="btn ghost icon" aria-label="Insert table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon {...I} /></button>
           {editor.isActive("table") && (
             <>
@@ -260,7 +276,7 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
               onClick={() => {
                 editor.chain().focus().deleteRange({ from: slash.from, to: slash.to }).run();
                 setSlash(null);
-                item.run(editor, () => setMathOpen(true));
+                item.run(editor, () => setMathOpen(true), () => setVoiceOpen(true));
               }}>
               <span className="slash-label">{item.label}</span>
               <span className="slash-hint dim">{item.hint}</span>
@@ -270,6 +286,12 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
       )}
 
       <EditorContent editor={editor} />
+      <SpeechNoteModal
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        notebookId={page.notebookId}
+        currentPage={page}
+      />
     </div>
   );
 }

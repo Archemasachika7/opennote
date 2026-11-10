@@ -78,12 +78,17 @@ export async function addTextBox(pageId: string, at: { x: number; y: number }, l
 }
 
 /** Tape covers part of the page; it starts hidden (covering) and is tapped to peel it back. */
-export async function addTape(pageId: string, r: { x: number; y: number; w: number; h: number }, color: string, layerId?: string): Promise<PageObject> {
+export async function addTape(
+  pageId: string, r: { x: number; y: number; w: number; h: number }, color: string, layerId?: string,
+  /** runs as soon as the tape exists, before the page timestamps update, so undo can never miss it */
+  onAdded?: (o: PageObject) => void,
+): Promise<PageObject> {
   const o: PageObject = {
     id: newId(), pageId, kind: "tape", x: r.x, y: r.y, w: r.w, h: r.h, rotation: 0, color, revealed: false,
     z: await nextZ(pageId), ...(layerId ? { layerId } : {}),
   };
   await db.objects.add(o);
+  onAdded?.(o);
   await touch(pageId);
   return o;
 }

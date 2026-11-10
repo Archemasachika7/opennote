@@ -610,8 +610,8 @@ export function InkLayer({
       const [x1, y1] = toLogical(ev.nativeEvent);
       const r = tapeRect(a.pts[0], a.pts[1], x1, y1);
       const layerId = getActiveLayer(pageId, { layers: layersRef.current });
-      const o = await addTape(pageId, r, tapeColor(), layerId !== BASE_LAYER ? layerId : undefined);
-      historyFor(pageId).push({ remove: [], add: [], objects: { before: [], after: [o] } });
+      await addTape(pageId, r, tapeColor(), layerId !== BASE_LAYER ? layerId : undefined,
+        (o) => historyFor(pageId).push({ remove: [], add: [], objects: { before: [], after: [o] } }));
       return;
     }
     if (a.shape) {

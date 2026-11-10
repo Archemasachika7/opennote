@@ -118,7 +118,7 @@ export function SyncPanel() {
           </span>
         </li>
       </ol>
-      <p className="dim small" style={{ margin: 0 }}>Tokens and keys stay on this device. Storage only ever sees encrypted data.</p>
+      <p className="dim small" style={{ margin: 0 }}>Tokens and keys are saved to your account, encrypted with your passphrase, so your other devices get them too. Storage only ever sees encrypted data.</p>
     </section>
   );
 }

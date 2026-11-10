@@ -30,6 +30,7 @@ import { platform } from "../platform/port";
 import { HeroCanvasDemo } from "./HeroCanvasDemo";
 import { BentoDemos } from "./BentoDemos";
 import { LiveArtifactDemo } from "./LiveArtifactDemo";
+import { GetOpenNote } from "./GetOpenNote";
 import { motionTokens } from "../ui/motion";
 import "./landing.css";
 
@@ -44,12 +45,6 @@ const KEYCAPS: { key: string; name: string; detail: string }[] = [
   { key: "Ctrl K", name: "Command Jump", detail: "Instant full-text search across notebooks, rich text pages, flashcards, and studio actions." },
 ];
 
-const RELEASES = "https://github.com/Archemasachika7/opennote/releases/latest";
-const DOWNLOADS: { name: string; detail: string; href: string; external: boolean; icon: ReactNode }[] = [
-  { name: "Web app", detail: "Open in Chrome or Edge. Install it as an app from the address bar.", href: "#/", external: false, icon: <Globe size={18} strokeWidth={1.5} /> },
-  { name: "Android", detail: "Download the APK for phones and tablets.", href: `${RELEASES}/download/OpenNote-android.apk`, external: true, icon: <Smartphone size={18} strokeWidth={1.5} /> },
-  { name: "Windows", detail: "Download the installer for laptops and pen tablets.", href: `${RELEASES}/download/OpenNote-windows-setup.exe`, external: true, icon: <Monitor size={18} strokeWidth={1.5} /> },
-];
 
 /** Fades a block up as it scrolls into view (once). Reduced motion: opacity only. */
 function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
@@ -336,28 +331,7 @@ export function LandingPage({
           </Reveal>
         </section>
 
-        {/* DOWNLOAD */}
-        <section id="lp-download" className="lp-section">
-          <div className="lp-section-head">
-            <span className="lp-sec-kicker">Get OpenNote</span>
-            <div className="lp-sec-title-row">
-              <h2>Web, Android and Windows. Free, no account.</h2>
-              <p>Same notebook on every device. Nothing to pay, no ads, your notes stay on your device.</p>
-            </div>
-          </div>
-          <div className="lp-dl-grid">
-            {DOWNLOADS.map((d, i) => (
-              <Reveal key={d.name} delay={i}>
-                <a className="lp-dl-card" href={d.href} target={d.external ? "_blank" : undefined} rel={d.external ? "noreferrer" : undefined}
-                  onClick={d.external ? undefined : (e) => { e.preventDefault(); navigate("/"); }}>
-                  <span className="lp-dl-icon">{d.icon}</span>
-                  <strong>{d.name}</strong>
-                  <span className="dim small">{d.detail}</span>
-                </a>
-              </Reveal>
-            ))}
-          </div>
-        </section>
+        <GetOpenNote />
 
         {/* THREE WORKSPACES + TACTILE KEYBOARD MATRIX */}
         <section id="lp-shortcuts" className="lp-section">

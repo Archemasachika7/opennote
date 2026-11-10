@@ -1,21 +1,21 @@
-/* Midnight Studio — spec §9 */
+/* Amber Dark (after 21st.dev "Amber Dark"), chosen 2026-11-10. Mint stays for Live pages. */
 :root {
-  --bg: #121318;
-  --surface: #1a1c23;
-  --surface-2: #22252e;
-  --card-surface: #1e2028;
-  --page-dark: #1e2028;
+  --bg: #09090b;
+  --surface: #101013;
+  --surface-2: #17171b;
+  --card-surface: #141417;
+  --page-dark: #141417;
   --page-light: #f3f1ec;
-  --line: #2a2d37;
-  --text: #e8e9ee;
-  --text-dim: #9a9dab;
-  --accent: #f5a524;
-  --accent-ink: #121318;
+  --line: #232328;
+  --text: #fafafa;
+  --text-dim: #a1a1aa;
+  --accent: #e3af35;
+  --accent-ink: #09090b;
   --live: #3ddc97;
   --study: #4fd1c5;
   --danger: #ff6b6b;
-  --danger-ink: #121318;
-  --radius: 6px;
+  --danger-ink: #09090b;
+  --radius: 8px;
   --font-ui: "Inter", system-ui, sans-serif;
   --font-title: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;

@@ -82,13 +82,12 @@ describe("Landing Page (21st.dev architectural studio, zero auth wall)", () => {
 });
 
 describe("landing downloads and film", () => {
-  it("links straight to the APK and EXE that CI attaches to the latest release, and shows the launch film", async () => {
+  it("has the Get OpenNote section (web, Windows, Android) and the launch film", async () => {
+    globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as unknown as typeof fetch;
     window.location.hash = "#/welcome";
     render(<App />);
-    const apk = await screen.findByRole("link", { name: /android/i });
-    const exe = screen.getByRole("link", { name: /windows/i });
-    expect(apk.getAttribute("href")).toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-android.apk");
-    expect(exe.getAttribute("href")).toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-windows-setup.exe");
+    expect(await screen.findByRole("region", { name: "Get OpenNote" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /continue on the web/i })).toBeInTheDocument();
     expect(document.querySelector("video source")?.getAttribute("src")).toBe("/media/opennote-launch.mp4");
   });
 });

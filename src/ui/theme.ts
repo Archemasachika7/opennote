@@ -28,7 +28,7 @@ function applyDomTheme(mode: ThemeMode): void {
   if (resolved === "light") document.documentElement.setAttribute("data-theme", "light");
   else document.documentElement.removeAttribute("data-theme");
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", resolved === "light" ? "#f4f4f6" : "#121318");
+  if (meta) meta.setAttribute("content", resolved === "light" ? "#f4f4f6" : "#09090b");
 }
 
 export function initTheme(): void {

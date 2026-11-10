@@ -439,7 +439,7 @@
   border-radius: 999px;
   background: rgba(18, 19, 24, 0.82);
   border: 1px solid rgba(245, 165, 36, 0.35);
-  color: #f5a524;
+  color: var(--accent);
   font-size: 10.5px;
   letter-spacing: 0.05em;
   pointer-events: none;
@@ -449,7 +449,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #f5a524;
+  background: var(--accent);
 }
 
 .lp-stage-telemetry {
@@ -622,7 +622,7 @@
 .lp-slider {
   flex: 1;
   min-width: 72px;
-  accent-color: #f5a524;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -702,8 +702,8 @@
   inset: 4px;
   border: 1px dashed rgba(18, 19, 24, 0.35);
   border-radius: 5px;
-  background: linear-gradient(90deg, #f5a524, #f2c94c);
-  color: #121318;
+  background: linear-gradient(90deg, var(--accent), #f2d27a);
+  color: var(--accent-ink);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -1097,3 +1097,25 @@
 
 /* calmer kickers: plain words, not code */
 .lp-sec-kicker { font-family: Inter, system-ui, sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+
+/* ---- Get OpenNote: web, Windows, Android ---- */
+.get-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.get-card {
+  position: relative; display: grid; align-content: start; gap: 8px; padding: 22px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+  transition: border-color 0.2s, transform 0.2s;
+}
+.get-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.get-card.is-rec { border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, var(--surface)), var(--surface)); }
+.get-card h3 { margin: 4px 0 0; font-family: var(--font-title); font-size: 20px; letter-spacing: -0.01em; }
+.get-card p { margin: 0 0 6px; line-height: 1.5; }
+.get-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.get-badge { position: absolute; top: 16px; right: 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 3px 8px; border-radius: 999px; color: var(--accent-ink); background: var(--accent); }
+.get-btn { justify-content: center; height: 40px; width: 100%; font-weight: 600; }
+.get-btn.is-off { opacity: 0.55; cursor: default; pointer-events: none; }
+.get-qr { margin-top: 6px; border-radius: 8px; border: 1px solid var(--line); }
+@media (max-width: 860px) { .get-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .get-card { transition: none; } }

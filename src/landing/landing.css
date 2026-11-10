@@ -1,6 +1,6 @@
 /* ==========================================================================
    OpenNote Architectural Landing Page — 21st.dev-inspired Studio Precision
-   Brand rule: Midnight Studio Obsidian + Warm Amber (#F5A524) + Mint (#3DDC97)
+   Brand rule: Amber Dark, flat. Gold accent only; no gradients, glows, green or red
    ========================================================================== */
 
 .lp-root {
@@ -16,13 +16,8 @@
   inset: 0 0 auto 0;
   height: 680px;
   pointer-events: none;
-  background-image: radial-gradient(
-    color-mix(in srgb, var(--text) 14%, transparent) 1px,
-    transparent 1px
-  );
+  background: none;
   background-size: 24px 24px;
-  mask-image: radial-gradient(ellipse 72% 62% at 50% 8%, #000 22%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 72% 62% at 50% 8%, #000 22%, transparent 100%);
   opacity: 0.65;
 }
 
@@ -187,11 +182,7 @@
   padding: 56px 32px 44px;
   display: grid;
   gap: 36px;
-  background: radial-gradient(
-    680px 260px at 22% 0%,
-    color-mix(in srgb, var(--accent) 8%, transparent),
-    transparent 78%
-  );
+  background: none;
 }
 
 .lp-hero-copy {
@@ -219,8 +210,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--live);
-  box-shadow: 0 0 10px var(--live);
+  background: var(--accent);
+  box-shadow: none;
 }
 
 .lp-dot-sep { opacity: 0.5; }
@@ -259,7 +250,7 @@
 
 .lp-demo-btn {
   border-color: var(--line);
-  color: var(--live);
+  color: var(--accent);
 }
 
 .lp-count-pill {
@@ -288,7 +279,7 @@
   left: 12%;
   right: 12%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background: none;
   opacity: 0.65;
   pointer-events: none;
 }
@@ -439,7 +430,7 @@
   border-radius: 999px;
   background: rgba(18, 19, 24, 0.82);
   border: 1px solid rgba(245, 165, 36, 0.35);
-  color: #f5a524;
+  color: var(--accent);
   font-size: 10.5px;
   letter-spacing: 0.05em;
   pointer-events: none;
@@ -449,7 +440,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #f5a524;
+  background: var(--accent);
 }
 
 .lp-stage-telemetry {
@@ -467,7 +458,7 @@
 
 .lp-tel-ok {
   margin-left: auto;
-  color: var(--live);
+  color: var(--accent);
 }
 
 /* ---- Sections & Headers ---- */
@@ -532,13 +523,7 @@
   padding: 20px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background:
-    radial-gradient(
-      340px circle at var(--mx) var(--my),
-      color-mix(in srgb, var(--accent) 9%, transparent),
-      transparent 70%
-    ),
-    var(--surface);
+  background: none;
   overflow: hidden;
   transition: border-color 180ms ease;
 }
@@ -622,7 +607,7 @@
 .lp-slider {
   flex: 1;
   min-width: 72px;
-  accent-color: #f5a524;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -658,7 +643,7 @@
   justify-content: space-between;
   gap: 8px;
   font-size: 10px;
-  color: #3ddc97;
+  color: var(--text);
 }
 
 .lp-stt-out {
@@ -694,7 +679,7 @@
 .lp-eq-formula {
   font-size: 16px;
   font-weight: 600;
-  color: #4fd1c5;
+  color: var(--text-dim);
 }
 
 .lp-tape-strip {
@@ -702,8 +687,8 @@
   inset: 4px;
   border: 1px dashed rgba(18, 19, 24, 0.35);
   border-radius: 5px;
-  background: linear-gradient(90deg, #f5a524, #f2c94c);
-  color: #121318;
+  background: none;
+  color: var(--accent-ink);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -844,8 +829,8 @@
   background: var(--bg);
 }
 .lp-mode-icon.amber { color: var(--accent); }
-.lp-mode-icon.mint { color: var(--live); }
-.lp-mode-icon.cyan { color: var(--study); }
+.lp-mode-icon.mint { color: var(--accent); }
+.lp-mode-icon.cyan { color: var(--text-dim); }
 
 .lp-mode-arrow {
   color: var(--text-dim);
@@ -932,11 +917,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 20px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--accent) 7%, var(--surface)),
-    var(--surface) 60%
-  );
+  background: none;
 }
 
 .lp-bottom-cta h2 {
@@ -1038,12 +1019,12 @@
   display: grid; grid-template-rows: auto 1fr auto; min-height: 340px; overflow: hidden;
   border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
 }
-.lp-live-out { grid-template-rows: auto 1fr; border-color: color-mix(in srgb, var(--live) 40%, var(--line)); }
+.lp-live-out { grid-template-rows: auto 1fr; border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .lp-live-bar {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 11px; letter-spacing: 0.04em;
   color: var(--text-dim); border-bottom: 1px solid var(--line);
 }
-.lp-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); }
+.lp-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: none; }
 .lp-live-code {
   width: 100%; min-height: 240px; resize: vertical; padding: 12px; border: 0; outline: none;
   background: var(--bg); color: var(--text); font-size: 12px; line-height: 1.55; tab-size: 2;
@@ -1097,3 +1078,48 @@
 
 /* calmer kickers: plain words, not code */
 .lp-sec-kicker { font-family: Inter, system-ui, sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+
+/* ---- Get OpenNote: web, Windows, Android ---- */
+.get-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.get-card {
+  position: relative; display: grid; align-content: start; gap: 8px; padding: 22px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+  transition: border-color 0.2s, transform 0.2s;
+}
+.get-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.get-card.is-rec { border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  background: none; }
+.get-card h3 { margin: 4px 0 0; font-family: var(--font-title); font-size: 20px; letter-spacing: -0.01em; }
+.get-card p { margin: 0 0 6px; line-height: 1.5; }
+.get-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.get-badge { position: absolute; top: 16px; right: 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 3px 8px; border-radius: 999px; color: var(--accent-ink); background: var(--accent); }
+.get-btn { justify-content: center; height: 40px; width: 100%; font-weight: 600; }
+.get-btn.is-off { opacity: 0.55; cursor: default; pointer-events: none; }
+.get-qr { margin-top: 6px; border-radius: 8px; border: 1px solid var(--line); }
+@media (max-width: 860px) { .get-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .get-card { transition: none; } }
+
+/* ==========================================================================
+   Flat pass (2026-11-10, user rule): no decorative gradients, no glow, no
+   green/red lights. Flat surfaces, 1px lines, gold only as a solid accent.
+   ========================================================================== */
+.lp-bg-grid { display: none; }
+.lp-hero { background: none; }
+.lp-stage-frame::before { background: var(--line); }
+.lp-bento-card { background: var(--surface); }
+.lp-tape-strip { background: var(--accent); }
+.lp-bottom-cta { background: var(--surface); }
+.get-card.is-rec { background: var(--surface); border-color: var(--accent); }
+.lp-status-dot { background: var(--text-dim); box-shadow: none; }
+.lp-live-dot { background: var(--text-dim); box-shadow: none; }
+.lp-film-video { box-shadow: none; }
+.lp-title { color: var(--display); letter-spacing: -0.035em; }
+.lp-section h2 { color: var(--display); }
+
+/* headline words are animated inline-blocks; the gap between them is a margin, not a collapsed space */
+.lp-title-word + .lp-title-word { margin-left: 0.24em; }
+
+/* the one-click download is a link styled as a button */
+.lp-hero-actions a.btn { text-decoration: none; }

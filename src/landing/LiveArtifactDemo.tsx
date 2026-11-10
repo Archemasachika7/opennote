@@ -8,7 +8,7 @@ const SAMPLE = `<style>
   body { font: 14px system-ui; color: #e8e9ee; background: #1e2028; display: grid; place-items: center; height: 100vh; margin: 0; }
   .bars { display: flex; align-items: end; gap: 4px; height: 90px; }
   .bars i { width: 14px; background: #f5a524; border-radius: 3px 3px 0 0; transition: height .25s; }
-  button { margin-top: 12px; padding: 6px 14px; border: 0; border-radius: 6px; background: #3ddc97; color: #121318; font-weight: 600; cursor: pointer; }
+  button { margin-top: 12px; padding: 6px 14px; border: 0; border-radius: 6px; background: #e3af35; color: #09090b; font-weight: 600; cursor: pointer; }
 </style>
 <div>
   <div class="bars" id="b"></div>

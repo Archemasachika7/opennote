@@ -30,6 +30,7 @@ import { platform } from "../platform/port";
 import { HeroCanvasDemo } from "./HeroCanvasDemo";
 import { BentoDemos } from "./BentoDemos";
 import { LiveArtifactDemo } from "./LiveArtifactDemo";
+import { detectPlatform, GetOpenNote, SmartDownload } from "./GetOpenNote";
 import { motionTokens } from "../ui/motion";
 import "./landing.css";
 
@@ -44,12 +45,6 @@ const KEYCAPS: { key: string; name: string; detail: string }[] = [
   { key: "Ctrl K", name: "Command Jump", detail: "Instant full-text search across notebooks, rich text pages, flashcards, and studio actions." },
 ];
 
-const RELEASES = "https://github.com/Archemasachika7/opennote/releases/latest";
-const DOWNLOADS: { name: string; detail: string; href: string; external: boolean; icon: ReactNode }[] = [
-  { name: "Web app", detail: "Open in Chrome or Edge. Install it as an app from the address bar.", href: "#/", external: false, icon: <Globe size={18} strokeWidth={1.5} /> },
-  { name: "Android", detail: "Download the APK for phones and tablets.", href: `${RELEASES}/download/OpenNote-android.apk`, external: true, icon: <Smartphone size={18} strokeWidth={1.5} /> },
-  { name: "Windows", detail: "Download the installer for laptops and pen tablets.", href: `${RELEASES}/download/OpenNote-windows-setup.exe`, external: true, icon: <Monitor size={18} strokeWidth={1.5} /> },
-];
 
 /** Fades a block up as it scrolls into view (once). Reduced motion: opacity only. */
 function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
@@ -147,8 +142,8 @@ export function LandingPage({
             <svg className="lp-logo" viewBox="0 0 32 32" fill="none" aria-hidden>
               <rect x="3" y="2" width="26" height="28" rx="5" fill="var(--surface)" stroke="var(--line)" strokeWidth="1.5" />
               <path d="M3 7C3 4.23858 5.23858 2 8 2H9.5V30H8C5.23858 30 3 27.7614 3 25V7Z" fill="var(--accent)" />
-              <path d="M13 19.5C15.2 15 17.5 22.5 20.4 16.8C22 13.8 23.5 18 25.2 15.5" stroke="var(--live)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="24.5" cy="8.5" r="2" fill="var(--live)" />
+              <path d="M13 19.5C15.2 15 17.5 22.5 20.4 16.8C22 13.8 23.5 18 25.2 15.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="24.5" cy="8.5" r="2" fill="var(--accent)" />
             </svg>
             <span className="lp-brand-name">OpenNote</span>
             <span className="lp-version mono">LOCAL-FIRST STUDIO</span>
@@ -213,9 +208,9 @@ export function LandingPage({
             <h1 className="lp-title" aria-label="Notes that run.">
               {HEADLINE.map((w, i) => (
                 <motion.span key={w} className={`lp-title-word${i === 2 ? " lp-title-accent" : ""}`} aria-hidden
-                  initial={{ opacity: 0, y: 18, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.08 + i * 0.09, ease: [0.22, 1, 0.36, 1] }}>
-                  {w}{" "}
+                  {w}
                 </motion.span>
               ))}
             </h1>
@@ -226,9 +221,11 @@ export function LandingPage({
             </p>
 
             <div className="lp-hero-actions">
+              {/* one click: the installer for this device (nothing on other devices) */}
+              <SmartDownload />
               <button
                 type="button"
-                className="btn primary lp-btn-lg"
+                className={detectPlatform() === "other" ? "btn primary lp-btn-lg" : "btn lp-btn-lg"}
                 onClick={() => navigate("/")}>
                 Enter Studio
                 {notebookCount > 0 && (
@@ -336,28 +333,7 @@ export function LandingPage({
           </Reveal>
         </section>
 
-        {/* DOWNLOAD */}
-        <section id="lp-download" className="lp-section">
-          <div className="lp-section-head">
-            <span className="lp-sec-kicker">Get OpenNote</span>
-            <div className="lp-sec-title-row">
-              <h2>Web, Android and Windows. Free, no account.</h2>
-              <p>Same notebook on every device. Nothing to pay, no ads, your notes stay on your device.</p>
-            </div>
-          </div>
-          <div className="lp-dl-grid">
-            {DOWNLOADS.map((d, i) => (
-              <Reveal key={d.name} delay={i}>
-                <a className="lp-dl-card" href={d.href} target={d.external ? "_blank" : undefined} rel={d.external ? "noreferrer" : undefined}
-                  onClick={d.external ? undefined : (e) => { e.preventDefault(); navigate("/"); }}>
-                  <span className="lp-dl-icon">{d.icon}</span>
-                  <strong>{d.name}</strong>
-                  <span className="dim small">{d.detail}</span>
-                </a>
-              </Reveal>
-            ))}
-          </div>
-        </section>
+        <GetOpenNote />
 
         {/* THREE WORKSPACES + TACTILE KEYBOARD MATRIX */}
         <section id="lp-shortcuts" className="lp-section">

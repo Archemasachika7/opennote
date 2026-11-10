@@ -76,18 +76,18 @@ function buildSeedStrokes(): DemoStroke[] {
     { color: "#525866", lightColor: "#9BA1B0", width: 2.4, pts: axisH },
     { color: "#525866", lightColor: "#9BA1B0", width: 2.4, pts: axisV },
     { color: "#F5A524", lightColor: "#B45309", width: 2.2, pts: envUp },
-    { color: "#3DDC97", lightColor: "#0D7A4E", width: 4.2, pts: wave },
+    { color: "#FAFAFA", lightColor: "#16171C", width: 4.2, pts: wave },
     { color: "#F5A524", lightColor: "#B45309", width: 3.0, pts: cardRect },
-    { color: "#4FD1C5", lightColor: "#0E7490", width: 2.8, pts: pointer },
-    { color: "#4FD1C5", lightColor: "#0E7490", width: 2.8, pts: arrowHead },
+    { color: "#A1A1AA", lightColor: "#5D6070", width: 2.8, pts: pointer },
+    { color: "#A1A1AA", lightColor: "#5D6070", width: 2.8, pts: arrowHead },
     { color: "#F5A524", lightColor: "#B45309", width: 3.2, pts: underline },
   ];
 }
 
 const SWATCHES = [
   { label: "Amber", dark: "#F5A524", light: "#B45309" },
-  { label: "Mint", dark: "#3DDC97", light: "#0D7A4E" },
-  { label: "Cyan", dark: "#4FD1C5", light: "#0E7490" },
+  { label: "White", dark: "#FAFAFA", light: "#16171C" },
+  { label: "Grey", dark: "#A1A1AA", light: "#5D6070" },
   { label: "Chalk", dark: "#E8E9EE", light: "#16171C" },
   { label: "Coral", dark: "#FF8A5B", light: "#C2410C" },
 ];
@@ -187,7 +187,7 @@ function paintPaperBackground(ctx: CanvasRenderingContext2D, paper: DemoPaper) {
   ctx.fillText("m x'' + b x' + k x = 0", 634, 154);
 
   ctx.font = '500 13px "JetBrains Mono", monospace';
-  ctx.fillStyle = isLight ? "#0D7A4E" : "#3DDC97";
+  ctx.fillStyle = isLight ? "#16171C" : "#FAFAFA";
   ctx.fillText("ω_d = √(ω₀² − γ²)", 638, 184);
 }
 

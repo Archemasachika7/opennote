@@ -38,7 +38,8 @@
 .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); }
 .sync-dot.good { background: var(--accent); }
 .sync-dot.busy { background: var(--accent); animation: sync-pulse 1s ease-in-out infinite; }
-.sync-dot.bad { background: #e5484d; }
+/* an error is a hollow dot plus words, not a red light */
+.sync-dot.bad { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text); }
 @keyframes sync-pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .sync-dot.busy { animation: none; } }
 .sync-msg { margin: 0; color: var(--text-dim); }

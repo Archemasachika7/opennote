@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { motion } from "motion/react";
+import { useState, type ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   ArrowRight,
   BookOpen,
@@ -8,12 +8,15 @@ import {
   Cpu,
   Download,
   FilePlus2,
+  Globe,
   GraduationCap,
   HardDrive,
   Layers,
   LayoutDashboard,
+  Monitor,
   Moon,
   Shield,
+  Smartphone,
   Sparkles,
   Sun,
 } from "lucide-react";
@@ -26,6 +29,8 @@ import { useTheme } from "../ui/theme";
 import { platform } from "../platform/port";
 import { HeroCanvasDemo } from "./HeroCanvasDemo";
 import { BentoDemos } from "./BentoDemos";
+import { LiveArtifactDemo } from "./LiveArtifactDemo";
+import { motionTokens } from "../ui/motion";
 import "./landing.css";
 
 const KEYCAPS: { key: string; name: string; detail: string }[] = [
@@ -39,36 +44,26 @@ const KEYCAPS: { key: string; name: string; detail: string }[] = [
   { key: "Ctrl K", name: "Command Jump", detail: "Instant full-text search across notebooks, rich text pages, flashcards, and studio actions." },
 ];
 
-const ARCH_SPECS = [
-  {
-    code: "ARCH.01",
-    metric: "< 4 ms",
-    title: "Wet / Dry Dual-Canvas Pipeline",
-    body: "Active stylus input renders on an isolated wet canvas with pointer prediction while committed strokes cache Path2D geometry on the dry layer.",
-    icon: <Cpu size={15} strokeWidth={1.6} />,
-  },
-  {
-    code: "ARCH.02",
-    metric: "16 B / pt",
-    title: "Binary Float32 Stroke Storage",
-    body: "Each sample packs [x, y, pressure, Δt] into raw Float32Array buffers inside IndexedDB — thousands of handwritten strokes hydrate in milliseconds.",
-    icon: <HardDrive size={15} strokeWidth={1.6} />,
-  },
-  {
-    code: "ARCH.03",
-    metric: "0 Auth",
-    title: "Local-First, Zero Cloud Lock-In",
-    body: "No account gate, no telemetry beacons, no recurring paywall. Your browser's persistent storage owns every byte from the first keystroke.",
-    icon: <Shield size={15} strokeWidth={1.6} />,
-  },
-  {
-    code: "ARCH.04",
-    metric: ".opennote",
-    title: "Portable Archives & Vector PDF",
-    body: "Import multi-page PDFs to annotate at full resolution, export print-ready PDFs or JPGs, and back up full notebooks as open ZIP bundles.",
-    icon: <Download size={15} strokeWidth={1.6} />,
-  },
+const RELEASES = "https://github.com/Archemasachika7/opennote/releases/latest";
+const DOWNLOADS: { name: string; detail: string; href: string; external: boolean; icon: ReactNode }[] = [
+  { name: "Web app", detail: "Open in Chrome or Edge. Install it as an app from the address bar.", href: "#/", external: false, icon: <Globe size={18} strokeWidth={1.5} /> },
+  { name: "Android", detail: "APK for phones and tablets, with pen and palm rejection.", href: RELEASES, external: true, icon: <Smartphone size={18} strokeWidth={1.5} /> },
+  { name: "Windows", detail: "EXE installer for laptops and pen tablets.", href: RELEASES, external: true, icon: <Monitor size={18} strokeWidth={1.5} /> },
 ];
+
+/** Fades a block up as it scrolls into view (once). Reduced motion: opacity only. */
+function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
+  const reduce = useReducedMotion() ?? false;
+  return (
+    <motion.div initial={{ opacity: 0, y: reduce ? 0 : motionTokens.distance.lg }} whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-60px" }}
+      transition={{ duration: motionTokens.duration.slow, delay: delay * motionTokens.stagger * 2, ease: [0.22, 1, 0.36, 1] }}>
+      {children}
+    </motion.div>
+  );
+}
+
+const HEADLINE = ["Notes", "that", "run."];
 
 function CrosshairDivider() {
   return (
@@ -152,7 +147,7 @@ export function LandingPage({
           <nav className="lp-nav" aria-label="Landing sections">
             <button type="button" onClick={() => scrollToSection("lp-workbench")}>Workbench</button>
             <button type="button" onClick={() => scrollToSection("lp-primitives")}>Primitives</button>
-            <button type="button" onClick={() => scrollToSection("lp-architecture")}>Architecture</button>
+            <button type="button" onClick={() => scrollToSection("lp-live")}>Live pages</button>
             <button type="button" onClick={() => scrollToSection("lp-shortcuts")}>Shortcuts</button>
           </nav>
 
@@ -198,21 +193,26 @@ export function LandingPage({
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}>
             <div className="lp-eyebrow mono">
               <span className="lp-status-dot" />
-              <span>ZERO ACCOUNT WALL</span>
+              <span>FREE</span>
               <span className="lp-dot-sep">·</span>
-              <span>OFFLINE PWA</span>
+              <span>OFFLINE</span>
               <span className="lp-dot-sep">·</span>
-              <span>INDEXEDDB NATIVE</span>
+              <span>NO ACCOUNT</span>
             </div>
 
-            <h1 className="lp-title">
-              Handwritten ink, live simulations, and spaced recall on one page.
+            <h1 className="lp-title" aria-label="Notes that run.">
+              {HEADLINE.map((w, i) => (
+                <motion.span key={w} className={`lp-title-word${i === 2 ? " lp-title-accent" : ""}`} aria-hidden
+                  initial={{ opacity: 0, y: 18, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{ duration: 0.5, delay: 0.08 + i * 0.09, ease: [0.22, 1, 0.36, 1] }}>
+                  {w}{" "}
+                </motion.span>
+              ))}
             </h1>
 
             <p className="lp-subtitle">
-              An engineering-grade digital notebook built for equations, lectures, and technical thinking.
-              Sketch at 120Hz, sync strokes to voice and Sarvam AI transcripts, run interactive code artifacts
-              beside your notes, and review with FSRS-4.5 — stored entirely on your device.
+              A pen-first notebook for lectures and problem sets. Write with your stylus, record a class and
+              replay your ink in sync, and paste AI-made HTML, SVG or React onto a page, where it runs.
             </p>
 
             <div className="lp-hero-actions">
@@ -277,30 +277,42 @@ export function LandingPage({
 
         <CrosshairDivider />
 
-        {/* ARCHITECTURAL ENGINEERING LEDGER */}
-        <section id="lp-architecture" className="lp-section lp-arch-section">
+        {/* SIGNATURE: PASTE -> RUN */}
+        <section id="lp-live" className="lp-section">
           <div className="lp-section-head">
-            <span className="mono lp-sec-kicker">02 // SYSTEM ARCHITECTURE</span>
+            <span className="mono lp-sec-kicker">02 // LIVE PAGES</span>
             <div className="lp-sec-title-row">
-              <h2>Engineered like a native instrument, delivered as a URL.</h2>
+              <h2>Copy an AI artifact. Paste. It runs.</h2>
               <p>
-                No loading spinners waiting on a remote database. Every stroke, PDF page, audio blob,
-                and flashcard lives in structured local IndexedDB tables with instant offline boot.
+                HTML, SVG or React from Claude, ChatGPT or Gemini becomes a real page between your notes:
+                interactive, offline, sandboxed, and you can write on it with your pen.
               </p>
             </div>
           </div>
+          <Reveal><LiveArtifactDemo /></Reveal>
+        </section>
 
-          <div className="lp-arch-grid">
-            {ARCH_SPECS.map((s) => (
-              <div key={s.code} className="lp-arch-cell">
-                <div className="lp-arch-top mono">
-                  <span>{s.code}</span>
-                  <span className="lp-arch-icon">{s.icon}</span>
-                </div>
-                <div className="lp-arch-metric mono">{s.metric}</div>
-                <h3>{s.title}</h3>
-                <p>{s.body}</p>
-              </div>
+        <CrosshairDivider />
+
+        {/* DOWNLOAD */}
+        <section id="lp-download" className="lp-section">
+          <div className="lp-section-head">
+            <span className="mono lp-sec-kicker">03 // EVERYWHERE</span>
+            <div className="lp-sec-title-row">
+              <h2>Web, Android and Windows. Free, no account.</h2>
+              <p>Same notebook on every device. Nothing to pay, no ads, your notes stay on your device.</p>
+            </div>
+          </div>
+          <div className="lp-dl-grid">
+            {DOWNLOADS.map((d, i) => (
+              <Reveal key={d.name} delay={i}>
+                <a className="lp-dl-card" href={d.href} target={d.external ? "_blank" : undefined} rel={d.external ? "noreferrer" : undefined}
+                  onClick={d.external ? undefined : (e) => { e.preventDefault(); navigate("/"); }}>
+                  <span className="lp-dl-icon">{d.icon}</span>
+                  <strong>{d.name}</strong>
+                  <span className="dim small">{d.detail}</span>
+                </a>
+              </Reveal>
             ))}
           </div>
         </section>
@@ -311,7 +323,7 @@ export function LandingPage({
         <section id="lp-shortcuts" className="lp-section">
           <div className="lp-dual-band">
             <div className="lp-modes-col">
-              <span className="mono lp-sec-kicker">03 // DOCUMENT SURFACES</span>
+              <span className="mono lp-sec-kicker">04 // DOCUMENT SURFACES</span>
               <h2>Three workspaces, one unified library.</h2>
               <div className="lp-mode-list">
                 <button type="button" className="lp-mode-card" onClick={() => void handleCreateDoc("notebook")}>
@@ -344,7 +356,7 @@ export function LandingPage({
             </div>
 
             <div className="lp-keys-col">
-              <span className="mono lp-sec-kicker">04 // MUSCLE MEMORY</span>
+              <span className="mono lp-sec-kicker">05 // MUSCLE MEMORY</span>
               <h2>Single-key studio ergonomics.</h2>
               <p className="lp-keys-sub">
                 Select any keycap to inspect its tool behaviour. Inside the studio, press <kbd className="kbd mono">?</kbd> anytime.

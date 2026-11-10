@@ -19,6 +19,8 @@ export interface SarvamPrefs {
   languageCode: string;
   mode: SarvamMode;
   engine: SttEngine;
+  /** Recorded-lecture transcription: free on-device Whisper (default) or Sarvam with the user's key. */
+  lectureEngine?: "whisper" | "sarvam";
 }
 
 export const SARVAM_LANGUAGES: { code: string; label: string }[] = [
@@ -57,13 +59,12 @@ function bump() {
   subs.forEach((fn) => fn());
 }
 
+/**
+ * Never from the build: anything in a VITE_* variable is compiled into the public bundle, so a key there
+ * would let every visitor spend the owner's credits. Each user pastes their own key in Settings.
+ */
 function readEnvSarvamKey(): string {
-  try {
-    const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-    return (env?.VITE_SARVAM_API_KEY ?? "").trim();
-  } catch {
-    return "";
-  }
+  return "";
 }
 
 export function hasEnvSarvamKey(): boolean {
@@ -101,6 +102,7 @@ export function getSarvamPrefs(): SarvamPrefs {
       languageCode: parsed.languageCode || "unknown",
       mode: parsed.mode || "transcribe",
       engine: parsed.engine || fallbackEngine,
+      lectureEngine: parsed.lectureEngine === "sarvam" ? "sarvam" : "whisper",
     };
   } catch {
     return { languageCode: "unknown", mode: "transcribe", engine: fallbackEngine };
@@ -264,28 +266,22 @@ async function invokeSingleSarvamChunk(
   const key = (opts.apiKey ?? getSarvamApiKey()).trim();
   const buildBody = () => buildSarvamFormData(chunkBlob, ext, opts);
 
-  if (key) {
-    try {
-      return await fetch(SARVAM_ENDPOINT, {
-        method: "POST",
-        headers: { "api-subscription-key": key },
-        body: buildBody(),
-      });
-    } catch {
-      // Network/CORS fallback when hosted on Vercel with /api/sarvam-stt Edge route
-      return await fetch(VERCEL_PROXY_ENDPOINT, {
-        method: "POST",
-        headers: { "x-sarvam-key": key },
-        body: buildBody(),
-      });
-    }
+  // the user's own key only: there is no shared key anywhere (free, no charges to anyone else)
+  if (!key) return new Response(JSON.stringify({ error: "no key" }), { status: 401 });
+  try {
+    return await fetch(SARVAM_ENDPOINT, {
+      method: "POST",
+      headers: { "api-subscription-key": key },
+      body: buildBody(),
+    });
+  } catch {
+    // Network/CORS fallback: same-origin /api/sarvam-stt pass-through (web build on Vercel only)
+    return await fetch(VERCEL_PROXY_ENDPOINT, {
+      method: "POST",
+      headers: { "x-sarvam-key": key },
+      body: buildBody(),
+    });
   }
-
-  // No browser key set: try server-managed Vercel env key (/api/sarvam-stt)
-  return await fetch(VERCEL_PROXY_ENDPOINT, {
-    method: "POST",
-    body: buildBody(),
-  });
 }
 
 function describeSarvamError(status: number, bodyText: string, hadKey: boolean): string {

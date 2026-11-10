@@ -1027,3 +1027,44 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Hero headline: word-by-word reveal ---- */
+.lp-title-word { display: inline-block; will-change: transform, opacity, filter; }
+.lp-title-accent { color: var(--accent); }
+
+/* ---- 02 Live pages: paste → run ---- */
+.lp-live { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.lp-live-pane {
+  display: grid; grid-template-rows: auto 1fr auto; min-height: 340px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+}
+.lp-live-out { grid-template-rows: auto 1fr; border-color: color-mix(in srgb, var(--live) 40%, var(--line)); }
+.lp-live-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 11px; letter-spacing: 0.04em;
+  color: var(--text-dim); border-bottom: 1px solid var(--line);
+}
+.lp-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); }
+.lp-live-code {
+  width: 100%; min-height: 240px; resize: vertical; padding: 12px; border: 0; outline: none;
+  background: var(--bg); color: var(--text); font-size: 12px; line-height: 1.55; tab-size: 2;
+}
+.lp-live-run { margin: 10px; justify-self: end; }
+.lp-live-frame { width: 100%; height: 100%; min-height: 290px; border: 0; background: var(--page-dark); }
+.lp-live-idle { align-self: center; justify-self: center; max-width: 260px; text-align: center; padding: 24px; }
+@media (max-width: 760px) { .lp-live { grid-template-columns: 1fr; } }
+
+/* ---- 03 Download ---- */
+.lp-dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.lp-dl-card {
+  display: grid; gap: 6px; padding: 18px; height: 100%; text-decoration: none; color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  transition: border-color 0.2s, transform 0.2s;
+}
+.lp-dl-card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); transform: translateY(-2px); }
+.lp-dl-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lp-dl-icon {
+  width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; margin-bottom: 4px;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+@media (max-width: 760px) { .lp-dl-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .lp-dl-card:hover { transform: none; } }

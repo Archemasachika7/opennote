@@ -21,6 +21,7 @@ import {
   encodePcm16Wav,
   getSarvamApiKey,
   setSarvamApiKey,
+  setSarvamPrefs,
   testSarvamConnection,
   transcribeWithSarvam,
 } from "../../src/ai/sarvamStt";
@@ -422,8 +423,16 @@ describe("3. Sarvam AI Speech-to-Text (saaras:v3) & Speech-to-Text Notes", () =>
 
   it("AudioBar transcribes a saved lecture clip with Sarvam AI and attaches clickable timestamped segments", async () => {
     const nb = await createNotebook({ title: "Transcript Audio NB" });
-    const clip = await saveAudioClip(nb.id, createSilentTestWav(500), { title: "Lecture 1", durationMs: 12_000 });
+    const wav = createSilentTestWav(500);
+    const clip = await saveAudioClip(nb.id, wav, { title: "Lecture 1", durationMs: 12_000 });
+    // fake-indexeddb drops jsdom Blobs (browsers keep them): hand the audio row back as the real browser would
+    const realGet = db.blobs.get.bind(db.blobs);
+    vi.spyOn(db.blobs, "get").mockImplementation((async (key: string) => {
+      const row = await realGet(key);
+      return row ? { ...row, data: wav } : row;
+    }) as never);
     setSarvamApiKey("sk_sarvam_clip_key");
+    setSarvamPrefs({ lectureEngine: "sarvam" }); // opt in: Whisper is the default
 
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ transcript: "Wave-particle duality explained clearly.", language_code: "en-IN" }), { status: 200 }),

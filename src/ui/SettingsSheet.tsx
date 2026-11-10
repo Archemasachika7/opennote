@@ -144,6 +144,19 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               <span className="dim small">saaras:v3</span>
             )}
           </div>
+          <div className="theme-seg" role="radiogroup" aria-label="Lecture transcription engine">
+            {([["whisper", "On-device (Whisper, free)"], ["sarvam", "Sarvam AI (your key)"]] as const).map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={(sarvamPrefs.lectureEngine ?? "whisper") === id}
+                className={`btn ${(sarvamPrefs.lectureEngine ?? "whisper") === id ? "active" : "ghost"}`}
+                onClick={() => setSarvamPrefs({ lectureEngine: id })}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="dim small" style={{ margin: "0 0 8px" }}>
+            Recorded lectures. Whisper runs on this device: free, private, offline after a one-time ~40 MB download.
+            Sarvam is often better for Indian languages and uses your own key.
+          </p>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <input
               type="password"

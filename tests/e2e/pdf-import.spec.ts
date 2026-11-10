@@ -15,7 +15,7 @@ test("import a PDF as a notebook, annotate it, and find its text", async ({ page
   test.setTimeout(60_000);
   const pdfPath = "test-results/sample.pdf";
   await makePdf(pdfPath);
-  await page.goto("/");
+  await page.goto("/#/library");
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Import" }).click();
   await (await chooser).setFiles(pdfPath);

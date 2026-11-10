@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckSquare, ChevronDown, Command, FolderPlus, GraduationCap, LayoutDashboard, LayoutGrid, List,
-  Pencil, Plus, Search, Settings, Sparkles, Star, Trash2, Upload, X,
+  Pencil, Plus, Search, Settings, Sparkles, Star, Trash2, Upload, User, X,
 } from "lucide-react";
+import { AccountSheet } from "../ui/AccountSheet";
+import { useAuth } from "../sync/auth";
 import { navigate } from "../App";
 import { db, type DocKind, type Folder, type Notebook } from "../store/schema";
 import { Menu } from "../ui/Menu";
@@ -28,11 +30,23 @@ import "./library.css";
 type Filter = { kind: "all" } | { kind: "favorites" } | { kind: "trash" } | { kind: "folder"; id: string | null } | { kind: "type"; doc: DocKind };
 const I = { size: 16, strokeWidth: 1.5 } as const;
 
+function ago(t: number, nowMs: number = Date.now()): string {
+  const m = Math.round((nowMs - t) / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "yesterday" : `${d} days ago`;
+}
+
 function savedView(): "grid" | "list" {
   try { return localStorage.getItem("opennote:libraryView") === "list" ? "list" : "grid"; } catch { return "grid"; }
 }
 
 export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?: () => void; onOpenPalette?: () => void } = {}) {
+  const auth = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
   const [sort, setSort] = useState<LibrarySort>("updated");
   const [view, setViewRaw] = useState<"grid" | "list">(savedView);
@@ -73,6 +87,8 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
     folderId: filter.kind === "folder" ? filter.id : undefined,
     kind: filter.kind === "type" ? filter.doc : undefined,
   }), [filter, sort], [] as Notebook[]);
+  // the "Continue" row: last three edited, whatever the sort
+  const recent = [...notebooks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
   const cardCounts = useLive(async () => {
     const m = new Map<string, number>();
     await db.cards.each((c) => m.set(c.notebookId, (m.get(c.notebookId) ?? 0) + 1));
@@ -199,6 +215,15 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
               <Command {...I} />
             </button>
           )}
+          {auth.status !== "disabled" && (
+            <>
+              <button className={`btn ghost icon${auth.status === "signed-in" ? " active" : ""}`} aria-label="Account"
+                title={auth.user ? `Signed in as ${auth.user.email}` : "Account (optional)"} onClick={() => setAccountOpen(true)}>
+                <User {...I} />
+              </button>
+              <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
+            </>
+          )}
           {onOpenSettings && (
             <button className="btn ghost icon" aria-label="Settings" title="Settings, storage & shortcuts (?)" onClick={onOpenSettings}>
               <Settings {...I} />
@@ -251,8 +276,8 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
           ))}
         </section>
       ) : (
-        <>
-          <nav className="lib-bar" aria-label="Filters and sort">
+        <div className="lib-body">
+          <aside className="lib-side" aria-label="Library sections">
             <div className="chips">
               {chip("All", { kind: "all" }, filter.kind === "all")}
               {chip("Favourites", { kind: "favorites" }, filter.kind === "favorites", <Star size={13} strokeWidth={1.5} />)}
@@ -262,6 +287,9 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
               {folders.map((f) => <span key={f.id}>{chip(f.name, { kind: "folder", id: f.id }, filter.kind === "folder" && filter.id === f.id)}</span>)}
               {chip("Trash", { kind: "trash" }, inTrash, <Trash2 size={13} strokeWidth={1.5} />)}
             </div>
+          </aside>
+          <div className="lib-main">
+          <nav className="lib-bar" aria-label="Filters and sort">
             <div className="lib-tools">
               {activeFolder && (
                 <div className="folder-actions">
@@ -322,6 +350,28 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
             )}
           </AnimatePresence>
 
+          {filter.kind === "all" && !selecting && recent.length >= 2 && (
+            <section className="lib-continue" aria-label="Continue where you left off">
+              <h2 className="lib-continue-title">Continue</h2>
+              <div className="lib-continue-row">
+                {recent.map((nb, i) => (
+                  <motion.button key={nb.id} type="button" className="lib-continue-card"
+                    aria-label={`Continue ${nb.title}`}
+                    initial={{ opacity: 0, y: motionTokens.distance.sm }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: motionTokens.duration.normal, delay: i * motionTokens.stagger }}
+                    whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => navigate(`/nb/${nb.id}`)}>
+                    <span className="lib-continue-cover" style={{ background: nb.coverColor }} aria-hidden />
+                    <span className="lib-continue-meta">
+                      <strong>{nb.title}</strong>
+                      <span className="dim small">{nb.pageIds.length} {nb.pageIds.length === 1 ? "page" : "pages"} · {ago(nb.updatedAt)}</span>
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {notebooks.length === 0 ? (
             <div className="empty">
               <h2>
@@ -370,7 +420,8 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
               </AnimatePresence>
             </motion.section>
           )}
-        </>
+          </div>
+        </div>
       )}
 
       <Sheet open={!!doomed} onClose={() => setDoomed(null)} title="Delete forever" width={440}>

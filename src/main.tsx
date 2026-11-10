@@ -4,9 +4,15 @@ import "./ui/global.css";
 import { App } from "./App";
 import { installPlatform } from "./platform/install";
 import { initTheme } from "./ui/theme";
+import { initAuth } from "./sync/auth";
+import { startSyncLoop } from "./sync/run";
 
 initTheme();
 void installPlatform();
+// optional sign-in: restores a saved session; does nothing when Supabase isn't configured
+void initAuth().catch(() => undefined);
+// encrypted sync: idles until signed in and unlocked with the sync passphrase
+startSyncLoop();
 
 if (import.meta.env.PROD && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {

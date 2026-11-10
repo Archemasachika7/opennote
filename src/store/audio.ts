@@ -1,13 +1,10 @@
 import { useSyncExternalStore } from "react";
-import { db, newId, now } from "../store/schema";
+import { db, newId, now, type Recording, type TranscriptSegment } from "../store/schema";
 import { getStrokes } from "./strokes";
 
-export interface AudioTranscriptSegment {
-  offsetMs: number;
-  endMs: number;
-  text: string;
-}
+export type AudioTranscriptSegment = TranscriptSegment;
 
+/** What the UI sees of a recording (the row minus storage details). */
 export interface AudioClipMeta {
   id: string;
   notebookId: string;
@@ -85,31 +82,16 @@ export async function countSyncedStrokesForClip(notebookId: string, clipId: stri
   }
 }
 
-const indexKey = (notebookId: string) => `opennote:audio-index:${notebookId}`;
-const clipBlobKey = (clipId: string) => `opennote:audio-clip:${clipId}`;
+let lastCreatedAt = 0;
 
-export async function listAudioClips(notebookId: string): Promise<AudioClipMeta[]> {
-  try {
-    const row = await db.blobs.get(indexKey(notebookId));
-    if (!row) return [];
-    const raw = typeof row.data?.text === "function"
-      ? await row.data.text()
-      : (row as unknown as { json?: string }).json ?? "";
-    if (!raw) return [];
-    const list = JSON.parse(raw) as AudioClipMeta[];
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
+function toMeta(r: Recording): AudioClipMeta {
+  const { blobId: _b, updatedAt: _u, ...meta } = r;
+  return meta;
 }
 
-async function writeAudioIndex(notebookId: string, list: AudioClipMeta[]): Promise<void> {
-  const json = JSON.stringify(list);
-  await db.blobs.put({
-    id: indexKey(notebookId),
-    data: new Blob([json], { type: "application/json" }),
-    json,
-  } as { id: string; data: Blob });
+export async function listAudioClips(notebookId: string): Promise<AudioClipMeta[]> {
+  const rows = await db.recordings.where("notebookId").equals(notebookId).toArray();
+  return rows.sort((a, b) => a.createdAt - b.createdAt).map(toMeta);
 }
 
 export async function saveAudioClip(
@@ -124,57 +106,60 @@ export async function saveAudioClip(
     transcriptSegments?: AudioTranscriptSegment[];
   },
 ): Promise<AudioClipMeta> {
-  const prev = await listAudioClips(notebookId);
-  const clip: AudioClipMeta = {
-    id: opts.id ?? newId(),
-    notebookId,
-    title: opts.title?.trim() || `Recording ${prev.length + 1}`,
-    durationMs: Math.max(0, Math.round(opts.durationMs)),
-    mimeType: blob.type || "audio/webm",
-    createdAt: now(),
-    ...(opts.transcript ? { transcript: opts.transcript } : {}),
-    ...(opts.languageCode ? { languageCode: opts.languageCode } : {}),
-    ...(opts.transcriptSegments ? { transcriptSegments: opts.transcriptSegments } : {}),
-  };
-  const bytes = typeof blob.arrayBuffer === "function" ? await blob.arrayBuffer().catch(() => undefined) : undefined;
-  await db.blobs.put({
-    id: clipBlobKey(clip.id),
-    data: blob,
-    ...(bytes ? { bytes, mimeType: clip.mimeType } : {}),
-  } as { id: string; data: Blob });
-  await writeAudioIndex(notebookId, [...prev, clip]);
-  return clip;
+  const id = opts.id ?? newId();
+  const blobId = newId();
+  // one transaction: the audio and its row land together, and parallel saves can't overwrite each other
+  return db.transaction("rw", [db.recordings, db.blobs], async () => {
+    const count = await db.recordings.where("notebookId").equals(notebookId).count();
+    // strictly increasing, so two saves in the same millisecond still list in order
+    const t = (lastCreatedAt = Math.max(now(), lastCreatedAt + 1));
+    const row: Recording = {
+      id,
+      notebookId,
+      blobId,
+      title: opts.title?.trim() || `Recording ${count + 1}`,
+      durationMs: Math.max(0, Math.round(opts.durationMs)),
+      mimeType: blob.type || "audio/webm",
+      createdAt: t,
+      updatedAt: t,
+      ...(opts.transcript ? { transcript: opts.transcript } : {}),
+      ...(opts.languageCode ? { languageCode: opts.languageCode } : {}),
+      ...(opts.transcriptSegments ? { transcriptSegments: opts.transcriptSegments } : {}),
+    };
+    await db.blobs.put({ id: blobId, data: blob });
+    await db.recordings.put(row);
+    return toMeta(row);
+  });
 }
 
 export async function updateAudioClipMeta(
-  notebookId: string,
+  _notebookId: string,
   clipId: string,
   patch: Partial<Omit<AudioClipMeta, "id" | "notebookId">>,
 ): Promise<AudioClipMeta | null> {
-  const prev = await listAudioClips(notebookId);
-  let updated: AudioClipMeta | null = null;
-  const next = prev.map((c) => {
-    if (c.id !== clipId) return c;
-    updated = { ...c, ...patch };
-    return updated;
+  return db.transaction("rw", db.recordings, async () => {
+    const row = await db.recordings.get(clipId);
+    if (!row) return null;
+    const next: Recording = { ...row, ...patch, id: row.id, notebookId: row.notebookId, blobId: row.blobId, updatedAt: now() };
+    await db.recordings.put(next);
+    return toMeta(next);
   });
-  if (!updated) return null;
-  await writeAudioIndex(notebookId, next);
-  return updated;
 }
 
 export async function getAudioClipBlob(clipId: string): Promise<Blob | null> {
-  const row = await db.blobs.get(clipBlobKey(clipId)) as { data?: Blob; bytes?: ArrayBuffer; mimeType?: string } | undefined;
+  const row = await db.recordings.get(clipId);
   if (!row) return null;
-  if (row.data instanceof Blob) return row.data;
-  if (row.bytes) return new Blob([row.bytes], { type: row.mimeType || "audio/wav" });
-  return row.data ?? null;
+  const blob = await db.blobs.get(row.blobId);
+  return blob?.data ?? null;
 }
 
-export async function deleteAudioClip(notebookId: string, clipId: string): Promise<void> {
-  const prev = await listAudioClips(notebookId);
-  await db.blobs.delete(clipBlobKey(clipId));
-  await writeAudioIndex(notebookId, prev.filter((c) => c.id !== clipId));
+export async function deleteAudioClip(_notebookId: string, clipId: string): Promise<void> {
+  await db.transaction("rw", [db.recordings, db.blobs], async () => {
+    const row = await db.recordings.get(clipId);
+    if (!row) return;
+    await db.blobs.delete(row.blobId);
+    await db.recordings.delete(clipId);
+  });
   if (liveState.playback?.clipId === clipId) {
     setAudioLiveState({ playback: null });
   }

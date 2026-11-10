@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 export const fixture = (name: string): string => readFileSync(`tests/e2e/fixtures/${name}`, "utf8");
 
 export async function newNotebook(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/#/library");
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect(page.locator("[data-testid=ink-surface]").first()).toBeVisible();
 }

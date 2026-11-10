@@ -89,7 +89,7 @@ describe("LibraryView", () => {
     await createNotebook({ title: "Two" });
     await createNotebook({ title: "Three" });
     render(<LibraryView />);
-    await screen.findByText("One");
+    await screen.findAllByText("One");
     await user.click(screen.getByRole("button", { name: "Select" }));
     await user.click(screen.getByRole("checkbox", { name: "Select One" }));
     await user.click(screen.getByRole("checkbox", { name: "Select Two" }));
@@ -104,7 +104,7 @@ describe("LibraryView", () => {
     await createNotebook({ title: "Inside", folderId: f.id });
     await createNotebook({ title: "Outside" });
     render(<LibraryView />);
-    await screen.findByText("Outside");
+    await screen.findAllByText("Outside");
     await user.click(screen.getByRole("button", { name: "Sem 1" }));
     await waitFor(() => expect(screen.queryByText("Outside")).not.toBeInTheDocument());
     expect(screen.getByText("Inside")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("LibraryView", () => {
     await createNotebook({ title: "Bravo" });
     await createNotebook({ title: "Alpha" });
     render(<LibraryView />);
-    await screen.findByText("Alpha");
+    await screen.findAllByText("Alpha");
     await user.selectOptions(screen.getByRole("combobox", { name: "Sort" }), "title");
     await waitFor(() => {
       const titles = screen.getAllByTestId("nb-title").map((e) => e.textContent);

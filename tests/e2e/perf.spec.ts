@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 async function seed(page: Page, fn: string, arg: unknown): Promise<string> {
-  await page.goto("/");
+  await page.goto("/#/library");
   return page.evaluate(async ([body, a]) => {
     const nbs = await import("/src/store/notebooks.ts");
     const pages = await import("/src/store/pages.ts");

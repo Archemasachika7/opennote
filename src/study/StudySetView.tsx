@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, ImagePlus, Plus, RotateCcw, Shuffle, Trash2, X } from "lucide-react";
 import { navigate } from "../App";
@@ -152,7 +152,7 @@ function Practice({ cards, onEdit }: { cards: Card[]; onEdit: () => void }) {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+      if ((e.target as HTMLElement).closest("input, textarea, select, button, [role=tab]")) return;
       if (e.key === " " || e.key === "Enter") { e.preventDefault(); setFlipped((f) => !f); }
       if (e.key === "ArrowRight") go(1);
       if (e.key === "ArrowLeft") go(-1);
@@ -198,16 +198,25 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
   // learning steps come back within minutes: re-check now and then
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t); }, []);
 
+  // one grade per card: a held or double-pressed key must not review it twice
+  const busy = useRef(false);
+  const last = useRef<{ id: string; due: number } | null>(null);
   const grade = async (g: Grade) => {
-    if (!card) return;
-    await reviewCard(card.id, g);
-    setShown(false);
-    setNow(Date.now());
+    if (!card || busy.current) return;
+    // until the stored card updates, this render still shows the card that was just graded
+    if (last.current && last.current.id === card.id && last.current.due === card.srs.due) return;
+    busy.current = true;
+    last.current = { id: card.id, due: card.srs.due };
+    try {
+      await reviewCard(card.id, g);
+      setShown(false);
+      setNow(Date.now());
+    } finally { busy.current = false; }
   };
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+      if ((e.target as HTMLElement).closest("input, textarea, select, button, [role=tab]")) return;
       if (!shown && (e.key === " " || e.key === "Enter")) { e.preventDefault(); setShown(true); return; }
       const hit = shown ? GRADES.find((x) => x.key === e.key) : undefined;
       if (hit) { e.preventDefault(); void grade(hit.g); }

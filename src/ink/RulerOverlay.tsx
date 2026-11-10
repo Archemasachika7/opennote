@@ -43,7 +43,8 @@ export function RulerOverlay() {
       <span className="ruler-ticks" aria-hidden />
       <span className="ruler-angle mono" style={{ transform: `rotate(${-r.angle}deg)` }}>{shown > 180 ? shown - 360 : shown}&deg;</span>
       <button className="ruler-btn ruler-close" aria-label="Hide ruler" onPointerDown={(e) => e.stopPropagation()} onClick={() => setRuler(null)}><X {...I} /></button>
-      <span className="ruler-btn ruler-turn" role="slider" aria-label="Turn ruler" aria-valuenow={Math.round(r.angle)} tabIndex={0}
+      <span className="ruler-btn ruler-turn" role="slider" aria-label="Turn ruler" aria-valuenow={Math.round(r.angle)} aria-valuemin={-180} aria-valuemax={180}
+        aria-valuetext={`${Math.round(r.angle)} degrees`} tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "ArrowLeft" || e.key === "ArrowDown") setRuler({ ...r, angle: r.angle - 1 });
           if (e.key === "ArrowRight" || e.key === "ArrowUp") setRuler({ ...r, angle: r.angle + 1 });

@@ -7,7 +7,7 @@ import { ObjectLayer } from "./ObjectLayer";
 import { TapeLayer } from "./TapeLayer";
 import { addImage, getObjects } from "./objects";
 import { resolveColor } from "./render";
-import { BASE_LAYER, getActiveLayer, hiddenLayers, useActiveLayerVersion, type Layer } from "./layers";
+import { BASE_LAYER, getActiveLayer, hiddenLayers, lockedLayers, useActiveLayerVersion, type Layer } from "./layers";
 
 /** An ink page body: images/text boxes under the ink, tape over it, drop-to-insert images. */
 export function InkPage({ pageId, width, height, paper, inputFilter, layers }: {
@@ -21,6 +21,7 @@ export function InkPage({ pageId, width, height, paper, inputFilter, layers }: {
   const scale = width / PAGE_SIZE.w;
   const objects = preview ? stored.map((o) => preview.find((p) => p.id === o.id) ?? o) : stored;
   const hidden = useMemo(() => hiddenLayers({ layers }), [layers]);
+  const locked = useMemo(() => lockedLayers({ layers }), [layers]);
   const active = getActiveLayer(pageId, { layers });
 
   const onDrop = async (e: React.DragEvent) => {
@@ -36,11 +37,11 @@ export function InkPage({ pageId, width, height, paper, inputFilter, layers }: {
   return (
     <div className="ink-page" data-testid="ink-page" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <ObjectLayer pageId={pageId} objects={objects} scale={scale} tool={tool.tool} textColor={textColor}
-        cropping={cropping} setCropping={setCropping} hidden={hidden} layerId={active === BASE_LAYER ? undefined : active} />
+        cropping={cropping} setCropping={setCropping} hidden={hidden} locked={locked} layerId={active === BASE_LAYER ? undefined : active} />
       <InkLayer pageId={pageId} width={width} height={height} paper={paper} inputFilter={inputFilter} layers={layers} tapeEnabled
         objects={stored.filter((o) => !hidden.has(o.layerId ?? BASE_LAYER))} onPreviewObjects={setPreview} onCropRequest={setCropping}
         disabled={tool.tool === "text" || tool.tool === "image" || cropping !== null} />
-      <TapeLayer objects={objects} scale={scale} tool={tool.tool} hidden={hidden} />
+      <TapeLayer objects={objects} scale={scale} tool={tool.tool} hidden={hidden} locked={locked} />
     </div>
   );
 }

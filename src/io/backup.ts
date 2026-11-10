@@ -94,7 +94,16 @@ export async function importBackup(file: Blob): Promise<Notebook> {
     return copy;
   });
   const t0 = now();
-  const cards: Card[] = (Array.isArray(m.cards) ? m.cards : []).map((c, i) => ({
+  // untrusted file: only known document kinds, only real layer lists, only card objects
+  if (nb.kind !== "whiteboard" && nb.kind !== "studyset") delete nb.kind;
+  for (const p of pages) {
+    if (p.kind !== "ink" || p.layers === undefined) continue;
+    const ok = Array.isArray(p.layers) && p.layers.length > 0 && p.layers.every((l) => l && typeof l === "object" && typeof l.id === "string" && typeof l.name === "string");
+    if (ok) p.layers = p.layers!.map((l) => ({ id: l.id, name: l.name, visible: l.visible !== false, locked: l.locked === true }));
+    else delete p.layers;
+  }
+  const rawCards = (Array.isArray(m.cards) ? m.cards : []).filter((c): c is Card => !!c && typeof c === "object" && !Array.isArray(c));
+  const cards: Card[] = rawCards.map((c, i) => ({
     id: newId(), notebookId: nb.id, order: typeof c.order === "number" ? c.order : i + 1,
     front: String(c.front ?? ""), back: String(c.back ?? ""),
     frontImage: c.frontImage ? blobMap.get(c.frontImage) : undefined, backImage: c.backImage ? blobMap.get(c.backImage) : undefined,

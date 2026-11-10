@@ -6,10 +6,19 @@ import { getObjects } from "../ink/objects";
 import { paintStroke, strokePath } from "../ink/render";
 import { hiddenLayers, layerOf, type Layer } from "../ink/layers";
 import type { Stroke } from "../ink/model";
+import type { Box } from "../ink/geometry";
 import { contentBounds, minimapFit, unionBox, viewBox, type View } from "./viewport";
 
 export const MINI_W = 200;
 export const MINI_H = 136;
+
+/** Grow a box outwards to grid lines of half its size (at least 600 units), with a margin. */
+export function snapOut(b: Box): Box {
+  const s = Math.max(b.w, b.h, 1200) / 2;
+  const x0 = Math.floor(b.x / s) * s, y0 = Math.floor(b.y / s) * s;
+  const x1 = Math.ceil((b.x + b.w) / s) * s, y1 = Math.ceil((b.y + b.h) / s) * s;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
 
 /** Overview of the whole board with the visible area marked; click or drag to jump there. */
 export function Minimap({ pageId, paper, view, size, layers, onView }: {
@@ -24,11 +33,16 @@ export function Minimap({ pageId, paper, view, size, layers, onView }: {
     return strokes.filter((s) => !hidden.has(layerOf(s)));
   }, [strokes, layers]);
   const vb = viewBox(view, size.w, size.h);
-  const content = contentBounds(shown, objects);
-  const world0 = content ? unionBox(content, vb) : vb;
-  const pad = Math.max(world0.w, world0.h) * 0.08;
-  const world = { x: world0.x - pad, y: world0.y - pad, w: world0.w + pad * 2, h: world0.h + pad * 2 };
+  const content = useMemo(() => contentBounds(shown, objects), [shown, objects]);
+  // The overview area snaps to a coarse grid, so panning/zooming only changes it (and repaints every
+  // stroke) when the view crosses a grid line, not on every frame.
+  const world = snapOut(content ? unionBox(content, vb) : vb);
   const fit = minimapFit(world, MINI_W, MINI_H);
+
+  useEffect(() => {
+    const ids = new Set(strokes.map((s) => s.id));
+    for (const id of paths.current.keys()) if (!ids.has(id)) paths.current.delete(id);
+  }, [strokes]);
 
   useEffect(() => {
     const c = canvas.current;
@@ -56,7 +70,7 @@ export function Minimap({ pageId, paper, view, size, layers, onView }: {
   };
 
   return (
-    <div className="minimap" data-testid="minimap" role="img" aria-label="Board overview. Click to move there."
+    <div className="minimap" data-testid="minimap" role="group" aria-label="Board overview. Click to move there; the Fit button shows everything."
       style={{ width: MINI_W, height: MINI_H }}
       onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); jump(e); }}
       onPointerMove={(e) => { if (e.buttons) jump(e); }}>

@@ -1,5 +1,7 @@
 import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PagePatch } from "./schema";
 import { layerOf, pageLayers, type Layer } from "../ink/layers";
+import { notifyPageChanged } from "../ink/pageEvents";
+import { clearHistory } from "../ink/history";
 
 export const TOO_LARGE = "Too large (max 5 MB)";
 
@@ -101,6 +103,9 @@ export async function deleteLayer(pageId: string, layerId: string): Promise<void
     await db.blobs.bulkDelete(await unreferencedBlobs(objs.map((o) => o.blobId).filter((x): x is string => !!x)));
     await updatePage(pageId, { layers: ls.filter((l) => l.id !== layerId) });
   });
+  // open ink layers hold strokes in memory: reload them; undo could bring back strokes on a dead layer
+  clearHistory(pageId);
+  notifyPageChanged(pageId);
 }
 
 export async function duplicatePage(pageId: string): Promise<Page> {

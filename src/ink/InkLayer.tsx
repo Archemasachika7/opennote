@@ -290,9 +290,16 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const now = performance.now();
     laserPts.current = liveLaserPoints(laserPts.current, now);
     paintLaser(ctx, laserPts.current, now, 1 / scale);
-    if (laserPts.current.length || active.current?.kind === "laser") laserFrame.current = requestAnimationFrame(laserLoop);
+    if (laserPts.current.length || active.current?.kind === "laser") laserFrame.current = requestAnimationFrame(() => laserLoopRef.current());
   };
-  const startLaserLoop = () => { if (!laserFrame.current) laserFrame.current = requestAnimationFrame(laserLoop); };
+  // always run the latest closure (the view may change while a trail fades)
+  const laserLoopRef = useRef(laserLoop);
+  laserLoopRef.current = laserLoop;
+  const startLaserLoop = () => { if (!laserFrame.current) laserFrame.current = requestAnimationFrame(() => laserLoopRef.current()); };
+  const stopLaser = () => {
+    if (laserFrame.current) { cancelAnimationFrame(laserFrame.current); laserFrame.current = 0; }
+    laserPts.current = [];
+  };
   useEffect(() => () => {
     if (laserFrame.current) cancelAnimationFrame(laserFrame.current);
     if (frame.current) cancelAnimationFrame(frame.current);
@@ -323,6 +330,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       if (!editable({ layerId })) { toast("This layer is locked or hidden. Pick another layer to write on."); return; }
     }
     if (selection) setSelection(null);
+    if (kind !== "laser") stopLaser(); // a fading trail must not wipe the new stroke's preview
     e.preventDefault();
     tryCapture(surface.current, e.pointerId);
     const now = performance.now();

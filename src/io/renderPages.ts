@@ -143,6 +143,16 @@ export async function renderBoard(page: InkPage, nb: Notebook): Promise<PageImag
   ctx.save();
   ctx.scale(k, k);
   ctx.translate(-box.x, -box.y);
+  // the board's dot/grid pattern, aligned to the same 52-unit grid as on screen
+  const G = 52;
+  ctx.strokeStyle = PAPER[nb.paper].rule; ctx.fillStyle = PAPER[nb.paper].rule; ctx.lineWidth = 1.5;
+  const gx0 = Math.floor(box.x / G) * G, gy0 = Math.floor(box.y / G) * G;
+  if (page.template === "grid") {
+    for (let x = gx0; x <= box.x + box.w; x += G) { ctx.beginPath(); ctx.moveTo(x, box.y); ctx.lineTo(x, box.y + box.h); ctx.stroke(); }
+    for (let y = gy0; y <= box.y + box.h; y += G) { ctx.beginPath(); ctx.moveTo(box.x, y); ctx.lineTo(box.x + box.w, y); ctx.stroke(); }
+  } else if (page.template === "dot") {
+    for (let y = gy0; y <= box.y + box.h; y += G) for (let x = gx0; x <= box.x + box.w; x += G) { ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); }
+  }
   await drawObjects(ctx, objs, nb.paper);
   await drawStrokes(ctx, page.id, nb.paper, 0, page);
   drawTape(ctx, objs);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PageObject } from "../store/schema";
 import { updateObject, addTextBox } from "./objects";
 import { BASE_LAYER } from "./layers";
+import { toast } from "../ui/Toast";
 import { useBlobUrl } from "../ui/useBlobUrl";
 import { tryCapture } from "./input";
 
@@ -83,7 +84,7 @@ function TextObj({ o, scale, color, active, origin }: { o: PageObject; scale: nu
   );
 }
 
-export function ObjectLayer({ pageId, objects, scale, tool, textColor, cropping, setCropping, origin = ZERO, hidden, layerId }: {
+export function ObjectLayer({ pageId, objects, scale, tool, textColor, cropping, setCropping, origin = ZERO, hidden, layerId, locked }: {
   pageId: string; objects: PageObject[]; scale: number; tool: string; textColor: string;
   cropping: string | null; setCropping: (id: string | null) => void;
   /** logical point at the layer's top-left (boards scroll; pages stay at 0,0) */
@@ -92,9 +93,12 @@ export function ObjectLayer({ pageId, objects, scale, tool, textColor, cropping,
   hidden?: Set<string>;
   /** layer that new text boxes go on */
   layerId?: string;
+  /** layers that cannot be edited (locked or hidden) */
+  locked?: Set<string>;
 }) {
   const onDown = async (e: React.PointerEvent) => {
     if (tool !== "text" || e.target !== e.currentTarget) return;
+    if (locked?.has(layerId ?? BASE_LAYER)) { toast("This layer is locked or hidden. Pick another layer to write on."); return; }
     const r = e.currentTarget.getBoundingClientRect();
     await addTextBox(pageId, { x: (e.clientX - r.left) / scale + origin.x, y: (e.clientY - r.top) / scale + origin.y }, layerId);
   };
@@ -105,7 +109,7 @@ export function ObjectLayer({ pageId, objects, scale, tool, textColor, cropping,
       style={{ pointerEvents: tool === "text" || cropping ? "auto" : "none" }}>
       {shown.map((o) => o.kind === "image"
         ? <ImageObj key={o.id} o={o} origin={origin} scale={scale} cropping={cropping === o.id} onCrop={(on) => setCropping(on ? o.id : null)} />
-        : <TextObj key={o.id} o={o} origin={origin} scale={scale} color={textColor} active={tool === "text"} />)}
+        : <TextObj key={o.id} o={o} origin={origin} scale={scale} color={textColor} active={tool === "text" && !locked?.has(o.layerId ?? BASE_LAYER)} />)}
     </div>
   );
 }

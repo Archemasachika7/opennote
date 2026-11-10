@@ -18,7 +18,7 @@ import { RulerOverlay } from "../ink/RulerOverlay";
 import { addImage, getObjects, setAllTape } from "../ink/objects";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { inkPalette, resolveColor } from "../ink/render";
-import { BASE_LAYER, getActiveLayer, hiddenLayers, useActiveLayerVersion } from "../ink/layers";
+import { BASE_LAYER, getActiveLayer, hiddenLayers, lockedLayers, useActiveLayerVersion } from "../ink/layers";
 import { getStrokes } from "../store/strokes";
 import { exportPagesPdf } from "../io/exportPdf";
 import { exportPagesJpg } from "../io/exportImages";
@@ -325,6 +325,7 @@ function BoardStage({ board, notebook, showMap, onToggleMap }: { board: InkPage;
   const [cropping, setCropping] = useState<string | null>(null);
   const objects = preview ? stored.map((o) => preview.find((p) => p.id === o.id) ?? o) : stored;
   const hidden = useMemo(() => hiddenLayers(board), [board]);
+  const locked = useMemo(() => lockedLayers(board), [board]);
   const active = getActiveLayer(board.id, board);
   const paper = notebook.paper;
   const textColor = resolveColor({ color: tool.color, paletteIndex: tool.paletteIndex ?? undefined }, paper);
@@ -349,12 +350,12 @@ function BoardStage({ board, notebook, showMap, onToggleMap }: { board: InkPage;
     <div className="wb-stage" ref={stage} data-testid="board-stage"
       style={{ backgroundColor: board.bgColor ?? BOARD_COLORS[paper][0], backgroundImage: bgImage, backgroundSize: `${step}px ${step}px`, backgroundPosition: bgPos }}>
       <ObjectLayer pageId={board.id} objects={objects} scale={view.zoom} origin={view} tool={tool.tool} textColor={textColor}
-        cropping={cropping} setCropping={setCropping} hidden={hidden} layerId={active === BASE_LAYER ? undefined : active} />
+        cropping={cropping} setCropping={setCropping} hidden={hidden} locked={locked} layerId={active === BASE_LAYER ? undefined : active} />
       <InkLayer pageId={board.id} width={size.w} height={size.h} paper={paper} view={view} layers={board.layers} tapeEnabled
         onPan={(dx, dy) => setView((v) => panBy(v, dx, dy))}
         objects={stored.filter((o) => !hidden.has(o.layerId ?? BASE_LAYER))} onPreviewObjects={setPreview} onCropRequest={setCropping}
         disabled={tool.tool === "text" || tool.tool === "image" || cropping !== null} />
-      <TapeLayer objects={objects} scale={view.zoom} origin={view} tool={tool.tool} hidden={hidden} />
+      <TapeLayer objects={objects} scale={view.zoom} origin={view} tool={tool.tool} hidden={hidden} locked={locked} />
 
       <div className="wb-panel" onPointerDown={(e) => e.stopPropagation()}>
         <select className="input" aria-label="Background pattern" value={pattern}

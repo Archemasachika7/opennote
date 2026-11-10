@@ -35,9 +35,18 @@ export async function pasteClipboard(pageId: string): Promise<{ strokes: Stroke[
   const n = (clip.pastes.get(pageId) ?? 0) + (pageId === clip.origin ? 1 : 0);
   clip.pastes.set(pageId, (clip.pastes.get(pageId) ?? 0) + 1);
   const d = n * OFFSET;
-  const strokes = clip.strokes.map((s) => ({ ...translate(s, d, d), id: crypto.randomUUID() }));
+  // a layer id only means something on its own page: elsewhere, content lands on the base layer
+  const target = await db.pages.get(pageId);
+  const known = new Set(target?.kind === "ink" ? (target.layers ?? []).map((l) => l.id) : []);
+  const fixLayer = <T extends { layerId?: string }>(x: T): T => {
+    if (!x.layerId || known.has(x.layerId)) return x;
+    const copy = { ...x };
+    delete copy.layerId;
+    return copy;
+  };
+  const strokes = clip.strokes.map((s) => fixLayer({ ...translate(s, d, d), id: crypto.randomUUID() }));
   const maxZ = (await db.objects.where("pageId").equals(pageId).toArray()).reduce((m, o) => Math.max(m, o.z), 0);
-  const objects = clip.objects.map((o, i) => ({ ...o, id: crypto.randomUUID(), pageId, x: o.x + d, y: o.y + d, z: maxZ + 1 + i }));
+  const objects = clip.objects.map((o, i) => fixLayer({ ...o, id: crypto.randomUUID(), pageId, x: o.x + d, y: o.y + d, z: maxZ + 1 + i }));
   await replaceStrokes(pageId, [], strokes);
   await putObjects(objects);
   historyFor(pageId).push({ remove: [], add: strokes, objects: { before: [], after: objects } });

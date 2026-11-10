@@ -1,5 +1,6 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
 import { STRIDE, type Stroke } from "./model";
+import { isClosedShape } from "./shapes";
 import type { Paper } from "../store/schema";
 
 const PALETTES: Record<Paper, string[]> = {
@@ -31,8 +32,34 @@ function toPairs(points: Float32Array): number[][] {
   return out;
 }
 
+/** Build an exact geometric polyline Path2D for a shape stroke. */
+export function geometricShapePath(s: Stroke): Path2D {
+  const path = new Path2D();
+  const pts = s.points;
+  const n = pts.length / STRIDE;
+  if (n === 0) return path;
+  if (s.shape?.kind === "arrow" && n >= 5) {
+    // [start, tip, wing1, tip2, wing2]
+    const sx = pts[0], sy = pts[1];
+    const tx = pts[4], ty = pts[5];
+    const w1x = pts[8], w1y = pts[9];
+    const w2x = pts[16], w2y = pts[17];
+    path.moveTo(sx, sy);
+    path.lineTo(tx, ty);
+    path.moveTo(w1x, w1y);
+    path.lineTo(tx, ty);
+    path.lineTo(w2x, w2y);
+    return path;
+  }
+  path.moveTo(pts[0], pts[1]);
+  for (let i = 1; i < n; i++) path.lineTo(pts[i * STRIDE], pts[i * STRIDE + 1]);
+  if (s.shape && isClosedShape(s.shape.kind)) path.closePath();
+  return path;
+}
+
 /** Outline polygon of a stroke as a Path2D. A pressure of exactly 0.5 everywhere is treated as "no pressure". */
 export function strokePath(s: Stroke): Path2D {
+  if (s.shape) return geometricShapePath(s);
   const pairs = toPairs(s.points);
   const realPressure = pairs.some((p) => p[2] !== 0.5);
   const outline = getStroke(pairs, { ...strokeOptions(s, realPressure), last: true });
@@ -48,10 +75,74 @@ export function strokePath(s: Stroke): Path2D {
   return path;
 }
 
-export function paintStroke(ctx: CanvasRenderingContext2D, s: Stroke, paper: Paper, path: Path2D = strokePath(s)): void {
+/** Paint a crisp vector geometric shape (bypassing freehand pressure simulation/corner rounding). */
+function paintGeometricShape(ctx: CanvasRenderingContext2D, s: Stroke, paper: Paper, alphaMul = 1): void {
+  const sh = s.shape!;
+  const col = resolveColor(s, paper);
+  const lw = s.tool === "highlighter" ? s.width * 4 : s.width * 2;
+  const baseAlpha = (s.tool === "highlighter" ? 0.38 : 1) * alphaMul;
+  const pts = s.points;
+  const n = pts.length / STRIDE;
+  if (n < 2) return;
+
+  ctx.save();
+  ctx.strokeStyle = col;
+  ctx.fillStyle = col;
+  ctx.lineWidth = lw;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (sh.kind === "arrow" && n >= 5) {
+    const sx = pts[0], sy = pts[1];
+    const tx = pts[4], ty = pts[5];
+    const w1x = pts[8], w1y = pts[9];
+    const w2x = pts[16], w2y = pts[17];
+    ctx.globalAlpha = baseAlpha;
+    if (sh.dashed) ctx.setLineDash([lw * 2.5, lw * 1.8]);
+    // Shaft stops slightly short when filled arrowhead is used so tip stays razor-sharp
+    const endX = sh.fill ? (w1x + w2x) / 2 : tx;
+    const endY = sh.fill ? (w1y + w2y) / 2 : ty;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(w1x, w1y);
+    ctx.lineTo(tx, ty);
+    ctx.lineTo(w2x, w2y);
+    if (sh.fill) {
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const path = geometricShapePath(s);
+  if (sh.fill && isClosedShape(sh.kind)) {
+    ctx.globalAlpha = (s.tool === "highlighter" ? 0.2 : 0.16) * alphaMul;
+    ctx.fill(path);
+  }
+  if (sh.dashed) ctx.setLineDash([lw * 2.5, lw * 1.8]);
+  ctx.globalAlpha = baseAlpha;
+  ctx.stroke(path);
+  ctx.restore();
+}
+
+export function paintStroke(ctx: CanvasRenderingContext2D, s: Stroke, paper: Paper, path?: Path2D, alphaMul = 1): void {
+  if (s.shape) {
+    paintGeometricShape(ctx, s, paper, alphaMul);
+    return;
+  }
+  const p = path ?? strokePath(s);
   ctx.save();
   ctx.fillStyle = resolveColor(s, paper);
-  ctx.globalAlpha = s.tool === "highlighter" ? 0.35 : 1;
-  ctx.fill(path);
+  ctx.globalAlpha = (s.tool === "highlighter" ? 0.35 : 1) * alphaMul;
+  ctx.fill(p);
   ctx.restore();
 }

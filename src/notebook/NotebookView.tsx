@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, PenLine, Sparkles } from "lucide-react";
+import { FileText, PenLine, Sparkles, X, ZoomIn, ZoomOut } from "lucide-react";
 import type { HtmlPage, InkPage, Notebook, Page } from "../store/schema";
-import { getNotebook, restoreNotebook, toggleBookmark } from "../store/notebooks";
+import { getNotebook, listNotebooks, restoreNotebook, toggleBookmark } from "../store/notebooks";
 import { navigate } from "../App";
 import { deletePageWithUndo, duplicatePage, getPages, insertPage, movePage, restoreDeletedPage, updatePage } from "../store/pages";
 import { useLive } from "../store/useLive";
@@ -12,7 +12,7 @@ import { PageFrame } from "./PageFrame";
 import { useVisiblePages } from "./useVisiblePages";
 import { usePinchZoom } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
-import { sendCommand, setTool, useTool } from "./tool";
+import { sendCommand, sendStampElement, setTool, useTool } from "./tool";
 import { addImage, pasteImages, setAllTape } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
@@ -27,10 +27,17 @@ import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
 import { useSmartPaste } from "../live/useSmartPaste";
 import { LayersSheet } from "../ink/LayersSheet";
+import { ElementsSheet } from "../ink/ElementsSheet";
 import { RulerOverlay } from "../ink/RulerOverlay";
 import type { InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
+import { TemplatesSheet } from "./TemplatesSheet";
+import { getEffectiveTemplate, hydratePageTemplates, setStemTemplateForPage } from "../store/templates";
+import { AudioBar } from "./AudioBar";
+import { ZoomWritingWindow } from "./ZoomBox";
+import { generateCardFromSelection, generateCardsFromPageTapes } from "../study/occlusion";
+import type { Box } from "../ink/geometry";
 import "./notebook.css";
 
 const BASE_WIDTH = 860;
@@ -48,6 +55,79 @@ function initialZoom(): number {
   return 1;
 }
 
+function SplitCompanionPane({
+  primaryNotebookId,
+  onClose,
+}: {
+  primaryNotebookId: string;
+  onClose: () => void;
+}) {
+  const allNotebooks = useLive(async () => (await listNotebooks()).filter((n) => (n.kind ?? "notebook") === "notebook"), [], [] as Notebook[]);
+  const [docId, setDocId] = useState(primaryNotebookId);
+  const [pageIdx, setPageIdx] = useState(0);
+  const [splitZoom, setSplitZoom] = useState(0.76);
+
+  const splitNb = useLive(async () => (await getNotebook(docId)) ?? null, [docId], null as Notebook | null);
+  const splitPages = useLive(() => getPages(docId), [docId], [] as Page[]);
+
+  useEffect(() => {
+    setPageIdx(0);
+  }, [docId]);
+
+  const safeIdx = Math.min(pageIdx, Math.max(0, splitPages.length - 1));
+  const activePage = splitPages[safeIdx];
+  const paneWidth = Math.round(BASE_WIDTH * splitZoom);
+
+  return (
+    <aside className="split-pane" data-testid="split-pane" aria-label="Split reference pane">
+      <header className="split-pane-head">
+        <select
+          className="input"
+          aria-label="Split pane document"
+          value={docId}
+          onChange={(e) => setDocId(e.target.value)}
+          style={{ maxWidth: 190 }}>
+          {allNotebooks.map((n) => (
+            <option key={n.id} value={n.id}>{n.title}</option>
+          ))}
+        </select>
+        {splitPages.length > 0 && (
+          <select
+            className="input"
+            aria-label="Split pane page"
+            value={String(safeIdx)}
+            onChange={(e) => setPageIdx(Number(e.target.value))}>
+            {splitPages.map((_p, i) => (
+              <option key={i} value={String(i)}>Page {i + 1} / {splitPages.length}</option>
+            ))}
+          </select>
+        )}
+        <div className="split-pane-zoom">
+          <button type="button" className="btn ghost icon" aria-label="Split zoom out" onClick={() => setSplitZoom((z) => clampZoom(z / 1.15))}>
+            <ZoomOut size={14} strokeWidth={1.5} />
+          </button>
+          <span className="mono dim small">{Math.round(splitZoom * 100)}%</span>
+          <button type="button" className="btn ghost icon" aria-label="Split zoom in" onClick={() => setSplitZoom((z) => clampZoom(z * 1.15))}>
+            <ZoomIn size={14} strokeWidth={1.5} />
+          </button>
+          <button type="button" className="btn ghost icon" aria-label="Close split screen" onClick={onClose}>
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      </header>
+      <div className="split-pane-scroll nb-scroll">
+        {splitNb && activePage ? (
+          <div className="nb-column" style={{ width: paneWidth }}>
+            <PageFrame page={activePage} notebook={splitNb} mounted width={paneWidth} priority={500} />
+          </div>
+        ) : (
+          <p className="dim" style={{ padding: 24, textAlign: "center" }}>No pages in selected notebook.</p>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageId?: string; onOpenSettings?: () => void }) {
   const notebook = useLive(async () => (await getNotebook(id)) ?? null, [id], undefined as Notebook | null | undefined);
   const pages = useLive(() => getPages(id), [id], [] as Page[]);
@@ -56,12 +136,18 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   const [zoom, setZoomRaw] = useState(initialZoom);
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
   const [sidebarOpen, setSidebarOpen] = useState(() => !initialMobile());
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [audioOpen, setAudioOpen] = useState(false);
+  const [elementsOpen, setElementsOpen] = useState(false);
+  const [templatesFor, setTemplatesFor] = useState<Page | null>(null);
   const [exporting, setExporting] = useState(false);
   const [busyJob, setBusyJob] = useState<{ label: string; done: number; total: number } | null>(null);
   const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
   const [layersFor, setLayersFor] = useState<string | null>(null);
   const width = BASE_WIDTH * zoom;
   usePinchZoom(scroller, setZoomRaw, clampZoom);
+
+  useEffect(() => { void hydratePageTemplates(); }, []);
 
   const jump = useCallback((i: number) => {
     const p = pages[i];
@@ -87,13 +173,12 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   const lastTool = useRef(tool.tool);
   useEffect(() => {
     if (tool.tool !== "image") { lastTool.current = tool.tool; return; }
-    // Image is a one-shot action: open the picker, then go back to the tool the user had.
     setTool({ tool: lastTool.current });
     const snapshot = { pages, current };
     void platform.openFiles(["image/*"]).then(async (files) => {
       if (files.length === 0) return;
-      const pageId = await resolveImageTarget(id, snapshot.pages, snapshot.current);
-      for (const f of files) await addImage(pageId, f);
+      const targetPageId = await resolveImageTarget(id, snapshot.pages, snapshot.current);
+      for (const f of files) await addImage(targetPageId, f);
     });
   }, [tool.tool]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -201,6 +286,30 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
+  async function handleGenerateTapeCards(targetPage: Page) {
+    if (!notebook) return;
+    const pageNum = pages.indexOf(targetPage) + 1;
+    const { studySet, created } = await generateCardsFromPageTapes(notebook, targetPage, pageNum);
+    if (created === 0) {
+      toast("Draw Study Tape strips over terms or steps on this page first, then generate flashcards.");
+      return;
+    }
+    toast(`Created ${created} occlusion ${created === 1 ? "flashcard" : "flashcards"}`, {
+      label: "Study now",
+      run: () => navigate(`/nb/${studySet.id}`),
+    });
+  }
+
+  async function handleMakeCardFromSelection(targetPage: Page, box: Box) {
+    if (!notebook) return;
+    const pageNum = pages.indexOf(targetPage) + 1;
+    const studySet = await generateCardFromSelection(notebook, targetPage, box, pageNum);
+    toast("Added occlusion flashcard to Study Cards", {
+      label: "Study now",
+      run: () => navigate(`/nb/${studySet.id}`),
+    });
+  }
+
   const toggleFitZoom = () => {
     const avail = scroller.current?.clientWidth ? scroller.current.clientWidth - 32 : 0;
     const fit = avail > 120 ? clampZoom(avail / BASE_WIDTH) : 1;
@@ -222,7 +331,6 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     );
   }
   if (notebook.trashedAt) {
-    // a trashed notebook is not editable (it would be purged anyway); offer to restore it
     return (
       <main className="nb-trashed">
         <h2>&ldquo;{notebook.title}&rdquo; is in Trash.</h2>
@@ -245,8 +353,16 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         onOpenSettings={onOpenSettings}
+        splitOpen={splitOpen}
+        onToggleSplit={() => setSplitOpen((v) => !v)}
+        audioOpen={audioOpen}
+        onToggleAudio={() => setAudioOpen((v) => !v)}
+        onOpenElements={cur?.kind === "ink" ? () => setElementsOpen(true) : undefined}
+        onOpenTemplates={cur?.kind === "ink" ? () => setTemplatesFor(cur) : undefined}
+        onGenerateTapeCards={cur?.kind === "ink" ? () => void handleGenerateTapeCards(cur) : undefined}
+        enableZoomBox
         palette={inkPalette(notebook.paper)}
-        currentKind={pages[current]?.kind}
+        currentKind={cur?.kind}
         onExportPdf={() => exportPdf(pages, notebook.title)}
         onExportOptions={() => setExporting(true)}
         onExportBackup={async () => {
@@ -259,6 +375,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         onUndo={() => cur && sendCommand("undo", cur.id)}
         onRedo={() => cur && sendCommand("redo", cur.id)}
       />
+      {audioOpen && <AudioBar notebookId={notebook.id} onClose={() => setAudioOpen(false)} />}
       {busyJob && (
         <div className="nb-progress" role="status">
           <span>{busyJob.label}</span>
@@ -268,7 +385,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
           {busyJob.total > 0 && <span className="mono dim small">{busyJob.done} / {busyJob.total}</span>}
         </div>
       )}
-      <div className={`nb-body ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+      <div className={`nb-body ${sidebarOpen ? "sidebar-open" : "sidebar-closed"} ${splitOpen ? "split-active" : ""}`}>
         {sidebarOpen && (
           <>
             <div className="nb-drawer-backdrop" aria-hidden onClick={() => setSidebarOpen(false)} />
@@ -295,8 +412,15 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
                 mounted={mounted}
                 width={width}
                 renderPage={(p, i, m, w) => (
-                  <PageFrame page={p} notebook={notebook} mounted={m} width={w} priority={1000 - Math.abs(i - current)}
-                    onEditLive={(pg) => pg.kind === "html" && setSheet({ index: i, edit: pg, initial: { title: pg.title, source: pg.source, artifactType: pg.artifactType, allowNetwork: pg.allowNetwork } })} />
+                  <PageFrame
+                    page={p}
+                    notebook={notebook}
+                    mounted={m}
+                    width={w}
+                    priority={1000 - Math.abs(i - current)}
+                    onMakeCardFromBox={(pg, box) => void handleMakeCardFromSelection(pg, box)}
+                    onEditLive={(pg) => pg.kind === "html" && setSheet({ index: i, edit: pg, initial: { title: pg.title, source: pg.source, artifactType: pg.artifactType, allowNetwork: pg.allowNetwork } })}
+                  />
                 )}
                 onDuplicate={(p) => duplicatePage(p.id)}
                 onDelete={handleDeletePage}
@@ -308,17 +432,41 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
                 onTapeAll={(p, on) => setAllTape(p.id, on)}
                 onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
                 onBookmark={(p) => toggleBookmark(id, p.id)}
-                onTemplate={(p, t) => updatePage(p.id, { template: t })}
+                onTemplate={(p, t) => void setStemTemplateForPage(p.id, t, updatePage)}
+                onOpenStemTemplates={(p) => setTemplatesFor(p)}
               />
             </div>
           )}
         </div>
+        {splitOpen && (
+          <SplitCompanionPane primaryNotebookId={notebook.id} onClose={() => setSplitOpen(false)} />
+        )}
         {!sidebarOpen && pages.length > 0 && (
           <button type="button" className="nb-page-pill mono" onClick={() => setSidebarOpen(true)} title="Show pages sidebar">
             {current + 1} / {pages.length}
           </button>
         )}
       </div>
+      {tool.zoomBoxOpen && cur?.kind === "ink" && (
+        <ZoomWritingWindow page={cur} notebook={notebook} onClose={() => setTool({ zoomBoxOpen: false })} />
+      )}
+      <ElementsSheet
+        open={elementsOpen}
+        onClose={() => setElementsOpen(false)}
+        paper={notebook.paper}
+        onInsert={(elem) => {
+          if (cur?.kind === "ink") sendStampElement(cur.id, elem);
+        }}
+      />
+      <TemplatesSheet
+        open={!!templatesFor}
+        onClose={() => setTemplatesFor(null)}
+        current={templatesFor ? getEffectiveTemplate(templatesFor) : "blank"}
+        paper={notebook.paper}
+        onSelect={(tpl) => {
+          if (templatesFor) void setStemTemplateForPage(templatesFor.id, tpl, updatePage);
+        }}
+      />
       <ExportSheet open={exporting} onClose={() => setExporting(false)} total={pages.length} current={current} onExport={runExport} />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
       <LayersSheet page={(pages.find((p) => p.id === layersFor && p.kind === "ink") as InkPage | undefined) ?? null} onClose={() => setLayersFor(null)} />

@@ -9,9 +9,13 @@ import { addImage, getObjects } from "./objects";
 import { resolveColor } from "./render";
 import { BASE_LAYER, getActiveLayer, hiddenLayers, lockedLayers, useActiveLayerVersion, type Layer } from "./layers";
 
+import type { Box } from "./geometry";
+import type { Stroke } from "./model";
+
 /** An ink page body: images/text boxes under the ink, tape over it, drop-to-insert images. */
-export function InkPage({ pageId, width, height, paper, inputFilter, layers }: {
+export function InkPage({ pageId, width, height, paper, inputFilter, layers, onMakeCardFromBox }: {
   pageId: string; width: number; height: number; paper: Paper; inputFilter?: (e: PointerEvent) => boolean; layers?: Layer[];
+  onMakeCardFromBox?: (box: Box, strokes: Stroke[]) => void;
 }) {
   const [tool] = useTool();
   useActiveLayerVersion();
@@ -40,6 +44,7 @@ export function InkPage({ pageId, width, height, paper, inputFilter, layers }: {
         cropping={cropping} setCropping={setCropping} hidden={hidden} locked={locked} layerId={active === BASE_LAYER ? undefined : active} />
       <InkLayer pageId={pageId} width={width} height={height} paper={paper} inputFilter={inputFilter} layers={layers} tapeEnabled
         objects={stored.filter((o) => !hidden.has(o.layerId ?? BASE_LAYER))} onPreviewObjects={setPreview} onCropRequest={setCropping}
+        onMakeCardFromBox={onMakeCardFromBox}
         disabled={tool.tool === "text" || tool.tool === "image" || cropping !== null} />
       <TapeLayer objects={objects} scale={scale} tool={tool.tool} hidden={hidden} locked={locked} />
     </div>

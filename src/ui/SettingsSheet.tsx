@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { HardDrive, Monitor, Moon, ShieldCheck, Sun } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { useTheme, type ThemeMode } from "./theme";
+import { useTool } from "../notebook/tool";
 import { db } from "../store/schema";
 import { platform } from "../platform/port";
 import { toast } from "./Toast";
@@ -45,6 +46,7 @@ const SHORTCUTS: [string, [string, string][]][] = [
 
 export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [theme, setTheme] = useTheme();
+  const [tool, setToolState] = useTool();
   const [info, setInfo] = useState<StorageInfo | null>(null);
 
   useEffect(() => {
@@ -98,6 +100,24 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               </button>
             ))}
           </div>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3>Smart Pen Gestures</h3>
+            <label className="small" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                aria-label="Smart pen gestures"
+                checked={tool.penGestures}
+                onChange={(e) => setToolState({ penGestures: e.target.checked })}
+              />
+              Enabled
+            </label>
+          </div>
+          <p className="dim small" style={{ margin: 0 }}>
+            Hold the pen still for 0.4s at the end of a line, arrow, rectangle, triangle or circle to snap it to crisp geometry. Scribble back-and-forth over ink to erase it.
+          </p>
         </section>
 
         <section className="settings-group">

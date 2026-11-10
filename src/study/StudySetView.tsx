@@ -13,7 +13,8 @@ import { useBlobUrl } from "../ui/useBlobUrl";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { motionTokens, springs, useSafeMotion } from "../ui/motion";
-import { isDue, nextLabel, progressOf, type Grade } from "./srs";
+import { DAY, isDue, nextLabel, progressOf, type Grade } from "./srs";
+import { nextLabelFsrs, retrievability, type SrsWithFsrs } from "./fsrs";
 import "./study.css";
 
 const I = { size: 15, strokeWidth: 1.5 } as const;
@@ -222,6 +223,13 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
   const [now, setNow] = useState(() => Date.now());
   const [shown, setShown] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [algo, setAlgo] = useState<"sm2" | "fsrs">(() => {
+    try { return localStorage.getItem("opennote:srs-algo") === "fsrs" ? "fsrs" : "sm2"; } catch { return "sm2"; }
+  });
+  const switchAlgo = (nextAlgo: "sm2" | "fsrs") => {
+    setAlgo(nextAlgo);
+    try { localStorage.setItem("opennote:srs-algo", nextAlgo); } catch { /* ignore */ }
+  };
   const due = useMemo(() => cards.filter((c) => isDue(c.srs, now)).sort((a, b) => a.srs.due - b.srs.due), [cards, now]);
   const card = due[0];
   const prog = progressOf(cards.map((c) => c.srs));
@@ -240,7 +248,7 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
     busy.current = true;
     last.current = { id: card.id, due: card.srs.due };
     try {
-      await reviewCard(card.id, g);
+      await reviewCard(card.id, g, undefined, algo);
       setShown(false);
       setNow(Date.now());
     } finally { busy.current = false; }
@@ -271,9 +279,31 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
         <span><i className="p-learning" />Learning {prog.learning}</span>
         <span><i className="p-mastered" />Mastered {prog.mastered}</span>
         <span className="dim">Due now {due.length} of {total}</span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <label htmlFor="srs-algo-select" className="dim">Scheduler:</label>
+          <select
+            id="srs-algo-select"
+            aria-label="Scheduler algorithm"
+            className="select"
+            style={{ height: 28, fontSize: 12, padding: "0 8px" }}
+            value={algo}
+            onChange={(e) => switchAlgo(e.target.value as "sm2" | "fsrs")}>
+            <option value="sm2">SM-2 (Classic)</option>
+            <option value="fsrs">FSRS-4.5 (Adaptive)</option>
+          </select>
+        </span>
       </div>
       {card ? (
         <>
+          {algo === "fsrs" && (card.srs as SrsWithFsrs).fsrs && (
+            <div className="mono dim small" data-testid="fsrs-metrics">
+              {(() => {
+                const m = (card.srs as SrsWithFsrs).fsrs!;
+                const r = Math.round(retrievability(m.stability, Math.max(0, (now - m.lastReview) / DAY)) * 100);
+                return `Retention ${r}% · Stability ${m.stability.toFixed(1)}d · Difficulty ${m.difficulty.toFixed(1)}`;
+              })()}
+            </div>
+          )}
           <div className="flash-wrap static"><Face card={card} flipped={shown} /></div>
           {!shown ? (
             <button className="btn primary big" onClick={() => setShown(true)}>Show answer</button>
@@ -281,7 +311,10 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
             <div className="grades" role="group" aria-label="How well did you know it?">
               {GRADES.map((x) => (
                 <button key={x.g} className={`btn grade-${x.g}`} onClick={() => grade(x.g)}>
-                  {x.label}<span className="mono dim small">{nextLabel(card.srs, x.g, now)}</span>
+                  {x.label}
+                  <span className="mono dim small">
+                    {algo === "fsrs" ? nextLabelFsrs(card.srs as SrsWithFsrs, x.g, now) : nextLabel(card.srs, x.g, now)}
+                  </span>
                 </button>
               ))}
             </div>

@@ -132,6 +132,8 @@ class OpenNoteDB extends Dexie {
   folders!: Table<Folder, string>;
   cards!: Table<Card, string>;
   recordings!: Table<Recording, string>;
+  /** Device-local sync bookkeeping (versions, last pull, storage settings). Never synced. */
+  syncMeta!: Table<{ key: string; value: unknown }, string>;
   constructor() {
     super("opennote");
     this.version(1).stores({
@@ -168,6 +170,8 @@ class OpenNoteDB extends Dexie {
         await blobs.delete(row.id);
       }
     });
+    // v4: sync bookkeeping, local to this device
+    this.version(4).stores({ syncMeta: "key" });
   }
 }
 

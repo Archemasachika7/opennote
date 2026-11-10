@@ -66,8 +66,14 @@ function readManifest(files: Record<string, Uint8Array>): Manifest {
   return m;
 }
 
-/** Import a .opennote file as a NEW notebook (never overwrites). All-or-nothing. */
-export async function importBackup(file: Blob): Promise<Notebook> {
+/**
+ * Import a .opennote file as a NEW notebook (never overwrites). All-or-nothing.
+ * `keepIds` is for sync between the same user's devices: ids, study progress, Trash state and each
+ * live page's internet setting are kept, and rows are upserted. Shared files never use it.
+ */
+export async function importBackup(file: Blob, opts: { keepIds?: boolean } = {}): Promise<Notebook> {
+  const keep = opts.keepIds === true;
+  const nid = (old: string) => (keep ? old : newId());
   let files: Record<string, Uint8Array>;
   if (file.size > MAX_BACKUP_BYTES) throw new Error("This backup is too large to import.");
   try {
@@ -77,12 +83,13 @@ export async function importBackup(file: Blob): Promise<Notebook> {
     });
   } catch { throw new Error(NOT_BACKUP); }
   const m = readManifest(files);
-  const pageMap = new Map(m.pages.map((p) => [p.id, newId()]));
+  const pageMap = new Map(m.pages.map((p) => [p.id, nid(p.id)]));
   // only pictures actually inside the file get mapped; a missing one is dropped, never pointed at a local blob
-  const blobMap = new Map(m.blobs.filter((b) => files[`blobs/${b.id}`]).map((b) => [b.id, newId()]));
+  const blobMap = new Map(m.blobs.filter((b) => files[`blobs/${b.id}`]).map((b) => [b.id, nid(b.id)]));
   const t = now();
   const nb: Notebook = {
-    ...m.notebook, id: newId(), trashedAt: null, folderId: null, createdAt: t, updatedAt: t,
+    ...m.notebook, id: keep ? m.notebook.id : newId(), trashedAt: keep ? m.notebook.trashedAt ?? null : null, folderId: null,
+    createdAt: keep ? m.notebook.createdAt : t, updatedAt: keep ? m.notebook.updatedAt : t,
     pageIds: m.notebook.pageIds.map((id) => pageMap.get(id)).filter((x): x is string => !!x),
     bookmarks: m.notebook.bookmarks.map((id) => pageMap.get(id)).filter((x): x is string => !!x),
   };
@@ -93,7 +100,7 @@ export async function importBackup(file: Blob): Promise<Notebook> {
       if (mapped) copy.background = { ...copy.background, blobId: mapped }; else delete copy.background;
     }
     // a shared file must not switch internet on for live pages: the user decides that per page
-    if (copy.kind === "html") { copy.allowNetwork = false; delete copy.snapshotBlobId; }
+    if (copy.kind === "html") { if (!keep) copy.allowNetwork = false; delete copy.snapshotBlobId; }
     return copy;
   });
   const t0 = now();
@@ -107,11 +114,11 @@ export async function importBackup(file: Blob): Promise<Notebook> {
   }
   const rawCards = (Array.isArray(m.cards) ? m.cards : []).filter((c): c is Card => !!c && typeof c === "object" && !Array.isArray(c));
   const cards: Card[] = rawCards.map((c, i) => ({
-    id: newId(), notebookId: nb.id, order: typeof c.order === "number" ? c.order : i + 1,
+    id: nid(c.id), notebookId: nb.id, order: typeof c.order === "number" ? c.order : i + 1,
     front: String(c.front ?? ""), back: String(c.back ?? ""),
     frontImage: c.frontImage ? blobMap.get(c.frontImage) : undefined, backImage: c.backImage ? blobMap.get(c.backImage) : undefined,
     // learning progress is personal: an imported set starts fresh
-    srs: newSrs(t0), createdAt: t0, updatedAt: t0,
+    srs: keep && c.srs ? c.srs : newSrs(t0), createdAt: keep ? c.createdAt ?? t0 : t0, updatedAt: keep ? c.updatedAt ?? t0 : t0,
   }));
   // untrusted file: a recording needs its audio inside the file, and only known fields are kept
   const clipMap = new Map<string, string>();
@@ -120,7 +127,7 @@ export async function importBackup(file: Blob): Promise<Notebook> {
     if (!r || typeof r !== "object" || typeof r.id !== "string" || typeof r.blobId !== "string") continue;
     const blobId = blobMap.get(r.blobId);
     if (!blobId) continue;
-    const id = newId();
+    const id = nid(r.id);
     clipMap.set(r.id, id);
     const segs = Array.isArray(r.transcriptSegments)
       ? r.transcriptSegments.filter((s) => s && typeof s.offsetMs === "number" && typeof s.endMs === "number" && typeof s.text === "string")
@@ -131,23 +138,23 @@ export async function importBackup(file: Blob): Promise<Notebook> {
       title: String(r.title ?? "Recording"),
       durationMs: Number.isFinite(r.durationMs) ? Math.max(0, r.durationMs) : 0,
       mimeType: typeof r.mimeType === "string" ? r.mimeType : "audio/webm",
-      createdAt: Number.isFinite(r.createdAt) ? r.createdAt : t0, updatedAt: t0,
+      createdAt: Number.isFinite(r.createdAt) ? r.createdAt : t0, updatedAt: keep && Number.isFinite(r.updatedAt) ? r.updatedAt : t0,
       ...(typeof r.transcript === "string" ? { transcript: r.transcript } : {}),
       ...(typeof r.languageCode === "string" ? { languageCode: r.languageCode } : {}),
       ...(segs ? { transcriptSegments: segs } : {}),
     });
   }
   await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards, db.recordings], async () => {
-    await db.cards.bulkAdd(cards);
+    await db.cards.bulkPut(cards);
     for (const b of m.blobs) {
       const bytes = files[`blobs/${b.id}`];
-      if (bytes) await db.blobs.add({ id: blobMap.get(b.id)!, data: new Blob([bytes as BlobPart], { type: b.type }) });
+      if (bytes) await db.blobs.put({ id: blobMap.get(b.id)!, data: new Blob([bytes as BlobPart], { type: b.type }) });
     }
-    await db.recordings.bulkAdd(recordings);
-    await db.notebooks.add(nb);
-    await db.pages.bulkAdd(pages);
-    await db.strokes.bulkAdd(m.strokes.filter((s) => pageMap.has(s.pageId)).map((s) => {
-      const id = newId();
+    await db.recordings.bulkPut(recordings);
+    await db.notebooks.put(nb);
+    await db.pages.bulkPut(pages);
+    await db.strokes.bulkPut(m.strokes.filter((s) => pageMap.has(s.pageId)).map((s) => {
+      const id = keep && typeof s.stroke.id === "string" ? s.stroke.id : newId();
       const { audioSync, ...rest } = s.stroke;
       const clipId = audioSync && Number.isFinite(audioSync.offsetMs) ? clipMap.get(audioSync.clipId) : undefined;
       return {
@@ -155,8 +162,8 @@ export async function importBackup(file: Blob): Promise<Notebook> {
         stroke: { ...rest, id, points: new Float32Array(s.stroke.points), ...(clipId ? { audioSync: { clipId, offsetMs: audioSync!.offsetMs } } : {}) },
       };
     }));
-    await db.objects.bulkAdd(m.objects.filter((o) => pageMap.has(o.pageId)).map((o) => ({
-      ...o, id: newId(), pageId: pageMap.get(o.pageId)!, blobId: o.blobId ? blobMap.get(o.blobId) : undefined,
+    await db.objects.bulkPut(m.objects.filter((o) => pageMap.has(o.pageId)).map((o) => ({
+      ...o, id: nid(o.id), pageId: pageMap.get(o.pageId)!, blobId: o.blobId ? blobMap.get(o.blobId) : undefined,
     })).filter((o) => o.kind !== "image" || o.blobId));
   });
   return nb;

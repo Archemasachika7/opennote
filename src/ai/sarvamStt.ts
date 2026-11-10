@@ -57,13 +57,12 @@ function bump() {
   subs.forEach((fn) => fn());
 }
 
+/**
+ * Never from the build: anything in a VITE_* variable is compiled into the public bundle, so a key there
+ * would let every visitor spend the owner's credits. Each user pastes their own key in Settings.
+ */
 function readEnvSarvamKey(): string {
-  try {
-    const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-    return (env?.VITE_SARVAM_API_KEY ?? "").trim();
-  } catch {
-    return "";
-  }
+  return "";
 }
 
 export function hasEnvSarvamKey(): boolean {

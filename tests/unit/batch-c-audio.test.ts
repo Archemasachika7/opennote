@@ -118,3 +118,10 @@ describe("Batch C: Sarvam relay is not an open proxy", () => {
     expect(client).not.toMatch(/server-managed/i);
   });
 });
+
+describe("no paid keys in the public bundle", () => {
+  it("never reads a Sarvam (or other AI) key from VITE_* build variables", () => {
+    const src = readFileSync("src/ai/sarvamStt.ts", "utf8");
+    expect(src).not.toMatch(/VITE_SARVAM/);
+  });
+});

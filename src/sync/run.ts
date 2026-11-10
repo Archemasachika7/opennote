@@ -263,6 +263,16 @@ export function syncNow(): Promise<void> {
   return running;
 }
 
+/**
+ * What sign-in changes do to this device's sync key and storage keys. Testable core.
+ * The app starts "signed out" for a moment before a saved login loads; that must not lock sync,
+ * so only a real sign-out (a user before, none now) or a different account forgets them.
+ */
+export async function reactToAuth(prevUserId: string | null, userId: string | null): Promise<void> {
+  if (userId) await withSettingsLock(() => forgetOtherAccount(userId));
+  else if (prevUserId) await withSettingsLock(() => forgetOtherAccount(null));
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 const onHide = () => { if (document.visibilityState === "hidden") void syncNow(); };
 
@@ -271,16 +281,15 @@ export function startSyncLoop(): void {
   if (!supabase || timer) return;
   let lastUserId: string | null = null;
   const react = async () => {
-    const uid = getAuthState().user?.id ?? null;
-    // a real sign-out or account switch (not the signed-out state before the session loads)
-    if (lastUserId && lastUserId !== uid) await withSettingsLock(() => forgetOtherAccount(uid));
-    if (uid) lastUserId = uid; else if (lastUserId) lastUserId = null;
+    const uid = getAuthState().status === "signed-in" ? getAuthState().user?.id ?? null : null;
+    const prev = lastUserId;
+    lastUserId = uid;
+    await reactToAuth(prev, uid);
     await refreshStorage();
-    if (getAuthState().status === "signed-in") {
+    if (uid) {
       set({ state: (await read(K.master)) ? "idle" : "locked" });
       void syncNow();
     } else {
-      await db.syncMeta.delete(K.master); // signing out locks this device
       set({ state: "off" });
     }
   };

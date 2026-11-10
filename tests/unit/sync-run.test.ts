@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { db } from "../../src/store/schema";
 import {
-  forgetOtherAccount, loadSharedSettings, unlockWithProfile, updateSharedSettings, withSettingsLock,
+  forgetOtherAccount, loadSharedSettings, reactToAuth, unlockWithProfile, updateSharedSettings, withSettingsLock,
 } from "../../src/sync/run";
 import { deriveMasterKey, newSalt, openJson, sealJson } from "../../src/sync/crypto";
 import { toPgBytea } from "../../src/sync/supabaseIndex";
@@ -202,4 +202,27 @@ it("settings changes run one at a time, in order", async () => {
   await Promise.all([slow, pull, failing.catch(() => undefined), after]);
   expect(order).toEqual(["connect", "pull", "after"]);
   await expect(failing).rejects.toThrow("boom");
+});
+
+/* ---- reload keeps sync unlocked ---- */
+
+it("the signed-out moment before a saved login loads doesn't lock sync or forget keys", async () => {
+  await db.syncMeta.bulkPut([{ key: "dev:owner", value: "alice" }, { key: "dev:master", value: "k" }, { key: "dev:telegram", value: TG }]);
+  await reactToAuth(null, null); // app start: no user yet
+  await reactToAuth(null, "alice"); // saved login restored
+  expect(await db.syncMeta.get("dev:master")).toBeDefined();
+  expect(await local("telegram")).toEqual(TG);
+});
+
+it("a real sign-out still locks sync and forgets keys", async () => {
+  await db.syncMeta.bulkPut([{ key: "dev:owner", value: "alice" }, { key: "dev:master", value: "k" }, { key: "dev:telegram", value: TG }]);
+  await reactToAuth("alice", null);
+  expect(await db.syncMeta.get("dev:master")).toBeUndefined();
+  expect(await local("telegram")).toBeUndefined();
+});
+
+it("restoring a login for a different account than the one that unlocked locks sync", async () => {
+  await db.syncMeta.bulkPut([{ key: "dev:owner", value: "alice" }, { key: "dev:master", value: "k" }]);
+  await reactToAuth(null, "bob");
+  expect(await db.syncMeta.get("dev:master")).toBeUndefined();
 });

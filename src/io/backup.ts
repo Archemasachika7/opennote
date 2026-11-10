@@ -1,5 +1,6 @@
 import { strToU8, strFromU8, unzipSync, zipSync } from "fflate";
-import { db, newId, now, MAX_HTML_BYTES, type Notebook, type Page, type PageObject } from "../store/schema";
+import { db, newId, now, MAX_HTML_BYTES, type Card, type Notebook, type Page, type PageObject } from "../store/schema";
+import { newSrs } from "../study/srs";
 import type { Stroke } from "../ink/model";
 
 export const BACKUP_EXT = ".opennote";
@@ -18,6 +19,8 @@ type Manifest = {
   strokes: { pageId: string; stroke: StrokeJson }[];
   objects: PageObject[];
   blobs: { id: string; type: string }[];
+  /** Study set cards (absent in older backups). */
+  cards?: Card[];
 };
 
 /** Zip one notebook (pages, ink, pictures, live pages) into a .opennote file. */
@@ -28,7 +31,9 @@ export async function exportBackup(notebookId: string): Promise<Blob> {
   const pageIds = pages.map((p) => p.id);
   const strokeRows = await db.strokes.where("pageId").anyOf(pageIds).toArray();
   const objects = await db.objects.where("pageId").anyOf(pageIds).toArray();
-  const blobIds = [...new Set([...objects.map((o) => o.blobId), ...pages.map((p) => (p.kind === "ink" ? p.background?.blobId : undefined))]
+  const cards = await db.cards.where("notebookId").equals(notebookId).toArray();
+  const blobIds = [...new Set([...objects.map((o) => o.blobId), ...pages.map((p) => (p.kind === "ink" ? p.background?.blobId : undefined)),
+    ...cards.flatMap((c) => [c.frontImage, c.backImage])]
     .filter((x): x is string => !!x))];
   const files: Record<string, Uint8Array> = {};
   const blobs: Manifest["blobs"] = [];
@@ -39,7 +44,7 @@ export async function exportBackup(notebookId: string): Promise<Blob> {
     blobs.push({ id, type: row.data.type });
   }
   const manifest: Manifest = {
-    format: "opennote", formatVersion: BACKUP_FORMAT, exportedAt: now(), notebook, pages, objects, blobs,
+    format: "opennote", formatVersion: BACKUP_FORMAT, exportedAt: now(), notebook, pages, objects, blobs, cards,
     strokes: strokeRows.map((r) => ({ pageId: r.pageId, stroke: { ...r.stroke, points: Array.from(r.stroke.points) } })),
   };
   files["manifest.json"] = strToU8(JSON.stringify(manifest));
@@ -88,7 +93,25 @@ export async function importBackup(file: Blob): Promise<Notebook> {
     if (copy.kind === "html") { copy.allowNetwork = false; delete copy.snapshotBlobId; }
     return copy;
   });
-  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs], async () => {
+  const t0 = now();
+  // untrusted file: only known document kinds, only real layer lists, only card objects
+  if (nb.kind !== "whiteboard" && nb.kind !== "studyset") delete nb.kind;
+  for (const p of pages) {
+    if (p.kind !== "ink" || p.layers === undefined) continue;
+    const ok = Array.isArray(p.layers) && p.layers.length > 0 && p.layers.every((l) => l && typeof l === "object" && typeof l.id === "string" && typeof l.name === "string");
+    if (ok) p.layers = p.layers!.map((l) => ({ id: l.id, name: l.name, visible: l.visible !== false, locked: l.locked === true }));
+    else delete p.layers;
+  }
+  const rawCards = (Array.isArray(m.cards) ? m.cards : []).filter((c): c is Card => !!c && typeof c === "object" && !Array.isArray(c));
+  const cards: Card[] = rawCards.map((c, i) => ({
+    id: newId(), notebookId: nb.id, order: typeof c.order === "number" ? c.order : i + 1,
+    front: String(c.front ?? ""), back: String(c.back ?? ""),
+    frontImage: c.frontImage ? blobMap.get(c.frontImage) : undefined, backImage: c.backImage ? blobMap.get(c.backImage) : undefined,
+    // learning progress is personal: an imported set starts fresh
+    srs: newSrs(t0), createdAt: t0, updatedAt: t0,
+  }));
+  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards], async () => {
+    await db.cards.bulkAdd(cards);
     for (const b of m.blobs) {
       const bytes = files[`blobs/${b.id}`];
       if (bytes) await db.blobs.add({ id: blobMap.get(b.id)!, data: new Blob([bytes as BlobPart], { type: b.type }) });

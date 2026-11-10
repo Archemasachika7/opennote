@@ -24,7 +24,10 @@ import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
 import { useSmartPaste } from "../live/useSmartPaste";
-import type { HtmlPage } from "../store/schema";
+import type { HtmlPage, InkPage } from "../store/schema";
+import { setAllTape } from "../ink/objects";
+import { LayersSheet } from "../ink/LayersSheet";
+import { RulerOverlay } from "../ink/RulerOverlay";
 import type { InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
@@ -44,6 +47,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
   const [exporting, setExporting] = useState(false);
   const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
+  const [layersFor, setLayersFor] = useState<string | null>(null);
   const width = BASE_WIDTH * zoom;
   usePinchZoom(scroller, setZoomRaw, clampZoom);
 
@@ -212,6 +216,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
               onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
               onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
               onRotate={(p) => rotatePage(p.id)}
+              onLayers={(p) => setLayersFor(p.id)} onTapeAll={(p, on) => setAllTape(p.id, on)}
               onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>
@@ -219,6 +224,8 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
       </div>
       <ExportSheet open={exporting} onClose={() => setExporting(false)} total={pages.length} current={current} onExport={runExport} />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
+      <LayersSheet page={(pages.find((p) => p.id === layersFor && p.kind === "ink") as InkPage | undefined) ?? null} onClose={() => setLayersFor(null)} />
+      <RulerOverlay />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
     </div>
   );

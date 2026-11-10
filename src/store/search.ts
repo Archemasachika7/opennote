@@ -35,5 +35,10 @@ export async function searchAll(raw: string): Promise<SearchHit[]> {
       else if (body.toLowerCase().includes(q)) hits.push({ notebookId: p.notebookId, pageId: p.id, title: p.title, snippet: snippetAround(body, q) });
     }
   });
+  await db.cards.each((c) => {
+    if (!titles.has(c.notebookId)) return;
+    const text = `${c.front} — ${c.back}`;
+    if (text.toLowerCase().includes(q)) hits.push({ notebookId: c.notebookId, title: titles.get(c.notebookId) ?? "", snippet: snippetAround(text, q) });
+  });
   return hits.slice(0, 50);
 }

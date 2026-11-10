@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2, PenLine, Redo2,
-  Shapes, Type, Undo2, ZoomIn, ZoomOut,
+  ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2, PenLine, Presentation,
+  RectangleHorizontal, Redo2, Ruler as RulerIcon, Shapes, Type, Undo2, ZoomIn, ZoomOut,
 } from "lucide-react";
+import { useRuler } from "../ink/ruler";
+import { toggleRuler } from "../ink/RulerOverlay";
 import { navigate } from "../App";
 import type { Notebook } from "../store/schema";
 import { updateNotebook } from "../store/notebooks";
@@ -22,6 +24,7 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
   currentKind?: "ink" | "text" | "html"; onExportPdf?: () => void; onExportBackup?: () => void; onExportOptions?: () => void;
 }) {
   const [t, set] = useTool();
+  const ruler = useRuler();
   const [menu, setMenu] = useState(false);
   useEffect(() => {
     if (t.paletteIndex !== null && palette[t.paletteIndex] !== t.color) set({ color: palette[t.paletteIndex] });
@@ -32,6 +35,8 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
     { name: "eraser", label: "Eraser", hint: "Eraser", icon: <Eraser {...ICON} /> },
     { name: "lasso", label: "Lasso", hint: "Lasso (select and move, does not draw)", icon: <Lasso {...ICON} /> },
     { name: "shape", label: "Shapes", hint: "Shapes (pick one, then drag on the page)", icon: <Shapes {...ICON} /> },
+    { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal)", icon: <RectangleHorizontal {...ICON} /> },
+    { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading trail for presenting, never saved)", icon: <Presentation {...ICON} /> },
     { name: "text", label: "Text box", hint: "Text box (click on the page)", icon: <Type {...ICON} /> },
     { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
     { name: "hand", label: "Hand", hint: "Hand (scroll)", icon: <Hand {...ICON} /> },
@@ -78,6 +83,9 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
           </button>
         ))}
       </div>
+      <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
+        title="Ruler (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
+        onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
       <div className="tool-group">
         <button className="btn ghost icon" aria-label="Undo" onClick={onUndo}><Undo2 {...ICON} /></button>
         <button className="btn ghost icon" aria-label="Redo" onClick={onRedo}><Redo2 {...ICON} /></button>

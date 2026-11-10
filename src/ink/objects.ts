@@ -64,11 +64,32 @@ export async function pasteImages(files: Blob[], pageId: string): Promise<number
   return imgs.length;
 }
 
-export async function addTextBox(pageId: string, at: { x: number; y: number }): Promise<PageObject> {
-  const o: PageObject = { id: newId(), pageId, kind: "textbox", x: at.x, y: at.y, w: 420, h: 80, rotation: 0, text: "", z: await nextZ(pageId) };
+export async function addTextBox(pageId: string, at: { x: number; y: number }, layerId?: string): Promise<PageObject> {
+  const o: PageObject = { id: newId(), pageId, kind: "textbox", x: at.x, y: at.y, w: 420, h: 80, rotation: 0, text: "", z: await nextZ(pageId),
+    ...(layerId && layerId !== "base" ? { layerId } : {}) };
   await db.objects.add(o);
   await touch(pageId);
   return o;
+}
+
+/** Tape covers part of the page; it starts hidden (covering) and is tapped to peel it back. */
+export async function addTape(pageId: string, r: { x: number; y: number; w: number; h: number }, color: string, layerId?: string): Promise<PageObject> {
+  const o: PageObject = {
+    id: newId(), pageId, kind: "tape", x: r.x, y: r.y, w: r.w, h: r.h, rotation: 0, color, revealed: false,
+    z: await nextZ(pageId), ...(layerId ? { layerId } : {}),
+  };
+  await db.objects.add(o);
+  await touch(pageId);
+  return o;
+}
+
+export async function setTapeRevealed(id: string, revealed: boolean): Promise<void> {
+  await db.objects.update(id, { revealed });
+}
+
+export async function setAllTape(pageId: string, revealed: boolean): Promise<void> {
+  const tapes = await db.objects.where("pageId").equals(pageId).filter((o) => o.kind === "tape").toArray();
+  await db.objects.bulkPut(tapes.map((o) => ({ ...o, revealed })));
 }
 
 export async function updateObject(id: string, patch: Partial<Omit<PageObject, "id" | "pageId">>): Promise<void> {

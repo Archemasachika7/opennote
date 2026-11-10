@@ -1,0 +1,25 @@
+.wb-view .nb-body { min-height: 0; }
+.wb-boards { overflow-y: auto; padding: 8px; gap: 8px; }
+.wb-boards ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.wb-boards li { display: flex; align-items: center; gap: 2px; border-radius: var(--radius); }
+.wb-boards li.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.wb-board { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; padding: 7px 8px; border: 0; background: none;
+  color: var(--text); text-align: left; font: inherit; cursor: pointer; border-radius: var(--radius); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-boards li.on .wb-board { color: var(--accent); }
+.wb-board:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.wb-add { margin-top: 4px; justify-content: center; }
+.wb-stage { position: relative; flex: 1; min-width: 0; overflow: hidden; touch-action: none; }
+.wb-empty { flex: 1; display: grid; place-items: center; }
+.wb-panel { position: absolute; top: 10px; right: 10px; z-index: 5; display: flex; gap: 8px; align-items: center; padding: 6px 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); }
+.wb-corner { position: absolute; right: 10px; bottom: 10px; z-index: 5; display: grid; gap: 6px; justify-items: end; }
+.wb-corner-bar { display: flex; gap: 2px; padding: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.minimap { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  cursor: pointer; touch-action: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); }
+.minimap canvas { display: block; }
+.minimap-view { position: absolute; border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 2px; pointer-events: none; }
+@media (max-width: 640px) {
+  .wb-boards { width: 112px; }
+  .minimap { display: none; }
+}

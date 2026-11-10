@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckSquare, FolderPlus, LayoutGrid, List, Plus, Search, Star, Trash2, Upload, X } from "lucide-react";
+import { CheckSquare, ChevronDown, FolderPlus, GraduationCap, LayoutDashboard, LayoutGrid, List, Plus, Search, Star, Trash2, Upload, X } from "lucide-react";
 import { navigate } from "../App";
-import { db, type Notebook } from "../store/schema";
+import { db, type DocKind, type Notebook } from "../store/schema";
+import { Menu } from "../ui/Menu";
 import {
   createNotebook, deleteNotebook, listNotebooks, moveNotebooks, purgeTrash, renameNotebook, restoreNotebook,
   setFavorite, toggleFavorite, trashNotebook, type LibrarySort,
@@ -19,7 +20,7 @@ import { importFile } from "../io/importFile";
 import { toast } from "../ui/Toast";
 import "./library.css";
 
-type Filter = { kind: "all" } | { kind: "favorites" } | { kind: "trash" } | { kind: "folder"; id: string | null };
+type Filter = { kind: "all" } | { kind: "favorites" } | { kind: "trash" } | { kind: "folder"; id: string | null } | { kind: "type"; doc: DocKind };
 const I = { size: 16, strokeWidth: 1.5 } as const;
 
 function savedView(): "grid" | "list" {
@@ -45,7 +46,14 @@ export function LibraryView() {
     sort,
     view: filter.kind === "favorites" ? "favorites" : inTrash ? "trash" : "all",
     folderId: filter.kind === "folder" ? filter.id : undefined,
+    kind: filter.kind === "type" ? filter.doc : undefined,
   }), [filter, sort], [] as Notebook[]);
+  const cardCounts = useLive(async () => {
+    const m = new Map<string, number>();
+    await db.cards.each((c) => m.set(c.notebookId, (m.get(c.notebookId) ?? 0) + 1));
+    return m;
+  }, [], new Map<string, number>());
+  const [newMenu, setNewMenu] = useState(false);
   const folders = useLive(listFolders, [], []);
   const liveCounts = useLive(async () => {
     const m = new Map<string, number>();
@@ -54,9 +62,10 @@ export function LibraryView() {
   }, [], new Map<string, number>());
   const hits = useLive(() => searchAll(q), [q], [] as SearchHit[]);
 
-  async function newNotebook() {
+  async function newNotebook(kind: DocKind = "notebook") {
     const isFirst = (await db.notebooks.count()) === 0;
-    const nb = await createNotebook({ title: "Untitled notebook", folderId: filter.kind === "folder" ? filter.id : null });
+    const title = kind === "whiteboard" ? "Untitled whiteboard" : kind === "studyset" ? "Untitled study set" : "Untitled notebook";
+    const nb = await createNotebook({ title, kind, folderId: filter.kind === "folder" ? filter.id : null });
     if (isFirst) void platform.requestPersistentStorage();
     navigate(`/nb/${nb.id}`);
   }
@@ -82,7 +91,16 @@ export function LibraryView() {
           try { const nb = await importFile(f); toast(`Imported "${nb.title}"`); } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
         }}><Upload {...I} />Import</button>
         <button className="btn" onClick={() => setNaming(true)}><FolderPlus {...I} />New folder</button>
-        <button className="btn primary" onClick={newNotebook}><Plus {...I} />New notebook</button>
+        <div className="split-btn" style={{ position: "relative" }}>
+          <button className="btn primary" onClick={() => newNotebook()}><Plus {...I} />New notebook</button>
+          <button className="btn primary icon" aria-label="More new items" aria-haspopup="menu" onClick={() => setNewMenu(true)}><ChevronDown {...I} /></button>
+          {newMenu && (
+            <Menu onClose={() => setNewMenu(false)} style={{ right: 0, top: 38 }} items={[
+              { label: "New whiteboard", icon: <LayoutDashboard size={14} strokeWidth={1.5} />, onSelect: () => newNotebook("whiteboard") },
+              { label: "New study set", icon: <GraduationCap size={14} strokeWidth={1.5} />, onSelect: () => newNotebook("studyset") },
+            ]} />
+          )}
+        </div>
       </header>
 
       {q.trim() ? (
@@ -101,6 +119,8 @@ export function LibraryView() {
             <div className="chips">
               {chip("All", { kind: "all" }, filter.kind === "all")}
               {chip("Favourites", { kind: "favorites" }, filter.kind === "favorites", <Star size={13} strokeWidth={1.5} />)}
+              {chip("Whiteboards", { kind: "type", doc: "whiteboard" }, filter.kind === "type" && filter.doc === "whiteboard", <LayoutDashboard size={13} strokeWidth={1.5} />)}
+              {chip("Study sets", { kind: "type", doc: "studyset" }, filter.kind === "type" && filter.doc === "studyset", <GraduationCap size={13} strokeWidth={1.5} />)}
               {chip("Unfiled", { kind: "folder", id: null }, filter.kind === "folder" && filter.id === null)}
               {folders.map((f) => <span key={f.id}>{chip(f.name, { kind: "folder", id: f.id }, filter.kind === "folder" && filter.id === f.id)}</span>)}
               {chip("Trash", { kind: "trash" }, inTrash, <Trash2 size={13} strokeWidth={1.5} />)}
@@ -163,7 +183,7 @@ export function LibraryView() {
               variants={{ visible: { transition: { staggerChildren: motionTokens.stagger } } }}>
               <AnimatePresence mode="popLayout">
                 {notebooks.map((nb) => (
-                  <NotebookCard key={nb.id} nb={nb} view={view} inTrash={inTrash} liveCount={liveCounts.get(nb.id) ?? 0}
+                  <NotebookCard key={nb.id} nb={nb} view={view} inTrash={inTrash} liveCount={liveCounts.get(nb.id) ?? 0} cardCount={cardCounts.get(nb.id) ?? 0}
                     selecting={selecting} selected={selected.has(nb.id)} onToggleSelect={() => toggle(nb.id)}
                     onOpen={() => navigate(`/nb/${nb.id}`)} onRename={(t) => renameNotebook(nb.id, t)}
                     onTrash={() => trashNotebook(nb.id)} onFavorite={() => toggleFavorite(nb.id)}

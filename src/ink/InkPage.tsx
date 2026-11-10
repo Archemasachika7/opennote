@@ -1,22 +1,28 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
 import { useLive } from "../store/useLive";
 import { useTool } from "../notebook/tool";
 import { InkLayer } from "./InkLayer";
 import { ObjectLayer } from "./ObjectLayer";
+import { TapeLayer } from "./TapeLayer";
 import { addImage, getObjects } from "./objects";
 import { resolveColor } from "./render";
+import { BASE_LAYER, getActiveLayer, hiddenLayers, lockedLayers, useActiveLayerVersion, type Layer } from "./layers";
 
-/** An ink page body: images/text boxes under the ink, drop-to-insert images. */
-export function InkPage({ pageId, width, height, paper, inputFilter }: {
-  pageId: string; width: number; height: number; paper: Paper; inputFilter?: (e: PointerEvent) => boolean;
+/** An ink page body: images/text boxes under the ink, tape over it, drop-to-insert images. */
+export function InkPage({ pageId, width, height, paper, inputFilter, layers }: {
+  pageId: string; width: number; height: number; paper: Paper; inputFilter?: (e: PointerEvent) => boolean; layers?: Layer[];
 }) {
   const [tool] = useTool();
+  useActiveLayerVersion();
   const stored = useLive(() => getObjects(pageId), [pageId], [] as PageObject[]);
   const [preview, setPreview] = useState<PageObject[] | null>(null);
   const [cropping, setCropping] = useState<string | null>(null);
   const scale = width / PAGE_SIZE.w;
   const objects = preview ? stored.map((o) => preview.find((p) => p.id === o.id) ?? o) : stored;
+  const hidden = useMemo(() => hiddenLayers({ layers }), [layers]);
+  const locked = useMemo(() => lockedLayers({ layers }), [layers]);
+  const active = getActiveLayer(pageId, { layers });
 
   const onDrop = async (e: React.DragEvent) => {
     const files = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith("image/"));
@@ -31,10 +37,11 @@ export function InkPage({ pageId, width, height, paper, inputFilter }: {
   return (
     <div className="ink-page" data-testid="ink-page" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <ObjectLayer pageId={pageId} objects={objects} scale={scale} tool={tool.tool} textColor={textColor}
-        cropping={cropping} setCropping={setCropping} />
-      <InkLayer pageId={pageId} width={width} height={height} paper={paper} inputFilter={inputFilter}
-        objects={stored} onPreviewObjects={setPreview} onCropRequest={setCropping}
+        cropping={cropping} setCropping={setCropping} hidden={hidden} locked={locked} layerId={active === BASE_LAYER ? undefined : active} />
+      <InkLayer pageId={pageId} width={width} height={height} paper={paper} inputFilter={inputFilter} layers={layers} tapeEnabled
+        objects={stored.filter((o) => !hidden.has(o.layerId ?? BASE_LAYER))} onPreviewObjects={setPreview} onCropRequest={setCropping}
         disabled={tool.tool === "text" || tool.tool === "image" || cropping !== null} />
+      <TapeLayer objects={objects} scale={scale} tool={tool.tool} hidden={hidden} locked={locked} />
     </div>
   );
 }

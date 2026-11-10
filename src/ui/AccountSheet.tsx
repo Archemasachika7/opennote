@@ -4,6 +4,7 @@ import { Check, LogOut, Mail, RotateCw } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { toast } from "./Toast";
 import { OtpInput } from "./OtpInput";
+import { SyncPanel } from "./SyncPanel";
 import { springs, useSafeMotion } from "./motion";
 import {
   googleAvailable, isValidCode, isValidEmail, restartSignIn, sendCode, signInWithGoogle, signOut, useAuth, verifyCode,
@@ -131,7 +132,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
                 </motion.div>
                 <span className="dim small">Signed in as</span>
                 <strong className="acct-email">{auth.user.email}</strong>
-                <p className="dim small" style={{ margin: 0 }}>Sync: coming soon. Your notes keep working offline.</p>
+                <SyncPanel />
                 <button type="button" className="btn acct-wide" disabled={busy} onClick={() => void run(signOut)}>
                   <LogOut {...I} />Sign out
                 </button>

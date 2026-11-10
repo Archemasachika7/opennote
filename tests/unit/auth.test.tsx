@@ -122,7 +122,8 @@ describe("AccountSheet", () => {
     fireEvent.click(signIn);
     await waitFor(() => expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy());
     expect(screen.getByText("a@b.co")).toBeTruthy();
-    expect(screen.getByText(/sync: coming soon/i)).toBeTruthy();
+    // signed in, sync still locked: the passphrase step shows
+    expect(screen.getByRole("button", { name: /unlock sync/i })).toBeTruthy();
   });
 });
 

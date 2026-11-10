@@ -30,3 +30,22 @@
 .otp-box:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .otp-box.filled { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 @media (max-width: 380px) { .otp { gap: 5px; } .otp-box { height: 42px; font-size: 18px; } }
+
+/* ---- Sync panel ---- */
+.sync-panel { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sync-h { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 13px; }
+.sync-status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); }
+.sync-dot.good { background: var(--accent); }
+.sync-dot.busy { background: var(--accent); animation: sync-pulse 1s ease-in-out infinite; }
+.sync-dot.bad { background: #e5484d; }
+@keyframes sync-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .sync-dot.busy { animation: none; } }
+.sync-msg { margin: 0; color: var(--text-dim); }
+.sync-msg.warn { color: var(--accent); }
+.sync-tiers { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: tier; }
+.sync-tiers li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; color: var(--text); }
+.sync-tiers li > svg { margin-top: 2px; color: var(--accent); }
+.sync-tiers li > span, .sync-tier-body { display: grid; gap: 2px; min-width: 0; }
+.sync-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.sync-inline .input { flex: 1; min-width: 140px; }

@@ -104,16 +104,60 @@ describe("AccountSheet", () => {
     await renderSheet();
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@b.co" } });
     fireEvent.click(screen.getByRole("button", { name: /send code/i }));
-    const code = await screen.findByLabelText(/6-digit code/i);
+    const group = await screen.findByRole("group", { name: /6-digit code/i });
+    const boxes = Array.from(group.querySelectorAll("input"));
+    expect(boxes).toHaveLength(6);
     const signIn = screen.getByRole("button", { name: /^sign in$/i }) as HTMLButtonElement;
-    fireEvent.change(code, { target: { value: "123" } });
+    // typing moves focus forward; letters are ignored
+    fireEvent.change(boxes[0], { target: { value: "1" } });
+    expect(document.activeElement).toBe(boxes[1]);
+    fireEvent.change(boxes[1], { target: { value: "x" } });
+    expect(boxes[1].value).toBe("");
     expect(signIn.disabled).toBe(true);
-    fireEvent.change(code, { target: { value: "123456" } });
+    // pasting the whole code fills every box
+    fireEvent.paste(boxes[0], { clipboardData: { getData: () => " 123 456 " } });
+    expect(boxes.map((b) => b.value).join("")).toBe("123456");
     expect(signIn.disabled).toBe(false);
+    // backspace on an empty box goes back
     fireEvent.click(signIn);
     await waitFor(() => expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy());
     expect(screen.getByText("a@b.co")).toBeTruthy();
     expect(screen.getByText(/sync: coming soon/i)).toBeTruthy();
+  });
+});
+
+describe("OtpInput", () => {
+  it("backspace on an empty box clears the previous one and moves back", async () => {
+    const { OtpInput } = await import("../../src/ui/OtpInput");
+    const seen: string[] = [];
+    render(<OtpInput value="12" onChange={(v) => seen.push(v)} />);
+    const boxes = Array.from(screen.getByRole("group", { name: /6-digit code/i }).querySelectorAll("input"));
+    boxes[2].focus();
+    fireEvent.keyDown(boxes[2], { key: "Backspace" });
+    expect(seen.at(-1)).toBe("1");
+    expect(document.activeElement).toBe(boxes[1]);
+  });
+});
+
+describe("resend timer", () => {
+  it("offers 'Resend code' only after 30 s", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const a = await freshAuth();
+      await a.initAuth();
+      const { AccountSheet } = await import("../../src/ui/AccountSheet");
+      render(<AccountSheet open onClose={() => {}} />);
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@b.co" } });
+      fireEvent.click(screen.getByRole("button", { name: /send code/i }));
+      const resend = (await screen.findByRole("button", { name: /resend/i })) as HTMLButtonElement;
+      expect(resend.disabled).toBe(true);
+      await act(async () => { vi.advanceTimersByTime(30_000); });
+      expect(resend.disabled).toBe(false);
+      fireEvent.click(resend);
+      await waitFor(() => expect(fake.auth.signInWithOtp).toHaveBeenCalledTimes(2));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

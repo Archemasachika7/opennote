@@ -3,14 +3,15 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2, PenLine, Presentation,
-  RectangleHorizontal, Redo2, Ruler as RulerIcon, Shapes, Type, Undo2, ZoomIn, ZoomOut,
+  ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2,
+  PanelLeft, PenLine, Presentation, RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes,
+  Type, Undo2, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { useRuler } from "../ink/ruler";
 import { toggleRuler } from "../ink/RulerOverlay";
 import { navigate } from "../App";
 import type { Notebook } from "../store/schema";
-import { updateNotebook } from "../store/notebooks";
+import { COVERS, renameNotebook, updateNotebook } from "../store/notebooks";
 import { Menu } from "../ui/Menu";
 import { useTool, type ToolName, type ToolState } from "./tool";
 import { SHAPES } from "../ink/shapes";
@@ -19,32 +20,112 @@ import type { PenVariant } from "../ink/model";
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
 export const DEFAULT_COLORS = ["#E8E9EE", "#4FD1C5", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
 
-export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind, onExportPdf, onExportBackup, onExportOptions }: {
-  notebook: Notebook; zoom: number; setZoom: (z: number) => void; onUndo: () => void; onRedo: () => void; palette?: string[];
-  currentKind?: "ink" | "text" | "html"; onExportPdf?: () => void; onExportBackup?: () => void; onExportOptions?: () => void;
+export function Toolbar({
+  notebook, zoom, setZoom, onResetZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind,
+  sidebarOpen, onToggleSidebar, onOpenSettings,
+  onExportPdf, onExportBackup, onExportOptions,
+}: {
+  notebook: Notebook;
+  zoom: number;
+  setZoom: (z: number) => void;
+  onResetZoom?: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  palette?: string[];
+  currentKind?: "ink" | "text" | "html";
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+  onOpenSettings?: () => void;
+  onExportPdf?: () => void;
+  onExportBackup?: () => void;
+  onExportOptions?: () => void;
 }) {
   const [t, set] = useTool();
   const ruler = useRuler();
   const [menu, setMenu] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(notebook.title);
+
+  useEffect(() => {
+    if (!editingTitle) setTitleDraft(notebook.title);
+  }, [notebook.title, editingTitle]);
+
   useEffect(() => {
     if (t.paletteIndex !== null && palette[t.paletteIndex] !== t.color) set({ color: palette[t.paletteIndex] });
   }, [palette, t.paletteIndex, t.color, set]);
+
   const tools: { name: ToolName; label: string; hint: string; icon: JSX.Element }[] = [
-    { name: "pen", label: "Pen", hint: "Pen (draw)", icon: <PenLine {...ICON} /> },
-    { name: "highlighter", label: "Highlighter", hint: "Highlighter", icon: <Highlighter {...ICON} /> },
-    { name: "eraser", label: "Eraser", hint: "Eraser", icon: <Eraser {...ICON} /> },
-    { name: "lasso", label: "Lasso", hint: "Lasso (select and move, does not draw)", icon: <Lasso {...ICON} /> },
-    { name: "shape", label: "Shapes", hint: "Shapes (pick one, then drag on the page)", icon: <Shapes {...ICON} /> },
-    { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal)", icon: <RectangleHorizontal {...ICON} /> },
-    { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading trail for presenting, never saved)", icon: <Presentation {...ICON} /> },
-    { name: "text", label: "Text box", hint: "Text box (click on the page)", icon: <Type {...ICON} /> },
+    { name: "pen", label: "Pen", hint: "Pen (draw) [P]", icon: <PenLine {...ICON} /> },
+    { name: "highlighter", label: "Highlighter", hint: "Highlighter [H]", icon: <Highlighter {...ICON} /> },
+    { name: "eraser", label: "Eraser", hint: "Eraser [E]", icon: <Eraser {...ICON} /> },
+    { name: "lasso", label: "Lasso", hint: "Lasso (select and move, does not draw) [L]", icon: <Lasso {...ICON} /> },
+    { name: "shape", label: "Shapes", hint: "Shapes (pick one, then drag on the page) [S]", icon: <Shapes {...ICON} /> },
+    { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal) [B]", icon: <RectangleHorizontal {...ICON} /> },
+    { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading trail for presenting, never saved) [K]", icon: <Presentation {...ICON} /> },
+    { name: "text", label: "Text box", hint: "Text box (click on the page) [T]", icon: <Type {...ICON} /> },
     { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
-    { name: "hand", label: "Hand", hint: "Hand (scroll)", icon: <Hand {...ICON} /> },
+    { name: "hand", label: "Hand", hint: "Hand (scroll, or hold Space) [V]", icon: <Hand {...ICON} /> },
   ];
+
+  const commitTitle = () => {
+    setEditingTitle(false);
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== notebook.title) void renameNotebook(notebook.id, trimmed);
+    else setTitleDraft(notebook.title);
+  };
+
+  const coverFooter = (
+    <div className="cover-picker" role="group" aria-label="Cover colour">
+      <span className="cover-picker-label dim">Cover</span>
+      <div className="cover-swatches">
+        {COVERS.map((c) => (
+          <button key={c} type="button" className={`swatch ${notebook.coverColor === c ? "on" : ""}`} style={{ background: c }}
+            aria-label={`Cover ${c}`} onClick={() => { void updateNotebook(notebook.id, { coverColor: c }); setMenu(false); }} />
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <header className="nb-toolbar">
-      <button className="btn ghost icon" aria-label="Back to library" onClick={() => navigate("/")}><ArrowLeft {...ICON} /></button>
-      <span className="nb-name">{notebook.title}</span>
+      <button className="btn ghost icon" aria-label="Back to library" title="Back to library" onClick={() => navigate("/")}><ArrowLeft {...ICON} /></button>
+      {onToggleSidebar && (
+        <button className={`btn ghost icon ${sidebarOpen ? "active" : ""}`} aria-label="Toggle sidebar" aria-pressed={sidebarOpen}
+          title="Toggle sidebar (Ctrl+\)" onClick={onToggleSidebar}>
+          <PanelLeft {...ICON} />
+        </button>
+      )}
+      {editingTitle ? (
+        <input
+          className="input nb-name-input"
+          aria-label="Document title"
+          autoFocus
+          value={titleDraft}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Escape") { e.preventDefault(); setTitleDraft(notebook.title); setEditingTitle(false); }
+          }}
+        />
+      ) : (
+        <span
+          className="nb-name"
+          role="button"
+          tabIndex={0}
+          title="Click to rename"
+          onClick={() => { setTitleDraft(notebook.title); setEditingTitle(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "F2") {
+              e.preventDefault();
+              setTitleDraft(notebook.title);
+              setEditingTitle(true);
+            }
+          }}>
+          {notebook.title}
+        </span>
+      )}
       <div className="tool-group" role="toolbar" aria-label="Tools">
         {tools.map((x) => (
           <button key={x.name} className={`btn ghost icon ${t.tool === x.name ? "active" : ""}`} aria-label={x.label} title={x.hint}
@@ -78,17 +159,18 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
       </div>
       <div className="widths" role="group" aria-label="Width">
         {[2, 3, 5, 8].map((w) => (
-          <button key={w} className={`btn ghost icon ${t.width === w ? "active" : ""}`} aria-label={`Width ${w}`} onClick={() => set({ width: w })}>
+          <button key={w} className={`btn ghost icon ${t.width === w ? "active" : ""}`} aria-label={`Width ${w}`}
+            title={`Stroke width ${w} ([ / ])`} onClick={() => set({ width: w })}>
             <span style={{ width: w + 2, height: w + 2, borderRadius: "50%", background: "currentColor" }} />
           </button>
         ))}
       </div>
       <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
-        title="Ruler (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
+        title="Ruler [R] (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
         onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
       <div className="tool-group">
-        <button className="btn ghost icon" aria-label="Undo" onClick={onUndo}><Undo2 {...ICON} /></button>
-        <button className="btn ghost icon" aria-label="Redo" onClick={onRedo}><Redo2 {...ICON} /></button>
+        <button className="btn ghost icon" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={onUndo}><Undo2 {...ICON} /></button>
+        <button className="btn ghost icon" aria-label="Redo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" onClick={onRedo}><Redo2 {...ICON} /></button>
       </div>
       {currentKind && currentKind !== "ink" && (
         // Ink pages are always for writing. On Text/Live pages the mouse either uses the page
@@ -105,19 +187,23 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
             <PenLine {...ICON} />Write on page</button>
         </div>
       )}
-      <div className="tool-group">
+      <div className="tool-group nb-toolbar-right">
         <button className="btn ghost icon" aria-label="Zoom out" onClick={() => setZoom(zoom / 1.2)}><ZoomOut {...ICON} /></button>
-        <span className="mono dim" style={{ minWidth: 42, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+        <button type="button" className="zoom-readout mono dim" aria-label="Reset zoom" title="Click to toggle Fit width / 100%"
+          onClick={() => (onResetZoom ? onResetZoom() : setZoom(1))}>
+          {Math.round(zoom * 100)}%
+        </button>
         <button className="btn ghost icon" aria-label="Zoom in" onClick={() => setZoom(zoom * 1.2)}><ZoomIn {...ICON} /></button>
       </div>
       <div style={{ position: "relative" }}>
         <button className="btn ghost icon" aria-label="Notebook options" onClick={() => setMenu(true)}><MoreHorizontal {...ICON} /></button>
         {menu && (
-          <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} items={[
+          <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} footer={coverFooter} items={[
             ...(onExportPdf ? [{ label: "Export PDF", onSelect: onExportPdf }] : []),
             ...(onExportOptions ? [{ label: "Export...", onSelect: onExportOptions }] : []),
             ...(onExportBackup ? [{ label: "Export backup (.opennote)", onSelect: onExportBackup }] : []),
             { label: notebook.paper === "dark" ? "Light paper" : "Dark paper", onSelect: () => updateNotebook(notebook.id, { paper: notebook.paper === "dark" ? "light" : "dark" }) },
+            ...(onOpenSettings ? [{ label: "Settings & shortcuts", icon: <Settings size={14} strokeWidth={1.5} />, shortcut: "?", onSelect: onOpenSettings }] : []),
           ]} />
         )}
       </div>

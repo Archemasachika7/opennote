@@ -3,6 +3,7 @@
   --bg: #121318;
   --surface: #1a1c23;
   --surface-2: #22252e;
+  --card-surface: #1e2028;
   --page-dark: #1e2028;
   --page-light: #f3f1ec;
   --line: #2a2d37;
@@ -11,7 +12,9 @@
   --accent: #f5a524;
   --accent-ink: #121318;
   --live: #3ddc97;
+  --study: #4fd1c5;
   --danger: #ff6b6b;
+  --danger-ink: #121318;
   --radius: 6px;
   --font-ui: "Inter", system-ui, sans-serif;
   --font-title: "Space Grotesk", "Inter", system-ui, sans-serif;
@@ -22,12 +25,15 @@
   --bg: #f4f4f6;
   --surface: #ffffff;
   --surface-2: #eceef2;
+  --card-surface: #ffffff;
   --line: #d9dbe2;
   --text: #16171c;
   --text-dim: #5d6070;
   --accent: #b45309;
   --accent-ink: #ffffff;
-  --live: #11a86b;
-  --danger: #d33a3a;
+  --live: #0d7a4e;
+  --study: #0e7490;
+  --danger: #c92a2a;
+  --danger-ink: #ffffff;
   color-scheme: light;
 }

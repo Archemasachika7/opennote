@@ -57,4 +57,12 @@
 .layer-name { flex: 1; min-width: 0; }
 .small { font-size: 13px; }
 
+@media (pointer: coarse) {
+  .sel-scale { width: 18px; height: 18px; right: -9px; bottom: -9px; }
+  .sel-scale::after, .sel-rot::after, .crop-h::after {
+    content: ""; position: absolute; inset: -10px;
+  }
+  .sel-rot { width: 28px; height: 28px; top: -36px; margin-left: -14px; }
+}
+
 @media (prefers-reduced-motion: reduce) { .tape { transition: none; } }

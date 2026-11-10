@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Notebook, Page } from "../store/schema";
+import { FileText, PenLine, Sparkles } from "lucide-react";
+import type { HtmlPage, InkPage, Notebook, Page } from "../store/schema";
 import { getNotebook, restoreNotebook, toggleBookmark } from "../store/notebooks";
 import { navigate } from "../App";
-import { deletePage, duplicatePage, getPages, insertPage, movePage, updatePage } from "../store/pages";
+import { deletePageWithUndo, duplicatePage, getPages, insertPage, movePage, restoreDeletedPage, updatePage } from "../store/pages";
 import { useLive } from "../store/useLive";
 import { Toolbar } from "./Toolbar";
 import { Thumbnails } from "./Thumbnails";
@@ -10,8 +11,9 @@ import { PageList } from "./PageList";
 import { PageFrame } from "./PageFrame";
 import { useVisiblePages } from "./useVisiblePages";
 import { usePinchZoom } from "./usePinchZoom";
+import { useStudioShortcuts } from "./useStudioShortcuts";
 import { sendCommand, setTool, useTool } from "./tool";
-import { addImage, pasteImages } from "../ink/objects";
+import { addImage, pasteImages, setAllTape } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { exportPagesPdf } from "../io/exportPdf";
@@ -24,8 +26,6 @@ import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
 import { useSmartPaste } from "../live/useSmartPaste";
-import type { HtmlPage, InkPage } from "../store/schema";
-import { setAllTape } from "../ink/objects";
 import { LayersSheet } from "../ink/LayersSheet";
 import { RulerOverlay } from "../ink/RulerOverlay";
 import type { InsertKind } from "./InsertMenu";
@@ -34,18 +34,30 @@ import { LatencyOverlay } from "../dev/LatencyOverlay";
 import "./notebook.css";
 
 const BASE_WIDTH = 860;
+const MOBILE_BP = 760;
 /** File-system safe file name (no reserved characters). */
 export const safeName = (name: string): string => name.replace(/[<>:"/|?*]+/g, "-").trim() || "notebook";
-export const clampZoom = (z: number): number => Math.min(4, Math.max(0.5, z));
+export const clampZoom = (z: number): number => Math.min(4, Math.max(0.35, z));
 
-export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
-  const notebook = useLive(() => getNotebook(id), [id], undefined as Notebook | undefined);
+function initialMobile(): boolean {
+  return typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth < MOBILE_BP;
+}
+
+function initialZoom(): number {
+  if (initialMobile()) return clampZoom((window.innerWidth - 24) / BASE_WIDTH);
+  return 1;
+}
+
+export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageId?: string; onOpenSettings?: () => void }) {
+  const notebook = useLive(async () => (await getNotebook(id)) ?? null, [id], undefined as Notebook | null | undefined);
   const pages = useLive(() => getPages(id), [id], [] as Page[]);
   const scroller = useRef<HTMLDivElement>(null);
   const { mounted, current } = useVisiblePages(scroller, pages.length);
-  const [zoom, setZoomRaw] = useState(1);
+  const [zoom, setZoomRaw] = useState(initialZoom);
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !initialMobile());
   const [exporting, setExporting] = useState(false);
+  const [busyJob, setBusyJob] = useState<{ label: string; done: number; total: number } | null>(null);
   const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
   const [layersFor, setLayersFor] = useState<string | null>(null);
   const width = BASE_WIDTH * zoom;
@@ -54,6 +66,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const jump = useCallback((i: number) => {
     const p = pages[i];
     if (p) document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (initialMobile()) setSidebarOpen(false);
   }, [pages]);
 
   const hasPages = pages.length > 0;
@@ -63,22 +76,14 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     if (i >= 0) jump(i);
   }, [pageId, hasPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest("input, textarea, [contenteditable=true]")) return;
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
-      const p = pages[current];
-      if (!p) return;
-      e.preventDefault();
-      sendCommand(e.shiftKey ? "redo" : "undo", p.id);
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [pages, current]);
+  const curPage = pages[current];
+  useStudioShortcuts({
+    onUndo: () => curPage && sendCommand("undo", curPage.id),
+    onRedo: () => curPage && sendCommand("redo", curPage.id),
+    onToggleSidebar: () => setSidebarOpen((v) => !v),
+  });
 
   const [tool] = useTool();
-  const curPage = pages[current];
   const lastTool = useRef(tool.tool);
   useEffect(() => {
     if (tool.tool !== "image") { lastTool.current = tool.tool; return; }
@@ -99,13 +104,13 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if (hasClipboard() && (text === CLIP_MARKER || text === "")) {
         e.preventDefault();
-        void resolveImageTarget(id, pages, current).then((pageId) => pasteClipboard(pageId));
+        void resolveImageTarget(id, pages, current).then((targetId) => pasteClipboard(targetId));
         return;
       }
       const files = [...(e.clipboardData?.files ?? [])].filter((x) => x.type.startsWith("image/"));
       if (files.length === 0) return;
       e.preventDefault();
-      void resolveImageTarget(id, pages, current).then((pageId) => pasteImages(files, pageId));
+      void resolveImageTarget(id, pages, current).then((targetId) => pasteImages(files, targetId));
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
@@ -116,14 +121,29 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     if (kind === "pdf") {
       const f = await platform.openFile([".pdf", "application/pdf"]);
       if (!f) return;
-      toast("Importing PDF...");
+      setBusyJob({ label: `Importing "${f.name}"`, done: 0, total: 0 });
       try {
-        const r = await importPdf(f, { notebookId: id, at: index });
+        const r = await importPdf(f, {
+          notebookId: id,
+          at: index,
+          onProgress: (done, total) => setBusyJob({ label: `Importing "${f.name}"`, done, total }),
+        });
         toast(`Added ${r.pageIds.length} PDF ${r.pageIds.length === 1 ? "page" : "pages"}`);
-      } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      } catch (e) {
+        toast(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusyJob(null);
+      }
       return;
     }
     await insertPage(id, index, kind === "ink" ? { kind: "ink", template: "blank" } : { kind: "text" });
+  }
+
+  async function handleDeletePage(p: Page) {
+    const snap = await deletePageWithUndo(p.id);
+    if (snap) {
+      toast("Page deleted", { label: "Undo", run: () => { void restoreDeletedPage(snap); } });
+    }
   }
 
   const currentRef = useRef(current);
@@ -137,26 +157,32 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
 
   async function exportPdf(list: Page[], name: string) {
     if (!notebook || list.length === 0) return;
-    toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} to PDF...`);
+    setBusyJob({ label: `Exporting PDF`, done: 0, total: list.length });
     try {
-      const r = await exportPagesPdf(list, notebook);
+      const r = await exportPagesPdf(list, notebook, (done, total) => setBusyJob({ label: "Exporting PDF", done, total }));
       const safe = safeName(name);
       await platform.saveFile(`${safe}.pdf`, new Blob([r.bytes as BlobPart], { type: "application/pdf" }));
       toast(`PDF saved (${r.pdfPages} ${r.pdfPages === 1 ? "page" : "pages"})` +
         (r.livesAsCards ? ` - ${r.livesAsCards} live ${r.livesAsCards === 1 ? "page" : "pages"} shown as a card` : ""));
     } catch (e) {
       toast(`PDF export failed: ${String(e)}`);
+    } finally {
+      setBusyJob(null);
     }
   }
 
   async function exportJpg(list: Page[], nbForName: Notebook) {
     if (list.length === 0) return;
-    toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} as JPG...`);
+    setBusyJob({ label: "Exporting JPG images", done: 0, total: list.length });
     try {
       const r = await exportPagesJpg(list, nbForName);
       await platform.saveFile(r.name, r.blob);
       toast("Images saved");
-    } catch (e) { toast(`JPG export failed: ${String(e)}`); }
+    } catch (e) {
+      toast(`JPG export failed: ${String(e)}`);
+    } finally {
+      setBusyJob(null);
+    }
   }
 
   async function runExport(r: ExportRequest) {
@@ -175,7 +201,26 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
-  if (!notebook) return <main className="nb-loading dim">Loading...</main>;
+  const toggleFitZoom = () => {
+    const avail = scroller.current?.clientWidth ? scroller.current.clientWidth - 32 : 0;
+    const fit = avail > 120 ? clampZoom(avail / BASE_WIDTH) : 1;
+    if (Math.abs(zoom - 1) > 0.03) setZoom(1);
+    else if (Math.abs(fit - 1) > 0.03) setZoom(fit);
+    else setZoom(1);
+  };
+
+  if (notebook === undefined) return <main className="nb-loading dim">Loading...</main>;
+  if (notebook === null) {
+    return (
+      <main className="nb-missing">
+        <h2>Notebook not found</h2>
+        <p className="dim">This notebook does not exist on this device or may have been deleted.</p>
+        <div className="row-end" style={{ justifyContent: "center" }}>
+          <button className="btn primary" onClick={() => navigate("/")}>Back to library</button>
+        </div>
+      </main>
+    );
+  }
   if (notebook.trashedAt) {
     // a trashed notebook is not editable (it would be purged anyway); offer to restore it
     return (
@@ -192,7 +237,17 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const cur = pages[current];
   return (
     <div className="nb-view">
-      <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind} onExportPdf={() => exportPdf(pages, notebook.title)}
+      <Toolbar
+        notebook={notebook}
+        zoom={zoom}
+        setZoom={setZoom}
+        onResetZoom={toggleFitZoom}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onOpenSettings={onOpenSettings}
+        palette={inkPalette(notebook.paper)}
+        currentKind={pages[current]?.kind}
+        onExportPdf={() => exportPdf(pages, notebook.title)}
         onExportOptions={() => setExporting(true)}
         onExportBackup={async () => {
           try {
@@ -201,26 +256,68 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
             toast("Backup saved");
           } catch (e) { toast(`Backup failed: ${e instanceof Error ? e.message : String(e)}`); }
         }}
-        onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
-      <div className="nb-body">
-        <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}
-          onInsert={insert} onReorder={(a, b) => movePage(id, a, b)} />
-        <div className="nb-scroll" ref={scroller}>
-          <div className="nb-column" style={{ width }}>
-            <PageList pages={pages} notebook={notebook} mounted={mounted} width={width}
-              renderPage={(p, i, m, w) => (
-                <PageFrame page={p} notebook={notebook} mounted={m} width={w} priority={1000 - Math.abs(i - current)}
-                  onEditLive={(pg) => pg.kind === "html" && setSheet({ index: i, edit: pg, initial: { title: pg.title, source: pg.source, artifactType: pg.artifactType, allowNetwork: pg.allowNetwork } })} />
-              )}
-              onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
-              onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
-              onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
-              onRotate={(p) => rotatePage(p.id)}
-              onLayers={(p) => setLayersFor(p.id)} onTapeAll={(p, on) => setAllTape(p.id, on)}
-              onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
-              onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
+        onUndo={() => cur && sendCommand("undo", cur.id)}
+        onRedo={() => cur && sendCommand("redo", cur.id)}
+      />
+      {busyJob && (
+        <div className="nb-progress" role="status">
+          <span>{busyJob.label}</span>
+          <div className="meter-track">
+            <div className="meter-fill" style={{ width: busyJob.total > 0 ? `${Math.round((busyJob.done / busyJob.total) * 100)}%` : "35%" }} />
           </div>
+          {busyJob.total > 0 && <span className="mono dim small">{busyJob.done} / {busyJob.total}</span>}
         </div>
+      )}
+      <div className={`nb-body ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+        {sidebarOpen && (
+          <>
+            <div className="nb-drawer-backdrop" aria-hidden onClick={() => setSidebarOpen(false)} />
+            <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} paper={notebook.paper} onJump={jump}
+              onInsert={insert} onReorder={(a, b) => movePage(id, a, b)} />
+          </>
+        )}
+        <div className="nb-scroll" ref={scroller}>
+          {pages.length === 0 ? (
+            <div className="nb-empty-pages">
+              <h2>This notebook has no pages</h2>
+              <p className="dim">Add an Ink page, Text page, or paste an AI artifact to create a Live page.</p>
+              <div className="empty-actions">
+                <button className="btn primary" onClick={() => insert(0, "ink")}><PenLine size={15} strokeWidth={1.5} />Add ink page</button>
+                <button className="btn" onClick={() => insert(0, "text")}><FileText size={15} strokeWidth={1.5} />Add text page</button>
+                <button className="btn" onClick={() => insert(0, "live")}><Sparkles size={15} strokeWidth={1.5} color="var(--live)" />Add live page</button>
+              </div>
+            </div>
+          ) : (
+            <div className="nb-column" style={{ width }}>
+              <PageList
+                pages={pages}
+                notebook={notebook}
+                mounted={mounted}
+                width={width}
+                renderPage={(p, i, m, w) => (
+                  <PageFrame page={p} notebook={notebook} mounted={m} width={w} priority={1000 - Math.abs(i - current)}
+                    onEditLive={(pg) => pg.kind === "html" && setSheet({ index: i, edit: pg, initial: { title: pg.title, source: pg.source, artifactType: pg.artifactType, allowNetwork: pg.allowNetwork } })} />
+                )}
+                onDuplicate={(p) => duplicatePage(p.id)}
+                onDelete={handleDeletePage}
+                onMovePage={(from, to) => movePage(id, from, to)}
+                onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
+                onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
+                onRotate={(p) => rotatePage(p.id)}
+                onLayers={(p) => setLayersFor(p.id)}
+                onTapeAll={(p, on) => setAllTape(p.id, on)}
+                onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
+                onBookmark={(p) => toggleBookmark(id, p.id)}
+                onTemplate={(p, t) => updatePage(p.id, { template: t })}
+              />
+            </div>
+          )}
+        </div>
+        {!sidebarOpen && pages.length > 0 && (
+          <button type="button" className="nb-page-pill mono" onClick={() => setSidebarOpen(true)} title="Show pages sidebar">
+            {current + 1} / {pages.length}
+          </button>
+        )}
       </div>
       <ExportSheet open={exporting} onClose={() => setExporting(false)} total={pages.length} current={current} onExport={runExport} />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />

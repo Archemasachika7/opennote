@@ -23,9 +23,11 @@ async function nextZ(pageId: string): Promise<number> {
 /** Downscale to <= 2048 px longest side and re-encode as WebP when a canvas is available. */
 async function prepare(file: Blob): Promise<{ blob: Blob; w: number; h: number }> {
   const bmp = await createImageBitmap(file);
-  const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
-  const w = Math.round(bmp.width * k);
-  const h = Math.round(bmp.height * k);
+  const rawW = Math.max(1, Number.isFinite(bmp.width) && bmp.width > 0 ? bmp.width : 600);
+  const rawH = Math.max(1, Number.isFinite(bmp.height) && bmp.height > 0 ? bmp.height : 400);
+  const k = Math.min(1, MAX_SIDE / Math.max(rawW, rawH));
+  const w = Math.max(1, Math.round(rawW * k));
+  const h = Math.max(1, Math.round(rawH * k));
   let blob: Blob = file;
   if (typeof OffscreenCanvas !== "undefined") {
     const c = new OffscreenCanvas(w, h);
@@ -42,13 +44,14 @@ export async function addImage(pageId: string, file: Blob, at?: { x: number; y: 
   const w = Math.min(img.w, MAX_W);
   const h = (w / img.w) * img.h;
   const blobId = newId();
+  const validAt = at && Number.isFinite(at.x) && Number.isFinite(at.y) ? at : undefined;
   // Without an explicit spot, cascade new images so they never sit exactly on top of earlier ones.
-  const n = at ? 0 : await db.objects.where("pageId").equals(pageId).filter((x) => x.kind === "image").count();
+  const n = validAt ? 0 : await db.objects.where("pageId").equals(pageId).filter((x) => x.kind === "image").count();
   const step = (n % 12) * 36;
   const o: PageObject = {
     id: newId(), pageId, kind: "image", w, h, rotation: 0, blobId, z: await nextZ(pageId),
-    x: at ? Math.min(at.x, PAGE_SIZE.w - w) : Math.max(0, Math.min((PAGE_SIZE.w - w) / 2 + step, PAGE_SIZE.w - w)),
-    y: at ? at.y : Math.max(0, (PAGE_SIZE.h - h) / 2 + step),
+    x: validAt ? Math.max(0, Math.min(validAt.x, PAGE_SIZE.w - w)) : Math.max(0, Math.min((PAGE_SIZE.w - w) / 2 + step, PAGE_SIZE.w - w)),
+    y: validAt ? Math.max(0, validAt.y) : Math.max(0, (PAGE_SIZE.h - h) / 2 + step),
   };
   await db.transaction("rw", [db.blobs, db.objects, db.pages, db.notebooks], async () => {
     await db.blobs.add({ id: blobId, data: img.blob });
@@ -65,7 +68,9 @@ export async function pasteImages(files: Blob[], pageId: string): Promise<number
 }
 
 export async function addTextBox(pageId: string, at: { x: number; y: number }, layerId?: string): Promise<PageObject> {
-  const o: PageObject = { id: newId(), pageId, kind: "textbox", x: at.x, y: at.y, w: 420, h: 80, rotation: 0, text: "", z: await nextZ(pageId),
+  const x = Number.isFinite(at.x) ? at.x : 120;
+  const y = Number.isFinite(at.y) ? at.y : 120;
+  const o: PageObject = { id: newId(), pageId, kind: "textbox", x, y, w: 420, h: 80, rotation: 0, text: "", z: await nextZ(pageId),
     ...(layerId && layerId !== "base" ? { layerId } : {}) };
   await db.objects.add(o);
   await touch(pageId);

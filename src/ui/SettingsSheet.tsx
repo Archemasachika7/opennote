@@ -4,6 +4,7 @@ import { AudioLines, CheckCircle2, HardDrive, Monitor, Moon, ShieldCheck, Sun, W
 import { Sheet } from "./Sheet";
 import { useTheme, type ThemeMode } from "./theme";
 import { useTool } from "../notebook/tool";
+import { setBlotEnabled, useBlotEnabled } from "./blotPrefs";
 import { db } from "../store/schema";
 import { platform } from "../platform/port";
 import { toast } from "./Toast";
@@ -54,6 +55,7 @@ const SHORTCUTS: [string, [string, string][]][] = [
 export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [theme, setTheme] = useTheme();
   const [tool, setToolState] = useTool();
+  const blotOn = useBlotEnabled();
   const [info, setInfo] = useState<StorageInfo | null>(null);
   const { apiKey: sarvamKey, prefs: sarvamPrefs, envManaged: sarvamEnv } = useSarvamConfig();
   const [keyInput, setKeyInput] = useState(sarvamKey);
@@ -115,6 +117,19 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               </button>
             ))}
           </div>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3>Blot</h3>
+            <label className="small" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input type="checkbox" aria-label="Blot, the ink-drop companion" checked={blotOn} onChange={(e) => setBlotEnabled(e.target.checked)} />
+              Shown
+            </label>
+          </div>
+          <p className="dim small" style={{ margin: 0 }}>
+            The little ink drop on the bottom edge. It hops when a live page runs, cheers when you know a flashcard, and waves when you tap it. Drag it along the edge to move it.
+          </p>
         </section>
 
         <section className="settings-group">

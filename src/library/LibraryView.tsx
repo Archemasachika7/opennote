@@ -1,4 +1,5 @@
 "use client";
+import { blotReact } from "../ui/blotBus";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -111,6 +112,7 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
     const title = kind === "whiteboard" ? "Untitled whiteboard" : kind === "studyset" ? "Untitled study set" : "Untitled notebook";
     const nb = await createNotebook({ title, kind, folderId: filter.kind === "folder" ? filter.id : null });
     if (isFirst) void platform.requestPersistentStorage();
+    blotReact("peek");
     navigate(`/nb/${nb.id}`);
   }
 

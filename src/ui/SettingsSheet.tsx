@@ -1,12 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
-import { HardDrive, Monitor, Moon, ShieldCheck, Sun } from "lucide-react";
+import { AudioLines, CheckCircle2, HardDrive, Monitor, Moon, ShieldCheck, Sun, Wifi } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { useTheme, type ThemeMode } from "./theme";
 import { useTool } from "../notebook/tool";
 import { db } from "../store/schema";
 import { platform } from "../platform/port";
 import { toast } from "./Toast";
+import {
+  SARVAM_LANGUAGES,
+  setSarvamApiKey,
+  setSarvamPrefs,
+  testSarvamConnection,
+  useSarvamConfig,
+} from "../ai/sarvamStt";
 
 const I = { size: 15, strokeWidth: 1.5 } as const;
 
@@ -48,6 +55,14 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [theme, setTheme] = useTheme();
   const [tool, setToolState] = useTool();
   const [info, setInfo] = useState<StorageInfo | null>(null);
+  const { apiKey: sarvamKey, prefs: sarvamPrefs, envManaged: sarvamEnv } = useSarvamConfig();
+  const [keyInput, setKeyInput] = useState(sarvamKey);
+  const [testingSarvam, setTestingSarvam] = useState(false);
+  const [sarvamStatus, setSarvamStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    setKeyInput(sarvamKey);
+  }, [sarvamKey, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -118,6 +133,82 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           <p className="dim small" style={{ margin: 0 }}>
             Hold the pen still for 0.4s at the end of a line, arrow, rectangle, triangle or circle to snap it to crisp geometry. Scribble back-and-forth over ink to erase it.
           </p>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3><AudioLines size={14} strokeWidth={1.5} style={{ verticalAlign: "-2px", marginRight: 6 }} />Speech-to-Text · Sarvam AI</h3>
+            {sarvamKey ? (
+              <span className="persist-badge mono"><CheckCircle2 size={13} strokeWidth={1.5} />Key ready</span>
+            ) : (
+              <span className="dim small">saaras:v3</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            <input
+              type="password"
+              className="input"
+              aria-label="Settings Sarvam API key"
+              placeholder="Paste Sarvam api-subscription-key..."
+              value={keyInput}
+              disabled={sarvamEnv}
+              onChange={(e) => setKeyInput(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            {!sarvamEnv && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setSarvamApiKey(keyInput);
+                  if (keyInput.trim()) setSarvamPrefs({ engine: "sarvam" });
+                  toast(keyInput.trim() ? "Saved Sarvam API key locally" : "Cleared Sarvam API key");
+                }}>
+                Save
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn primary"
+              disabled={testingSarvam}
+              onClick={async () => {
+                const trimmed = keyInput.trim();
+                if (!sarvamEnv && trimmed !== sarvamKey) setSarvamApiKey(trimmed);
+                setTestingSarvam(true);
+                const r = await testSarvamConnection(trimmed);
+                setTestingSarvam(false);
+                setSarvamStatus(r);
+              }}>
+              <Wifi size={14} strokeWidth={1.5} />
+              {testingSarvam ? "Testing..." : "Test Invoke"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <span className="dim small">Default language:</span>
+            <select
+              className="input"
+              aria-label="Default speech language"
+              value={sarvamPrefs.languageCode}
+              onChange={(e) => setSarvamPrefs({ languageCode: e.target.value })}>
+              {SARVAM_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
+            </select>
+          </div>
+          {sarvamStatus && (
+            <p
+              role="status"
+              className="small"
+              style={{
+                margin: "8px 0 0",
+                padding: "6px 8px",
+                borderRadius: 6,
+                background: sarvamStatus.ok ? "rgba(61, 220, 151, 0.12)" : "rgba(255, 107, 107, 0.12)",
+                color: sarvamStatus.ok ? "#3DDC97" : "#FF8A8A",
+              }}>
+              {sarvamStatus.message}
+            </p>
+          )}
         </section>
 
         <section className="settings-group">

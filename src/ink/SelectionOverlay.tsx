@@ -1,11 +1,12 @@
 "use client";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { motionTokens } from "../ui/motion";
-import { ClipboardCopy, Copy, Crop, GraduationCap, Minus, PaintBucket, Palette, RotateCw, Scissors, Stamp, Trash2 } from "lucide-react";
+import { ClipboardCopy, Copy, Crop, Droplet, GraduationCap, Minus, PaintBucket, Palette, RotateCw, Scissors, Stamp, Trash2 } from "lucide-react";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
 import { tryCapture } from "./input";
+import type { ShapeStylePatch } from "../notebook/tool";
 
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
@@ -13,8 +14,9 @@ const I = { size: 14, strokeWidth: 1.5 } as const;
 export function SelectionOverlay({
   box, scale, origin = { x: 0, y: 0 }, xf,
   hasShape, shapeFilled, shapeDashed,
+  shapeFillColor, shapeFillOpacity = 0.42, fillPalette = [],
   onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut,
-  onToggleFill, onToggleDashed, onSaveElement, onMakeCard,
+  onToggleFill, onToggleDashed, onUpdateShapeStyle, onSaveElement, onMakeCard,
 }: {
   box: Box;
   scale: number;
@@ -24,6 +26,9 @@ export function SelectionOverlay({
   hasShape?: boolean;
   shapeFilled?: boolean;
   shapeDashed?: boolean;
+  shapeFillColor?: string;
+  shapeFillOpacity?: number;
+  fillPalette?: string[];
   onPreview: (m: Xf) => void;
   onCommit: (m: Xf) => void;
   onDelete: () => void;
@@ -34,11 +39,13 @@ export function SelectionOverlay({
   onCut?: () => void;
   onToggleFill?: () => void;
   onToggleDashed?: () => void;
+  onUpdateShapeStyle?: (patch: ShapeStylePatch) => void;
   onSaveElement?: () => void;
   onMakeCard?: () => void;
 }) {
   const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number; sx: number; sy: number } | null>(null);
   const el = useRef<HTMLDivElement>(null);
+  const [fillPickerOpen, setFillPickerOpen] = useState(false);
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
 
@@ -88,14 +95,33 @@ export function SelectionOverlay({
       <span className="sel-rot" data-testid="sel-rotate" onPointerDown={start("rotate")}><RotateCw {...I} /></span>
       <span className="sel-scale" data-testid="sel-scale" onPointerDown={start("scale")} />
       <div className="sel-bar" onPointerDown={(e) => e.stopPropagation()}>
-        <button className="btn ghost icon" aria-label="Recolour selection" onClick={onRecolor}><Palette {...I} /></button>
+        <button className="btn ghost icon" aria-label="Recolour selection" title="Set border colour from active swatch" onClick={onRecolor}><Palette {...I} /></button>
         {hasShape && onToggleFill && (
-          <button className={`btn ghost icon ${shapeFilled ? "on" : ""}`} aria-label="Toggle shape fill" title="Toggle shape fill" onClick={onToggleFill}>
-            <PaintBucket {...I} />
+          <button
+            className={`btn ghost icon ${shapeFilled ? "active" : ""}`}
+            aria-label="Toggle shape fill"
+            aria-pressed={!!shapeFilled}
+            title="Toggle shape interior fill"
+            onClick={onToggleFill}>
+            <PaintBucket {...I} style={shapeFilled && shapeFillColor ? { color: shapeFillColor } : undefined} />
+          </button>
+        )}
+        {hasShape && onUpdateShapeStyle && (
+          <button
+            className={`btn ghost icon ${fillPickerOpen ? "active" : ""}`}
+            aria-label="Shape fill colour"
+            title="Pick shape interior fill colour & opacity"
+            onClick={() => setFillPickerOpen((v) => !v)}>
+            <Droplet {...I} style={shapeFillColor ? { color: shapeFillColor } : undefined} />
           </button>
         )}
         {hasShape && onToggleDashed && (
-          <button className={`btn ghost icon ${shapeDashed ? "on" : ""}`} aria-label="Toggle dashed outline" title="Toggle dashed outline" onClick={onToggleDashed}>
+          <button
+            className={`btn ghost icon ${shapeDashed ? "active" : ""}`}
+            aria-label="Toggle dashed outline"
+            aria-pressed={!!shapeDashed}
+            title="Toggle dashed outline"
+            onClick={onToggleDashed}>
             <Minus {...I} />
           </button>
         )}
@@ -115,6 +141,40 @@ export function SelectionOverlay({
         {onCrop && <button className="btn ghost icon" aria-label="Crop image" onClick={onCrop}><Crop {...I} /></button>}
         <button className="btn ghost icon" aria-label="Delete selection" onClick={onDelete}><Trash2 {...I} /></button>
       </div>
+      {hasShape && fillPickerOpen && onUpdateShapeStyle && (
+        <div className="sel-fill-popover" onPointerDown={(e) => e.stopPropagation()} role="group" aria-label="Selection fill colours">
+          {fillPalette.map((c, i) => (
+            <button
+              key={`sel-fill-${c}`}
+              type="button"
+              className="fill-swatch"
+              style={{ background: c }}
+              aria-label={`Selection fill colour ${i + 1}`}
+              onClick={() => onUpdateShapeStyle({ fill: true, fillColor: c, fillPaletteIndex: i, fillOpacity: shapeFillOpacity })}
+            />
+          ))}
+          <input
+            type="color"
+            aria-label="Selection custom fill colour"
+            value={shapeFillColor && shapeFillColor.length === 7 ? shapeFillColor : "#4fd1c5"}
+            onChange={(e) => onUpdateShapeStyle({ fill: true, fillColor: e.target.value, fillPaletteIndex: null, fillOpacity: shapeFillOpacity })}
+          />
+          <button
+            type="button"
+            className={`btn ghost small mono ${shapeFillOpacity >= 0.8 ? "active" : ""}`}
+            style={{ padding: "2px 6px", height: 22, fontSize: 11 }}
+            onClick={() => onUpdateShapeStyle({ fill: true, fillOpacity: shapeFillOpacity >= 0.8 ? 0.42 : 0.9 })}>
+            {shapeFillOpacity >= 0.8 ? "Solid" : "Tint"}
+          </button>
+          <button
+            type="button"
+            className="btn ghost small"
+            style={{ padding: "2px 6px", height: 22, fontSize: 11 }}
+            onClick={() => onUpdateShapeStyle({ fill: false })}>
+            None
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -5,13 +5,14 @@ import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selec
 import { SelectionOverlay } from "./SelectionOverlay";
 import { shapePoints, snapLineEndpoint, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
-import { getTool, onCommand, onStampElement, setTool, useTool } from "../notebook/tool";
+import { getTool, onCommand, onShapeStylePatch, onStampElement, setTool, useTool, type ShapeStylePatch } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
 import { historyFor, type Op } from "./history";
 import { notifyPageChanged, onPageChanged } from "./pageEvents";
 import { copyToClipboard, cutToClipboard } from "./clipboard";
 import { bbox, hitTest, hitsEraserPath, snapShape, splitByEraser, type Box } from "./geometry";
-import { paintStroke, resolveColor, strokePath } from "./render";
+import { inkPalette, paintStroke, resolveColor, resolveFillColor, strokePath } from "./render";
+import { sliceStrokeByTime } from "./replay";
 import { getRuler, rulerEdges, snapToRuler, RULER_SNAP_PX, type RulerLine } from "./ruler";
 import { liveLaserPoints, paintLaser, type LaserPoint } from "./laser";
 import { BASE_LAYER, getActiveLayer, layerOf, layerOrder, lockedLayers, hiddenLayers, type Layer } from "./layers";
@@ -20,7 +21,7 @@ import { toast } from "../ui/Toast";
 import { isScribbleGesture, pointsToXYPath } from "./gestures";
 import { instantiateElement, saveStrokesAsElement } from "./elements";
 import { currentRecordingStamp, requestAudioSeek, useAudioLiveState } from "../store/audio";
-import type { GeometricShapeKind, Stroke } from "./model";
+import type { GeometricShapeKind, ShapeMeta, Stroke, StrokeAudioSync } from "./model";
 import "./ink.css";
 
 const ERASER_RADIUS = 8;
@@ -40,6 +41,7 @@ type Active = {
   lastMove: number;
   holdAnchor: [number, number];
   pen: boolean;
+  audioSync?: StrokeAudioSync;
   shape?: { kind: ShapeKind; x0: number; y0: number; x1: number; y1: number };
   snappedShape?: SnappedHold;
 };
@@ -95,6 +97,9 @@ export function InkLayer({
   const paths = useRef(new Map<string, Path2D>());
   const boxes = useRef(new Map<string, Box>());
   const active = useRef<Active | null>(null);
+  const lastShapeId = useRef<string | null>(null);
+  const selectionRef = useRef<Selection | null>(null);
+  selectionRef.current = selection;
   const holdTimer = useRef<number | null>(null);
   const pans = useRef(new Map<number, { x: number; y: number }>());
   const frame = useRef(0);
@@ -162,15 +167,43 @@ export function InkLayer({
       byLayer[Math.min(layerInfo.count - 1, layerInfo.order.get(layerOf(s0)) ?? 0)].push(s);
     }
     const pathFor = (s: Stroke) => (s.shape ? undefined : ov && ov.ids.has(s.id) ? strokePath(s) : pathOf(s));
-    const alphaFor = (s: Stroke) => {
-      if (pb?.inkReplay && s.audioSync && s.audioSync.clipId === pb.clipId) {
-        return s.audioSync.offsetMs <= pb.currentMs ? 1 : 0.18;
+    const replayActive = Boolean(
+      pb?.inkReplay && (pb.playing || (pb.currentMs > 0 && (!pb.durationMs || pb.currentMs < pb.durationMs - 60))),
+    );
+    const activeTips: { x: number; y: number }[] = [];
+    const paintReplayAware = (s: Stroke) => {
+      if (replayActive && pb && s.audioSync && s.audioSync.clipId === pb.clipId) {
+        const rf = sliceStrokeByTime(s, pb.currentMs);
+        if (rf.state === "future") {
+          paintStroke(ctx, s, paper, pathFor(s), 0.14);
+          return;
+        }
+        if (rf.state === "writing") {
+          paintStroke(ctx, s, paper, pathFor(s), 0.14);
+          if (rf.partial) paintStroke(ctx, rf.partial, paper, undefined, 1);
+          if (rf.tip) activeTips.push(rf.tip);
+          return;
+        }
       }
-      return 1;
+      paintStroke(ctx, s, paper, pathFor(s), 1);
     };
     for (const list of byLayer) {
-      for (const s of list) if (s.tool === "highlighter") paintStroke(ctx, s, paper, pathFor(s), alphaFor(s));
-      for (const s of list) if (s.tool !== "highlighter") paintStroke(ctx, s, paper, pathFor(s), alphaFor(s));
+      for (const s of list) if (s.tool === "highlighter") paintReplayAware(s);
+      for (const s of list) if (s.tool !== "highlighter") paintReplayAware(s);
+    }
+    if (activeTips.length > 0) {
+      ctx.save();
+      for (const tip of activeTips) {
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(245, 165, 36, 0.28)";
+        ctx.arc(tip.x, tip.y, 8 / scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.fillStyle = "#F5A524";
+        ctx.arc(tip.x, tip.y, 3.5 / scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
     performance.mark?.("dry-end");
     try { performance.measure?.("dry-redraw", "dry-start", "dry-end"); } catch { /* unsupported */ }
@@ -179,6 +212,7 @@ export function InkLayer({
   useEffect(() => {
     let alive = true;
     setEditLine(null);
+    lastShapeId.current = null;
     void getStrokes(pageId).then((list) => {
       if (!alive) return;
       strokes.current = new Map(list.map((s) => [s.id, s]));
@@ -190,7 +224,9 @@ export function InkLayer({
     return () => { alive = false; clearHoldTimer(); };
   }, [pageId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { redrawDry(); }, [redrawDry, audioState.playback?.currentMs, audioState.playback?.inkReplay, audioState.playback?.clipId]);
+  useEffect(() => {
+    redrawDry();
+  }, [redrawDry, audioState.playback?.currentMs, audioState.playback?.playing, audioState.playback?.inkReplay, audioState.playback?.clipId]);
 
   const suppressPageEvent = useRef(false);
   useEffect(() => onPageChanged((id) => {
@@ -278,13 +314,22 @@ export function InkLayer({
     return snapToRuler(pts, lines, RULER_SNAP_PX * k) ?? pts;
   };
 
+  const buildShapeMeta = (kind: GeometricShapeKind, t = getTool()): ShapeMeta => ({
+    kind,
+    fill: t.shapeFill,
+    ...(t.shapeFillColor ? { fillColor: t.shapeFillColor } : {}),
+    ...(t.shapeFillPaletteIndex !== null ? { fillPaletteIndex: t.shapeFillPaletteIndex } : {}),
+    ...(t.shapeFillOpacity !== 0.42 ? { fillOpacity: t.shapeFillOpacity } : {}),
+    dashed: t.shapeDashed,
+  });
+
   const currentStroke = (a: Active, extra: number[] = []): Stroke => {
     const t = getTool();
     const layerId = getActiveLayer(pageId, { layers: layersRef.current });
     const shapeKind: GeometricShapeKind | undefined = a.shape?.kind ?? a.snappedShape?.kind;
     let points: Float32Array = a.snappedShape ? a.snappedShape.points : new Float32Array([...a.pts, ...extra]);
     if (!shapeKind && t.tool !== "shape") points = snapAlongRuler(points);
-    const sync = currentRecordingStamp();
+    const sync = a.audioSync ?? currentRecordingStamp();
     return {
       id: crypto.randomUUID(),
       tool: t.tool === "highlighter" ? "highlighter" : "pen",
@@ -294,7 +339,7 @@ export function InkLayer({
       width: t.width,
       points,
       ...(layerId !== BASE_LAYER ? { layerId } : {}),
-      ...(shapeKind ? { shape: { kind: shapeKind, fill: t.shapeFill, dashed: t.shapeDashed } } : {}),
+      ...(shapeKind ? { shape: buildShapeMeta(shapeKind, t) } : {}),
       ...(sync ? { audioSync: sync } : {}),
     };
   };
@@ -445,6 +490,7 @@ export function InkLayer({
       id: e.pointerId, kind,
       pts: kind === "stroke" ? [x, y, pen ? e.pressure : 0.5, 0] : [x, y],
       start: now, lastMove: now, holdAnchor: [x, y], pen,
+      audioSync: kind === "stroke" ? currentRecordingStamp() : undefined,
     };
     if (kind === "laser") {
       laserPts.current.push({ x, y, t: now, start: true });
@@ -571,7 +617,16 @@ export function InkLayer({
     if (a.shape) {
       const sh = a.shape;
       [sh.x1, sh.y1] = toLogical(ev.nativeEvent);
-      if (Math.hypot(sh.x1 - sh.x0, sh.y1 - sh.y0) < 6) return; // a click, not a shape
+      if (Math.hypot(sh.x1 - sh.x0, sh.y1 - sh.y0) < 6) {
+        const hitShape = [...strokes.current.values()]
+          .reverse()
+          .find((st) => Boolean(st.shape) && editable(st) && hitTest(st, sh.x0, sh.y0, 10));
+        if (hitShape) {
+          lastShapeId.current = hitShape.id;
+          setSelection({ strokeIds: [hitShape.id], objectIds: [] });
+        }
+        return;
+      }
       a.pts = Array.from(shapePoints(sh.kind, sh.x0, sh.y0, sh.x1, sh.y1, ev.nativeEvent.shiftKey));
     }
     const t = getTool();
@@ -579,7 +634,7 @@ export function InkLayer({
     if (!a.shape && !a.snappedShape && !getRuler() && (t.tool === "shape" || t.penGestures) && performance.now() - a.lastMove >= SNAP_HOLD_MS) {
       const snapped = snapShape(s.points);
       if (snapped) {
-        s = { ...s, points: snapped.points, shape: { kind: snapped.kind, fill: t.shapeFill, dashed: t.shapeDashed } };
+        s = { ...s, points: snapped.points, shape: buildShapeMeta(snapped.kind, t) };
       }
     }
 
@@ -595,6 +650,7 @@ export function InkLayer({
       }
     }
 
+    if (s.shape) lastShapeId.current = s.id;
     strokes.current.set(s.id, s);
     redrawDry();
     historyFor(pageId).push({ remove: [], add: [s] });
@@ -658,13 +714,47 @@ export function InkLayer({
     await apply(selStrokes, next);
   };
 
+  const applyShapeStylePatch = useCallback(async (targets: Stroke[], patch: ShapeStylePatch) => {
+    const shapeStrokes = targets.filter((s) => Boolean(s.shape) && editable(s));
+    if (!shapeStrokes.length) return;
+    const { clearFillColor, ...rest } = patch;
+    const next = shapeStrokes.map((s) => {
+      const merged: ShapeMeta = { ...s.shape!, ...rest };
+      if (clearFillColor) {
+        delete merged.fillColor;
+        delete merged.fillPaletteIndex;
+      }
+      return { ...s, shape: merged };
+    });
+    historyFor(pageId).push({ remove: shapeStrokes, add: next });
+    await apply(shapeStrokes, next);
+  }, [pageId, editable, apply]);
+
+  // Live-update selected shape(s) or the shape just drawn when Toolbar Fill / Colour / Dashed controls are clicked
+  useEffect(() => onShapeStylePatch((patch) => {
+    const sel = selectionRef.current;
+    if (sel?.strokeIds.length) {
+      const chosen = sel.strokeIds.map((id) => strokes.current.get(id)).filter((x): x is Stroke => !!x);
+      if (chosen.some((s) => s.shape)) {
+        void applyShapeStylePatch(chosen, patch);
+        return;
+      }
+    }
+    if (lastShapeId.current) {
+      const last = strokes.current.get(lastShapeId.current);
+      if (last?.shape) void applyShapeStylePatch([last], patch);
+    }
+  }), [applyShapeStylePatch]);
+
   const toggleShapeProp = async (prop: "fill" | "dashed") => {
     const shapeStrokes = selStrokes.filter((s) => s.shape);
     if (!shapeStrokes.length) return;
     const nextVal = !shapeStrokes.every((s) => Boolean(s.shape?.[prop]));
-    const next = shapeStrokes.map((s) => ({ ...s, shape: { ...s.shape!, [prop]: nextVal } }));
-    historyFor(pageId).push({ remove: shapeStrokes, add: next });
-    await apply(shapeStrokes, next);
+    const t = getTool();
+    await applyShapeStylePatch(shapeStrokes, {
+      [prop]: nextVal,
+      ...(prop === "fill" && nextVal && t.shapeFillColor ? { fillColor: t.shapeFillColor, fillPaletteIndex: t.shapeFillPaletteIndex } : {}),
+    });
   };
 
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
@@ -684,9 +774,12 @@ export function InkLayer({
     return () => document.removeEventListener("keydown", key);
   });
 
-  const hasShape = selStrokes.some((s) => Boolean(s.shape));
+  const firstShapeStroke = selStrokes.find((s) => Boolean(s.shape));
+  const hasShape = Boolean(firstShapeStroke);
   const shapeFilled = selStrokes.some((s) => Boolean(s.shape?.fill));
   const shapeDashed = selStrokes.some((s) => Boolean(s.shape?.dashed));
+  const shapeFillColor = firstShapeStroke ? resolveFillColor(firstShapeStroke, paper) : undefined;
+  const shapeFillOpacity = firstShapeStroke?.shape?.fillOpacity ?? 0.42;
 
   const touchAction = tool.tool === "hand" && !onPan ? "auto" : "none";
   const cursor = audioState.playback?.tapToSeek
@@ -756,10 +849,12 @@ export function InkLayer({
       {selBox && (
         <SelectionOverlay box={selBox} scale={scale} origin={{ x: ox, y: oy }} xf={previewXf}
           hasShape={hasShape} shapeFilled={shapeFilled} shapeDashed={shapeDashed}
+          shapeFillColor={shapeFillColor} shapeFillOpacity={shapeFillOpacity} fillPalette={inkPalette(paper)}
           onPreview={preview} onCommit={commit}
           onDelete={deleteSel} onDuplicate={duplicateSel} onRecolor={recolorSel} onCopy={copySel} onCut={cutSel}
           onToggleFill={() => void toggleShapeProp("fill")}
           onToggleDashed={() => void toggleShapeProp("dashed")}
+          onUpdateShapeStyle={(patch) => void applyShapeStylePatch(selStrokes, patch)}
           onSaveElement={selStrokes.length > 0 ? async () => {
             const saved = await saveStrokesAsElement(`Diagram ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, selStrokes);
             if (saved) toast("Saved to Elements & Stamps");

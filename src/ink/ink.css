@@ -124,4 +124,30 @@
   background: var(--surface);
 }
 
+.sel-fill-popover {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(100% + 44px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 9;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.sel-fill-popover input[type="color"] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) { .tape { transition: none; } }

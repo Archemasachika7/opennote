@@ -7,6 +7,7 @@ import { deletePageWithUndo, getPages, insertBoard, movePage, restoreDeletedPage
 import { useLive } from "../store/useLive";
 import { navigate } from "../App";
 import { Toolbar } from "../notebook/Toolbar";
+import { SpeechNoteModal } from "../notebook/SpeechNoteModal";
 import { ExportSheet, type ExportRequest } from "../notebook/ExportSheet";
 import { safeName } from "../notebook/NotebookView";
 import { useStudioShortcuts } from "../notebook/useStudioShortcuts";
@@ -82,6 +83,7 @@ export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pag
   const [exporting, setExporting] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
   const [elementsOpen, setElementsOpen] = useState(false);
+  const [speechNoteOpen, setSpeechNoteOpen] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(() => !(typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth < 640));
 
@@ -144,6 +146,7 @@ export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pag
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         onOpenSettings={onOpenSettings}
         onOpenElements={() => setElementsOpen(true)}
+        onOpenSpeechNote={() => setSpeechNoteOpen(true)}
         onExportOptions={() => setExporting(true)}
         onExportPdf={() => runExport({ format: "pdf", indices: boards.map((_, i) => i) } as ExportRequest)}
       />
@@ -168,15 +171,21 @@ export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pag
         paper={notebook.paper}
         onInsert={(elem) => { if (board) sendStampElement(board.id, elem); }}
       />
+      <SpeechNoteModal
+        open={speechNoteOpen}
+        onClose={() => setSpeechNoteOpen(false)}
+        notebookId={notebook.id}
+        currentPage={board}
+      />
       <RulerOverlay />
     </div>
   );
 }
 
 /** The toolbar for the current board (zoom lives in the stage, so the toolbar reads it from there). */
-function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSettings, onOpenElements, onExportPdf, onExportOptions }: {
+function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSettings, onOpenElements, onOpenSpeechNote, onExportPdf, onExportOptions }: {
   notebook: Notebook; board?: InkPage; sidebarOpen: boolean; onToggleSidebar: () => void; onOpenSettings?: () => void;
-  onOpenElements?: () => void; onExportPdf: () => void; onExportOptions: () => void;
+  onOpenElements?: () => void; onOpenSpeechNote?: () => void; onExportPdf: () => void; onExportOptions: () => void;
 }) {
   const [zoom, setZoomState] = useState(() => (board ? loadView(board.id).zoom : 1));
   useEffect(() => {
@@ -192,6 +201,7 @@ function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSett
       onToggleSidebar={onToggleSidebar}
       onOpenSettings={onOpenSettings}
       onOpenElements={board ? onOpenElements : undefined}
+      onOpenSpeechNote={onOpenSpeechNote}
       palette={inkPalette(notebook.paper)}
       currentKind="ink"
       setZoom={(z) => window.dispatchEvent(new CustomEvent("opennote:board-set-zoom", { detail: z }))}

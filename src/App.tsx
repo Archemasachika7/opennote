@@ -7,6 +7,7 @@ import { CommandPalette } from "./ui/CommandPalette";
 import { useLive } from "./store/useLive";
 import { getNotebook } from "./store/notebooks";
 import type { Notebook } from "./store/schema";
+import { isNativeShell } from "./platform/shell";
 
 const NotebookView = lazy(() => import("./notebook/NotebookView").then((m) => ({ default: m.NotebookView })));
 const WhiteboardView = lazy(() => import("./board/WhiteboardView").then((m) => ({ default: m.WhiteboardView })));
@@ -18,9 +19,9 @@ export type Route =
   | { name: "notebook"; id: string; pageId?: string };
 
 function parse(hash: string): Route {
-  if (hash === "" || hash === "#" || hash === "#/welcome" || hash === "#/home") {
-    return { name: "landing" };
-  }
+  if (hash === "#/welcome" || hash === "#/home") return { name: "landing" };
+  // the installed apps (APK / EXE) open straight to the library; the web shows the landing page first
+  if (hash === "" || hash === "#") return isNativeShell() ? { name: "library" } : { name: "landing" };
   const m = /^#\/nb\/([^/?]+)(?:\?p=([^&]+))?/.exec(hash);
   if (!m) return { name: "library" };
   return m[2]

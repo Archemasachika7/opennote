@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-/* Whisper in a Web Worker (see ./whisper.ts). The ONNX runtime comes from the app (public/vendor/ort);
+/* Whisper in a Web Worker (see ./whisper.ts). Vite bundles the ONNX runtime into the app (offline);
    the model comes from Hugging Face once and is cached by the browser (Cache API). */
 import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
 import { WHISPER_MODEL, type AsrOptions } from "./whisper";
@@ -7,8 +7,6 @@ import { WHISPER_MODEL, type AsrOptions } from "./whisper";
 declare const self: DedicatedWorkerGlobalScope;
 
 env.allowLocalModels = false;
-const onnx = env.backends.onnx as { wasm?: { wasmPaths?: string } };
-if (onnx.wasm) onnx.wasm.wasmPaths = new URL(`${import.meta.env.BASE_URL}vendor/ort/`, self.location.href).href;
 
 let asr: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 

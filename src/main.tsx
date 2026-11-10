@@ -6,6 +6,7 @@ import { installPlatform } from "./platform/install";
 import { initTheme } from "./ui/theme";
 import { initAuth } from "./sync/auth";
 import { startSyncLoop } from "./sync/run";
+import { startServiceWorker } from "./platform/serviceWorker";
 
 initTheme();
 void installPlatform();
@@ -14,10 +15,7 @@ void initAuth().catch(() => undefined);
 // encrypted sync: idles until signed in and unlocked with the sync passphrase
 startSyncLoop();
 
-if (import.meta.env.PROD && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
-  });
-}
+// offline cache on the website; inside the Android and Windows apps it is removed instead (see serviceWorker.ts)
+if (import.meta.env.PROD) startServiceWorker();
 
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

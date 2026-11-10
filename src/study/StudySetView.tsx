@@ -1,4 +1,5 @@
 "use client";
+import { blotReact } from "../ui/blotBus";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, ImagePlus, Plus, RotateCcw, Settings, Shuffle, Trash2, X } from "lucide-react";
@@ -249,6 +250,7 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
     last.current = { id: card.id, due: card.srs.due };
     try {
       await reviewCard(card.id, g, undefined, algo);
+      if (g === "good" || g === "easy") blotReact("cheer");
       setShown(false);
       setNow(Date.now());
     } finally { busy.current = false; }

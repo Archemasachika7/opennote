@@ -25,6 +25,7 @@ import { ExportSheet, type ExportRequest } from "./ExportSheet";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
+import { blotReact } from "../ui/blotBus";
 import { useSmartPaste } from "../live/useSmartPaste";
 import { LayersSheet } from "../ink/LayersSheet";
 import { ElementsSheet } from "../ink/ElementsSheet";
@@ -285,6 +286,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     if (!s) return;
     if (s.edit) { await updatePage(s.edit.id, d); return; }
     const p = await insertPage(id, s.index, { kind: "html", ...d });
+    blotReact("hop");
     setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 

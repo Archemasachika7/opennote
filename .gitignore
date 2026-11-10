@@ -9,3 +9,6 @@ public/vendor/
 src-tauri/target/
 src-tauri/gen/
 *.tsbuildinfo
+
+# local env (Supabase URL + publishable key)
+.env.local

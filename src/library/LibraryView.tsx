@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckSquare, ChevronDown, Command, FolderPlus, GraduationCap, LayoutDashboard, LayoutGrid, List,
-  Pencil, Plus, Search, Settings, Sparkles, Star, Trash2, Upload, X,
+  Pencil, Plus, Search, Settings, Sparkles, Star, Trash2, Upload, User, X,
 } from "lucide-react";
+import { AccountSheet } from "../ui/AccountSheet";
+import { useAuth } from "../sync/auth";
 import { navigate } from "../App";
 import { db, type DocKind, type Folder, type Notebook } from "../store/schema";
 import { Menu } from "../ui/Menu";
@@ -33,6 +35,8 @@ function savedView(): "grid" | "list" {
 }
 
 export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?: () => void; onOpenPalette?: () => void } = {}) {
+  const auth = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
   const [sort, setSort] = useState<LibrarySort>("updated");
   const [view, setViewRaw] = useState<"grid" | "list">(savedView);
@@ -198,6 +202,15 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
             <button className="btn ghost icon" aria-label="Command palette" title="Command palette (Ctrl+K)" onClick={onOpenPalette}>
               <Command {...I} />
             </button>
+          )}
+          {auth.status !== "disabled" && (
+            <>
+              <button className={`btn ghost icon${auth.status === "signed-in" ? " active" : ""}`} aria-label="Account"
+                title={auth.user ? `Signed in as ${auth.user.email}` : "Account (optional)"} onClick={() => setAccountOpen(true)}>
+                <User {...I} />
+              </button>
+              <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
+            </>
           )}
           {onOpenSettings && (
             <button className="btn ghost icon" aria-label="Settings" title="Settings, storage & shortcuts (?)" onClick={onOpenSettings}>

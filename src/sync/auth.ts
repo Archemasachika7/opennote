@@ -12,7 +12,9 @@ const WEB_CALLBACK = "/auth/callback";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export const isValidEmail = (email: string): boolean => EMAIL_RE.test(email.trim());
-export const isValidCode = (code: string): boolean => /^\d{6}$/.test(code.trim());
+/** Boxes shown for the email code. Supabase lets a project send 6 to 10 digits; this one sends 8. */
+export const OTP_LENGTH = Number(import.meta.env.VITE_SUPABASE_OTP_LENGTH) || 8;
+export const isValidCode = (code: string): boolean => /^\d{6,10}$/.test(code.trim());
 
 let state: AuthState = { status: supabase ? "signed-out" : "disabled", user: null };
 const subs = new Set<() => void>();
@@ -68,7 +70,7 @@ export async function sendCode(email: string): Promise<void> {
 
 export async function verifyCode(email: string, code: string): Promise<void> {
   const c = client();
-  if (!isValidCode(code)) throw new Error("Enter the 6-digit code from the email.");
+  if (!isValidCode(code)) throw new Error("Enter the code from the email.");
   const { data, error } = await c.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
   if (error) throw new Error(error.message);
   const user = toUser(data.user);

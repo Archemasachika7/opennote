@@ -80,3 +80,15 @@ describe("Landing Page (21st.dev architectural studio, zero auth wall)", () => {
     expect(screen.getByText(/FSRS-4\.5 interval/i)).toBeInTheDocument();
   });
 });
+
+describe("landing downloads and film", () => {
+  it("links straight to the APK and EXE that CI attaches to the latest release, and shows the launch film", async () => {
+    window.location.hash = "#/welcome";
+    render(<App />);
+    const apk = await screen.findByRole("link", { name: /android/i });
+    const exe = screen.getByRole("link", { name: /windows/i });
+    expect(apk.getAttribute("href")).toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-android.apk");
+    expect(exe.getAttribute("href")).toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-windows-setup.exe");
+    expect(document.querySelector("video source")?.getAttribute("src")).toBe("/media/opennote-launch.mp4");
+  });
+});

@@ -65,8 +65,8 @@ describe("auth state flow", () => {
   it("rejects bad emails and codes before calling Supabase", async () => {
     const a = await freshAuth();
     await expect(a.sendCode("not-an-email")).rejects.toThrow(/email/i);
-    await expect(a.verifyCode("a@b.co", "12345")).rejects.toThrow(/6-digit/i);
-    await expect(a.verifyCode("a@b.co", "12a456")).rejects.toThrow(/6-digit/i);
+    await expect(a.verifyCode("a@b.co", "12345")).rejects.toThrow(/code from the email/i);
+    await expect(a.verifyCode("a@b.co", "12a456")).rejects.toThrow(/code from the email/i);
     expect(fake.auth.signInWithOtp).not.toHaveBeenCalled();
     expect(fake.auth.verifyOtp).not.toHaveBeenCalled();
   });
@@ -104,9 +104,11 @@ describe("AccountSheet", () => {
     await renderSheet();
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@b.co" } });
     fireEvent.click(screen.getByRole("button", { name: /send code/i }));
-    const group = await screen.findByRole("group", { name: /6-digit code/i });
+    const group = await screen.findByRole("group", { name: /digit code/i });
     const boxes = Array.from(group.querySelectorAll("input"));
-    expect(boxes).toHaveLength(6);
+    expect(boxes).toHaveLength(8); // this Supabase project sends 8-digit codes
+    // an 8-digit code (what Supabase sends) also signs in
+    expect((await import("../../src/sync/auth")).isValidCode("12345678")).toBe(true);
     const signIn = screen.getByRole("button", { name: /^sign in$/i }) as HTMLButtonElement;
     // typing moves focus forward; letters are ignored
     fireEvent.change(boxes[0], { target: { value: "1" } });
@@ -132,7 +134,7 @@ describe("OtpInput", () => {
     const { OtpInput } = await import("../../src/ui/OtpInput");
     const seen: string[] = [];
     render(<OtpInput value="12" onChange={(v) => seen.push(v)} />);
-    const boxes = Array.from(screen.getByRole("group", { name: /6-digit code/i }).querySelectorAll("input"));
+    const boxes = Array.from(screen.getByRole("group", { name: /digit code/i }).querySelectorAll("input"));
     boxes[2].focus();
     fireEvent.keyDown(boxes[2], { key: "Backspace" });
     expect(seen.at(-1)).toBe("1");

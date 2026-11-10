@@ -2,7 +2,9 @@ import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from "reac
 import { motion } from "motion/react";
 import { motionTokens, useSafeMotion } from "./motion";
 
-const LEN = 6;
+import { OTP_LENGTH } from "../sync/auth";
+
+const LEN = OTP_LENGTH;
 
 /** Six single-digit boxes: typing moves forward, Backspace moves back, pasting fills all of them. */
 export function OtpInput({ value, onChange, autoFocus, disabled }:
@@ -43,7 +45,7 @@ export function OtpInput({ value, onChange, autoFocus, disabled }:
   };
 
   return (
-    <div className="otp" role="group" aria-label="6-digit code">
+    <div className="otp" role="group" aria-label={`${LEN}-digit code`} style={{ gridTemplateColumns: `repeat(${LEN}, 1fr)` }}>
       {digits.map((d, i) => {
         const filled = d !== " ";
         return (

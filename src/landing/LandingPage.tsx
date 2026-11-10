@@ -47,8 +47,8 @@ const KEYCAPS: { key: string; name: string; detail: string }[] = [
 const RELEASES = "https://github.com/Archemasachika7/opennote/releases/latest";
 const DOWNLOADS: { name: string; detail: string; href: string; external: boolean; icon: ReactNode }[] = [
   { name: "Web app", detail: "Open in Chrome or Edge. Install it as an app from the address bar.", href: "#/", external: false, icon: <Globe size={18} strokeWidth={1.5} /> },
-  { name: "Android", detail: "APK for phones and tablets, with pen and palm rejection.", href: RELEASES, external: true, icon: <Smartphone size={18} strokeWidth={1.5} /> },
-  { name: "Windows", detail: "EXE installer for laptops and pen tablets.", href: RELEASES, external: true, icon: <Monitor size={18} strokeWidth={1.5} /> },
+  { name: "Android", detail: "Download the APK for phones and tablets.", href: `${RELEASES}/download/OpenNote-android.apk`, external: true, icon: <Smartphone size={18} strokeWidth={1.5} /> },
+  { name: "Windows", detail: "Download the installer for laptops and pen tablets.", href: `${RELEASES}/download/OpenNote-windows-setup.exe`, external: true, icon: <Monitor size={18} strokeWidth={1.5} /> },
 ];
 
 /** Fades a block up as it scrolls into view (once). Reduced motion: opacity only. */
@@ -64,6 +64,16 @@ function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }
 }
 
 const HEADLINE = ["Notes", "that", "run."];
+
+const COMPARE: [string, string, string][] = [
+  ["Price", "Free, no ads", "Subscription or paid app"],
+  ["Account", "Optional", "Usually required to sync"],
+  ["Paste AI-made HTML, SVG, React", "Runs on the page", "Not supported"],
+  ["Lecture audio linked to your ink", "Yes, tap a stroke to hear it", "In some apps"],
+  ["Transcription", "On your device (Whisper)", "Cloud, often paid"],
+  ["Sync", "End-to-end encrypted", "Readable by the provider"],
+  ["Works offline", "Yes, fully", "Partly"],
+];
 
 function CrosshairDivider() {
   return (
@@ -191,7 +201,7 @@ export function LandingPage({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}>
-            <div className="lp-eyebrow mono">
+            <div className="lp-eyebrow">
               <span className="lp-status-dot" />
               <span>FREE</span>
               <span className="lp-dot-sep">·</span>
@@ -257,14 +267,23 @@ export function LandingPage({
           </motion.div>
         </section>
 
-        <CrosshairDivider />
+        {/* LAUNCH FILM */}
+        <section id="lp-film" className="lp-section lp-film" aria-label="Launch film">
+          <Reveal>
+            <video className="lp-film-video" controls preload="none" playsInline
+              poster="/media/opennote-launch-poster.jpg" aria-label="OpenNote launch film, 30 seconds">
+              <source src="/media/opennote-launch.mp4" type="video/mp4" />
+              <track kind="subtitles" src="/media/opennote-launch.srt" srcLang="en" label="English" />
+            </video>
+          </Reveal>
+        </section>
 
         {/* INTERACTIVE BENTO PRIMITIVES */}
         <section id="lp-primitives" className="lp-section">
           <div className="lp-section-head">
-            <span className="mono lp-sec-kicker">01 // INTERACTIVE PRIMITIVES</span>
+            <span className="lp-sec-kicker">Try it right here</span>
             <div className="lp-sec-title-row">
-              <h2>Five studio instruments. Every card below is live.</h2>
+              <h2>Every card below works. Go ahead, draw on it.</h2>
               <p>
                 Test shape snapping, scrub lecture ink replay, tune a harmonic wave, switch Indic scripts,
                 or peel back Study Tape before opening a single menu.
@@ -275,12 +294,10 @@ export function LandingPage({
           <BentoDemos />
         </section>
 
-        <CrosshairDivider />
-
         {/* SIGNATURE: PASTE -> RUN */}
         <section id="lp-live" className="lp-section">
           <div className="lp-section-head">
-            <span className="mono lp-sec-kicker">02 // LIVE PAGES</span>
+            <span className="lp-sec-kicker">Only in OpenNote</span>
             <div className="lp-sec-title-row">
               <h2>Copy an AI artifact. Paste. It runs.</h2>
               <p>
@@ -292,12 +309,37 @@ export function LandingPage({
           <Reveal><LiveArtifactDemo /></Reveal>
         </section>
 
-        <CrosshairDivider />
+        {/* COMPARISON */}
+        <section id="lp-compare" className="lp-section">
+          <div className="lp-section-head">
+            <span className="lp-sec-kicker">Why OpenNote</span>
+            <div className="lp-sec-title-row">
+              <h2>What you get, next to a typical note app.</h2>
+              <p>Typical means the usual paid handwriting apps. Check any app's own page before you buy.</p>
+            </div>
+          </div>
+          <Reveal>
+            <div className="lp-compare" role="table" aria-label="OpenNote compared with a typical note app">
+              <div role="row" className="lp-compare-row lp-compare-head">
+                <span role="columnheader" />
+                <span role="columnheader">OpenNote</span>
+                <span role="columnheader">Typical note app</span>
+              </div>
+              {COMPARE.map(([what, ours, theirs]) => (
+                <div role="row" className="lp-compare-row" key={what}>
+                  <span role="rowheader">{what}</span>
+                  <span role="cell" className="lp-yes">{ours}</span>
+                  <span role="cell" className="dim">{theirs}</span>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </section>
 
         {/* DOWNLOAD */}
         <section id="lp-download" className="lp-section">
           <div className="lp-section-head">
-            <span className="mono lp-sec-kicker">03 // EVERYWHERE</span>
+            <span className="lp-sec-kicker">Get OpenNote</span>
             <div className="lp-sec-title-row">
               <h2>Web, Android and Windows. Free, no account.</h2>
               <p>Same notebook on every device. Nothing to pay, no ads, your notes stay on your device.</p>
@@ -317,14 +359,12 @@ export function LandingPage({
           </div>
         </section>
 
-        <CrosshairDivider />
-
         {/* THREE WORKSPACES + TACTILE KEYBOARD MATRIX */}
         <section id="lp-shortcuts" className="lp-section">
           <div className="lp-dual-band">
             <div className="lp-modes-col">
-              <span className="mono lp-sec-kicker">04 // DOCUMENT SURFACES</span>
-              <h2>Three workspaces, one unified library.</h2>
+              <span className="lp-sec-kicker">Three kinds of document</span>
+              <h2>Notebooks, whiteboards and flashcards, in one library.</h2>
               <div className="lp-mode-list">
                 <button type="button" className="lp-mode-card" onClick={() => void handleCreateDoc("notebook")}>
                   <div className="lp-mode-icon amber"><BookOpen size={16} strokeWidth={1.6} /></div>
@@ -356,8 +396,8 @@ export function LandingPage({
             </div>
 
             <div className="lp-keys-col">
-              <span className="mono lp-sec-kicker">05 // MUSCLE MEMORY</span>
-              <h2>Single-key studio ergonomics.</h2>
+              <span className="lp-sec-kicker">Shortcuts</span>
+              <h2>One key for every tool.</h2>
               <p className="lp-keys-sub">
                 Select any keycap to inspect its tool behaviour. Inside the studio, press <kbd className="kbd mono">?</kbd> anytime.
               </p>
@@ -387,13 +427,11 @@ export function LandingPage({
           </div>
         </section>
 
-        <CrosshairDivider />
-
         {/* BOTTOM ZERO-FRICTION LAUNCH BAR */}
         <section className="lp-bottom-cta">
           <div>
-            <span className="mono lp-sec-kicker">READY IN 0 SECONDS · NO SIGN-UP</span>
-            <h2>Your browser is already the studio.</h2>
+            <span className="lp-sec-kicker">Free · no sign-up</span>
+            <h2>Start writing. Nothing to install.</h2>
           </div>
           <div className="lp-bottom-btns">
             {onOpenSettings && (
@@ -416,8 +454,8 @@ export function LandingPage({
 
       <footer className="lp-footer mono">
         <div className="lp-footer-inner">
-          <span>OPENNOTE · OFFLINE-FIRST DIGITAL NOTEBOOK</span>
-          <span>MIDNIGHT STUDIO PALETTE · ZERO CLOUD TELEMETRY</span>
+          <span>OpenNote · free and open source</span>
+          <span>No ads. No tracking. Your notes stay on your device.</span>
         </div>
       </footer>
     </div>

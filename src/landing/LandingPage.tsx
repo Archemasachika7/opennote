@@ -30,7 +30,7 @@ import { platform } from "../platform/port";
 import { HeroCanvasDemo } from "./HeroCanvasDemo";
 import { BentoDemos } from "./BentoDemos";
 import { LiveArtifactDemo } from "./LiveArtifactDemo";
-import { GetOpenNote } from "./GetOpenNote";
+import { detectPlatform, GetOpenNote, SmartDownload } from "./GetOpenNote";
 import { motionTokens } from "../ui/motion";
 import "./landing.css";
 
@@ -221,9 +221,11 @@ export function LandingPage({
             </p>
 
             <div className="lp-hero-actions">
+              {/* one click: the installer for this device (nothing on other devices) */}
+              <SmartDownload />
               <button
                 type="button"
-                className="btn primary lp-btn-lg"
+                className={detectPlatform() === "other" ? "btn primary lp-btn-lg" : "btn lp-btn-lg"}
                 onClick={() => navigate("/")}>
                 Enter Studio
                 {notebookCount > 0 && (

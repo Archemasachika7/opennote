@@ -1120,3 +1120,6 @@
 
 /* headline words are animated inline-blocks; the gap between them is a margin, not a collapsed space */
 .lp-title-word + .lp-title-word { margin-left: 0.24em; }
+
+/* the one-click download is a link styled as a button */
+.lp-hero-actions a.btn { text-decoration: none; }

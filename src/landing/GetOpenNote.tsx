@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Globe, Monitor, Smartphone } from "lucide-react";
+import { Download, Globe, Monitor, Smartphone } from "lucide-react";
 import QRCode from "qrcode";
 import { navigate } from "../App";
 
@@ -35,6 +35,22 @@ const FALLBACK: ReleaseInfo = {
   exe: { url: `${LATEST}/OpenNote-windows-setup.exe`, mb: 0 },
 };
 
+// one request per page view: the hero button and the download section share it (60 API calls/hour per IP)
+let inflight: Promise<ReleaseInfo | null> | null = null;
+function loadRelease(): Promise<ReleaseInfo | null> {
+  inflight ??= fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
+    // only a 404 means "no release yet"; a rate limit (easy on campus Wi-Fi) or being offline must not
+    // hide real downloads, so fall back to the redirect links that need no API
+    .then(async (res) => (res.ok ? parseRelease(await res.json()) : res.status === 404 ? null : FALLBACK))
+    .catch(() => FALLBACK)
+    .then((release) => {
+      try { sessionStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), release })); } catch { /* private mode */ }
+      return release;
+    })
+    .finally(() => { inflight = null; });
+  return inflight;
+}
+
 /** The latest GitHub release (CI attaches the APK and EXE to every v* tag). null = none yet. */
 function useLatestRelease(): { loading: boolean; release: ReleaseInfo | null } {
   const [state, setState] = useState<{ loading: boolean; release: ReleaseInfo | null }>({ loading: true, release: null });
@@ -44,16 +60,7 @@ function useLatestRelease(): { loading: boolean; release: ReleaseInfo | null } {
       const hit = JSON.parse(sessionStorage.getItem(CACHE) ?? "null") as { at: number; release: ReleaseInfo | null } | null;
       if (hit && Date.now() - hit.at < 10 * 60_000) { setState({ loading: false, release: hit.release }); return; }
     } catch { /* no cache */ }
-    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
-      // only a 404 means "no release yet"; a rate limit (60/hour per IP, easy on campus Wi-Fi) or being
-      // offline must not hide real downloads, so fall back to the redirect links that need no API
-      .then(async (res) => (res.ok ? parseRelease(await res.json()) : res.status === 404 ? null : FALLBACK))
-      .catch(() => FALLBACK)
-      .then((release) => {
-        if (!alive) return;
-        setState({ loading: false, release });
-        try { sessionStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), release })); } catch { /* private mode */ }
-      });
+    loadRelease().then((release) => { if (alive) setState({ loading: false, release }); });
     return () => { alive = false; };
   }, []);
   return state;
@@ -68,6 +75,22 @@ function QR({ url }: { url: string }) {
     return () => { alive = false; };
   }, [url]);
   return src ? <img className="get-qr" src={src} width={132} height={132} alt="QR code: scan with your phone to download the Android app" /> : null;
+}
+
+/** One click: the right installer for this device (Windows → .exe, Android → .apk); nothing elsewhere. */
+export function SmartDownload({ platform = detectPlatform() }: { platform?: Platform }) {
+  const { release } = useLatestRelease();
+  if (platform === "other") return null;
+  const file = platform === "windows" ? release?.exe : release?.apk;
+  if (!file) return null;
+  const label = platform === "windows" ? "Download for Windows" : "Download for Android";
+  return (
+    <a className="btn primary lp-btn-lg" href={file.url} aria-label={label}>
+      <Download size={15} strokeWidth={1.8} />
+      {label}
+      {file.mb > 0 && <span className="lp-count-pill mono">{file.mb} MB</span>}
+    </a>
+  );
 }
 
 export function GetOpenNote() {

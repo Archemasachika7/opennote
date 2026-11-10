@@ -61,3 +61,29 @@ describe("when the GitHub API is rate-limited or offline", () => {
     expect(screen.queryByText(/first release coming soon/i)).toBeNull();
   });
 });
+
+describe("one-click download in the hero", () => {
+  it("Windows gets the EXE, Android gets the APK, other devices get no button", async () => {
+    const { SmartDownload } = await import("../../src/landing/GetOpenNote");
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(RELEASE))) as unknown as typeof fetch;
+    const { unmount } = render(<SmartDownload platform="windows" />);
+    const win = await screen.findByRole("link", { name: /download for windows/i });
+    expect(win.getAttribute("href")).toBe(RELEASE.assets[1].browser_download_url);
+    expect(screen.getByText(/4\.2 MB/)).toBeTruthy();
+    unmount();
+    sessionStorage.clear();
+    const a = render(<SmartDownload platform="android" />);
+    expect((await screen.findByRole("link", { name: /download for android/i })).getAttribute("href")).toBe(RELEASE.assets[0].browser_download_url);
+    a.unmount();
+    const o = render(<SmartDownload platform="other" />);
+    expect(o.container.querySelector("a")).toBeNull();
+  });
+
+  it("still downloads in one click when the API is rate-limited", async () => {
+    const { SmartDownload } = await import("../../src/landing/GetOpenNote");
+    globalThis.fetch = vi.fn(async () => new Response("{}", { status: 403 })) as unknown as typeof fetch;
+    render(<SmartDownload platform="windows" />);
+    expect((await screen.findByRole("link", { name: /download for windows/i })).getAttribute("href"))
+      .toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-windows-setup.exe");
+  });
+});

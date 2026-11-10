@@ -17,9 +17,9 @@ import type { PenVariant } from "../ink/model";
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
 export const DEFAULT_COLORS = ["#E8E9EE", "#4FD1C5", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
 
-export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind, onExportPdf }: {
+export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind, onExportPdf, onExportBackup, onExportOptions }: {
   notebook: Notebook; zoom: number; setZoom: (z: number) => void; onUndo: () => void; onRedo: () => void; palette?: string[];
-  currentKind?: "ink" | "text" | "html"; onExportPdf?: () => void;
+  currentKind?: "ink" | "text" | "html"; onExportPdf?: () => void; onExportBackup?: () => void; onExportOptions?: () => void;
 }) {
   const [t, set] = useTool();
   const [menu, setMenu] = useState(false);
@@ -107,6 +107,8 @@ export function Toolbar({ notebook, zoom, setZoom, onUndo, onRedo, palette = DEF
         {menu && (
           <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} items={[
             ...(onExportPdf ? [{ label: "Export PDF", onSelect: onExportPdf }] : []),
+            ...(onExportOptions ? [{ label: "Export...", onSelect: onExportOptions }] : []),
+            ...(onExportBackup ? [{ label: "Export backup (.opennote)", onSelect: onExportBackup }] : []),
             { label: notebook.paper === "dark" ? "Light paper" : "Dark paper", onSelect: () => updateNotebook(notebook.id, { paper: notebook.paper === "dark" ? "light" : "dark" }) },
           ]} />
         )}

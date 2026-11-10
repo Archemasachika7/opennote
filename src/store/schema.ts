@@ -19,6 +19,10 @@ export interface Notebook {
   pageIds: string[];
   createdAt: number;
   updatedAt: number;
+  /** Library favourite (absent on older notebooks = false). */
+  favorite?: boolean;
+  /** When it was moved to Trash; absent/null = not in Trash. */
+  trashedAt?: number | null;
 }
 
 interface PageBase {
@@ -28,7 +32,9 @@ interface PageBase {
   updatedAt: number;
   size: { w: number; h: number };
 }
-export interface InkPage extends PageBase { kind: "ink"; template: Template }
+/** Imported PDF page shown under the ink (never erasable); text is kept for search. */
+export interface PageBackground { blobId: string; pdfText?: string; /** degrees clockwise: 0, 90, 180, 270 */ rotation?: number }
+export interface InkPage extends PageBase { kind: "ink"; template: Template; background?: PageBackground }
 export interface TextPage extends PageBase { kind: "text"; doc: unknown | null }
 export interface HtmlPage extends PageBase {
   kind: "html";
@@ -44,7 +50,7 @@ export type PagePatch = Partial<Omit<InkPage, "kind" | "id">> & Partial<Omit<Tex
   Partial<Omit<HtmlPage, "kind" | "id">>;
 
 export type NewPage =
-  | { kind: "ink"; template: Template }
+  | { kind: "ink"; template: Template; background?: PageBackground; size?: { w: number; h: number } }
   | { kind: "text" }
   | { kind: "html"; title: string; source: string; artifactType: ArtifactType; allowNetwork: boolean };
 
@@ -87,3 +93,13 @@ class OpenNoteDB extends Dexie {
 export const db = new OpenNoteDB();
 export const newId = (): string => crypto.randomUUID();
 export const now = (): number => Date.now();
+
+/** Of the given blob ids, those no object or page background references any more (safe to delete). */
+export async function unreferencedBlobs(candidates: string[]): Promise<string[]> {
+  const want = new Set(candidates);
+  if (want.size === 0) return [];
+  const used = new Set<string>();
+  await db.objects.each((o) => { if (o.blobId && want.has(o.blobId)) used.add(o.blobId); });
+  await db.pages.each((p) => { if (p.kind === "ink" && p.background && want.has(p.background.blobId)) used.add(p.background.blobId); });
+  return [...want].filter((b) => !used.has(b));
+}

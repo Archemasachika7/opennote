@@ -13,7 +13,7 @@ const PAPER = { dark: { bg: "#1E2028", rule: "#2A2D37", ink: "#E8E9EE", dim: "#9
 const FONT: Record<TextStyle, string> = {
   h1: "600 50px 'Space Grotesk', Inter, sans-serif", h2: "600 40px 'Space Grotesk', Inter, sans-serif",
   h3: "600 34px 'Space Grotesk', Inter, sans-serif", p: "30px Inter, sans-serif", quote: "italic 30px Inter, sans-serif",
-  code: "24px 'JetBrains Mono', monospace", hr: "30px Inter, sans-serif",
+  code: "24px 'JetBrains Mono', monospace", hr: "30px Inter, sans-serif", table: "26px Inter, sans-serif",
 };
 
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
@@ -71,8 +71,20 @@ async function drawStrokes(ctx: CanvasRenderingContext2D, pageId: string, paper:
 }
 
 export async function renderInkPage(page: InkPage, nb: Notebook): Promise<PageImage[]> {
-  const [c, ctx] = canvas(W, H);
-  drawTemplate(ctx, page, nb.paper, H);
+  const h = page.size?.h ?? H;
+  const [c, ctx] = canvas(W, h);
+  drawTemplate(ctx, page, nb.paper, h);
+  if (page.background) {
+    const blob = await getBlob(page.background.blobId);
+    if (blob) {
+      const bmp = await createImageBitmap(blob);
+      const rot = ((page.background.rotation ?? 0) * Math.PI) / 180;
+      const turned = (page.background.rotation ?? 0) % 180 !== 0;
+      ctx.save(); ctx.translate(W / 2, h / 2); ctx.rotate(rot);
+      ctx.drawImage(bmp, turned ? -h / 2 : -W / 2, turned ? -W / 2 : -h / 2, turned ? h : W, turned ? W : h);
+      ctx.restore(); bmp.close();
+    }
+  }
   await drawObjects(ctx, await getObjects(page.id), nb.paper);
   await drawStrokes(ctx, page.id, nb.paper);
   return [await toImage(c)];
@@ -99,6 +111,44 @@ export async function renderTextPage(page: TextPage, nb: Notebook): Promise<Page
       ctx.fillStyle = l.style === "quote" ? p.dim : p.ink;
       if (l.prefix) { ctx.font = FONT.p; ctx.fillText(l.prefix, x - 36, y); ctx.font = FONT[l.style]; }
       if (l.style === "code") { ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.fillRect(x - 10, y - 4, W - PAD_X * 2 - l.indent + 20, LINE_HEIGHT.code); ctx.fillStyle = p.ink; }
+      if (l.cells) {
+        // table row: equal-width cells with borders, header row bold
+        const tw = W - PAD_X * 2 - l.indent;
+        const cw = tw / Math.max(1, l.cells.length);
+        const rh = LINE_HEIGHT.table;
+        ctx.strokeStyle = p.rule; ctx.lineWidth = 1.5;
+        l.cells.forEach((cell, k) => {
+          ctx.strokeRect(x + k * cw, y - 6, cw, rh);
+          ctx.font = l.header ? "600 26px Inter, sans-serif" : FONT.table;
+          ctx.fillStyle = p.ink;
+          ctx.save(); ctx.beginPath(); ctx.rect(x + k * cw, y - 6, cw - 6, rh); ctx.clip();
+          ctx.fillText(cell, x + k * cw + 10, y + 4);
+          ctx.restore();
+        });
+        continue;
+      }
+      if (l.runs && l.runs.length) {
+        // styled words: colour, highlight, bold/italic, underline/strike
+        let cx = x;
+        const base = FONT[l.style];
+        const size = Number(/(\d+)px/.exec(base)?.[1] ?? 30);
+        const space = (() => { ctx.font = base; return ctx.measureText(" ").width; })();
+        for (const [k, r] of l.runs.entries()) {
+          const weight = r.bold || l.style.startsWith("h") ? "600 " : "";
+          ctx.font = `${r.italic || l.style === "quote" ? "italic " : ""}${weight}${base.replace(/^(italic )?(600 )?/, "")}`;
+          const wpx = ctx.measureText(r.text).width;
+          if (r.highlight) { ctx.fillStyle = r.highlight; ctx.fillRect(cx - 2, y - 2, wpx + 4, size + 8); }
+          ctx.fillStyle = r.color ?? (l.style === "quote" ? p.dim : p.ink);
+          ctx.fillText(r.text, cx, y);
+          if (r.underline || r.strike) {
+            ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 2;
+            const ly = r.underline ? y + size + 2 : y + size * 0.55;
+            ctx.beginPath(); ctx.moveTo(cx, ly); ctx.lineTo(cx + wpx, ly); ctx.stroke();
+          }
+          cx += wpx + (l.runs[k + 1]?.joined ? 0 : space);
+        }
+        continue;
+      }
       ctx.fillText(l.text, x, y);
     }
     if (i === 0) await drawStrokes(ctx, page.id, nb.paper); // pen notes written over the page

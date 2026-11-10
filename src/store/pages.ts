@@ -1,4 +1,4 @@
-import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, type NewPage, type Page, type PagePatch } from "./schema";
+import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PagePatch } from "./schema";
 
 export const TOO_LARGE = "Too large (max 5 MB)";
 
@@ -6,7 +6,10 @@ function build(notebookId: string, init: NewPage): Page {
   const t = now();
   const base = { id: newId(), notebookId, createdAt: t, updatedAt: t, size: { ...PAGE_SIZE } };
   switch (init.kind) {
-    case "ink": return { ...base, kind: "ink", template: init.template };
+    case "ink": return {
+      ...base, kind: "ink", template: init.template, ...(init.size ? { size: { ...init.size } } : {}),
+      ...(init.background ? { background: { ...init.background } } : {}),
+    };
     case "text": return { ...base, kind: "text", doc: null };
     case "html": return { ...base, ...init, kind: "html", height: PAGE_SIZE.h };
   }
@@ -88,14 +91,14 @@ export async function deletePage(pageId: string): Promise<void> {
     if (!p) return;
     const objs = await db.objects.where("pageId").equals(pageId).toArray();
     await db.objects.where("pageId").equals(pageId).delete();
-    // Duplicated pages share image blobs: only delete blobs no remaining object references.
-    const candidates = [...new Set(objs.map((o) => o.blobId).filter((x): x is string => !!x))];
-    const stillUsed = new Set((await db.objects.filter((o) => !!o.blobId && candidates.includes(o.blobId)).toArray()).map((o) => o.blobId));
-    const blobIds = candidates.filter((b) => !stillUsed.has(b));
-    if (p.kind === "html" && p.snapshotBlobId) blobIds.push(p.snapshotBlobId);
-    await db.blobs.bulkDelete(blobIds);
-    await db.strokes.where("pageId").equals(pageId).delete();
+    const candidates = objs.map((o) => o.blobId).filter((x): x is string => !!x);
+    if (p.kind === "ink" && p.background) candidates.push(p.background.blobId);
+    if (p.kind === "html" && p.snapshotBlobId) candidates.push(p.snapshotBlobId);
+    // remove the page first so its own background no longer counts as a reference
     await db.pages.delete(pageId);
+    // duplicated pages share image blobs: only delete blobs nothing references any more
+    await db.blobs.bulkDelete(await unreferencedBlobs(candidates));
+    await db.strokes.where("pageId").equals(pageId).delete();
     const nb = await db.notebooks.get(p.notebookId);
     if (nb) {
       await db.notebooks.update(nb.id, {

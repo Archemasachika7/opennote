@@ -52,3 +52,18 @@
 .mode-switch button > svg, .mode-switch button { z-index: 0; }
 .mode-pill { position: absolute; inset: 0; z-index: -1; border-radius: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent); }
 .mode-switch button.on { background: none; box-shadow: none; }
+.thumb-tabs button { font-size: 12.5px; }
+.outline-row { display: block; width: 100%; padding: 6px 8px; border: 0; background: none; text-align: left; cursor: pointer; border-radius: 4px;
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-row[data-level="1"] { font-weight: 600; }
+.outline-row[data-level="3"] { color: var(--text-dim); }
+.outline-row:hover { background: var(--surface-2); }
+.opt-group { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px 12px; margin: 0 0 12px; display: grid; gap: 8px; }
+.opt-group legend { padding: 0 6px; color: var(--text-dim); font-size: 12.5px; }
+.opt-group label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.opt-group input[type="radio"] { accent-color: var(--accent); }
+.range-row .input { flex: 1; }
+.pdf-bg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }
+.goto { padding: 8px 12px 0; }
+.goto .input { width: 100%; height: 28px; font-size: 12.5px; }
+.nb-trashed { max-width: 520px; margin: 18vh auto 0; padding: 0 24px; text-align: center; display: grid; gap: 10px; }

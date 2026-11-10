@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Notebook, Page } from "../store/schema";
-import { getNotebook, toggleBookmark } from "../store/notebooks";
+import { getNotebook, restoreNotebook, toggleBookmark } from "../store/notebooks";
+import { navigate } from "../App";
 import { deletePage, duplicatePage, getPages, insertPage, movePage, updatePage } from "../store/pages";
 import { useLive } from "../store/useLive";
 import { Toolbar } from "./Toolbar";
@@ -14,6 +15,11 @@ import { addImage, pasteImages } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
 import { exportPagesPdf } from "../io/exportPdf";
+import { BACKUP_EXT, exportBackup } from "../io/backup";
+import { exportPagesJpg } from "../io/exportImages";
+import { importPdf } from "../io/pdfImport";
+import { rotatePage } from "../ink/rotate";
+import { ExportSheet, type ExportRequest } from "./ExportSheet";
 import { toast } from "../ui/Toast";
 import { platform } from "../platform/port";
 import { PasteSheet, type LiveDraft } from "../live/PasteSheet";
@@ -25,6 +31,8 @@ import { LatencyOverlay } from "../dev/LatencyOverlay";
 import "./notebook.css";
 
 const BASE_WIDTH = 860;
+/** File-system safe file name (no reserved characters). */
+export const safeName = (name: string): string => name.replace(/[<>:"/|?*]+/g, "-").trim() || "notebook";
 export const clampZoom = (z: number): number => Math.min(4, Math.max(0.5, z));
 
 export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
@@ -34,6 +42,7 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   const { mounted, current } = useVisiblePages(scroller, pages.length);
   const [zoom, setZoomRaw] = useState(1);
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
+  const [exporting, setExporting] = useState(false);
   const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
   const width = BASE_WIDTH * zoom;
   usePinchZoom(scroller, setZoomRaw, clampZoom);
@@ -100,6 +109,16 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setSheet({ index }); return; }
+    if (kind === "pdf") {
+      const f = await platform.openFile([".pdf", "application/pdf"]);
+      if (!f) return;
+      toast("Importing PDF...");
+      try {
+        const r = await importPdf(f, { notebookId: id, at: index });
+        toast(`Added ${r.pageIds.length} PDF ${r.pageIds.length === 1 ? "page" : "pages"}`);
+      } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      return;
+    }
     await insertPage(id, index, kind === "ink" ? { kind: "ink", template: "blank" } : { kind: "text" });
   }
 
@@ -117,13 +136,30 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
     toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} to PDF...`);
     try {
       const r = await exportPagesPdf(list, notebook);
-      const safe = name.replace(/[<>:"/|?*]+/g, "-").trim() || "notebook";
+      const safe = safeName(name);
       await platform.saveFile(`${safe}.pdf`, new Blob([r.bytes as BlobPart], { type: "application/pdf" }));
       toast(`PDF saved (${r.pdfPages} ${r.pdfPages === 1 ? "page" : "pages"})` +
         (r.livesAsCards ? ` - ${r.livesAsCards} live ${r.livesAsCards === 1 ? "page" : "pages"} shown as a card` : ""));
     } catch (e) {
       toast(`PDF export failed: ${String(e)}`);
     }
+  }
+
+  async function exportJpg(list: Page[], nbForName: Notebook) {
+    if (list.length === 0) return;
+    toast(`Exporting ${list.length} ${list.length === 1 ? "page" : "pages"} as JPG...`);
+    try {
+      const r = await exportPagesJpg(list, nbForName);
+      await platform.saveFile(r.name, r.blob);
+      toast("Images saved");
+    } catch (e) { toast(`JPG export failed: ${String(e)}`); }
+  }
+
+  async function runExport(r: ExportRequest) {
+    setExporting(false);
+    if (!notebook) return;
+    const list = r.indices.map((i) => pages[i]).filter((p): p is Page => !!p);
+    if (r.format === "pdf") await exportPdf(list, notebook.title); else await exportJpg(list, notebook);
   }
 
   async function saveLive(d: LiveDraft) {
@@ -136,10 +172,31 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
   }
 
   if (!notebook) return <main className="nb-loading dim">Loading...</main>;
+  if (notebook.trashedAt) {
+    // a trashed notebook is not editable (it would be purged anyway); offer to restore it
+    return (
+      <main className="nb-trashed">
+        <h2>&ldquo;{notebook.title}&rdquo; is in Trash.</h2>
+        <p className="dim">Restore it to keep working on it. Items in Trash are deleted after 30 days.</p>
+        <div className="row-end" style={{ justifyContent: "center" }}>
+          <button className="btn" onClick={() => navigate("/")}>Back to library</button>
+          <button className="btn primary" onClick={() => restoreNotebook(notebook.id)}>Restore</button>
+        </div>
+      </main>
+    );
+  }
   const cur = pages[current];
   return (
     <div className="nb-view">
       <Toolbar notebook={notebook} zoom={zoom} setZoom={setZoom} palette={inkPalette(notebook.paper)} currentKind={pages[current]?.kind} onExportPdf={() => exportPdf(pages, notebook.title)}
+        onExportOptions={() => setExporting(true)}
+        onExportBackup={async () => {
+          try {
+            const blob = await exportBackup(notebook.id);
+            await platform.saveFile(`${safeName(notebook.title)}${BACKUP_EXT}`, blob);
+            toast("Backup saved");
+          } catch (e) { toast(`Backup failed: ${e instanceof Error ? e.message : String(e)}`); }
+        }}
         onUndo={() => cur && sendCommand("undo", cur.id)} onRedo={() => cur && sendCommand("redo", cur.id)} />
       <div className="nb-body">
         <Thumbnails pages={pages} bookmarks={notebook.bookmarks} current={current} onJump={jump}
@@ -154,10 +211,13 @@ export function NotebookView({ id, pageId }: { id: string; pageId?: string }) {
               onDuplicate={(p) => duplicatePage(p.id)} onDelete={(p) => deletePage(p.id)}
               onPaste={(p) => { if (p.kind === "ink") void pasteClipboard(p.id); }}
               onExportPage={(p) => exportPdf([p], `${notebook.title} - page ${pages.indexOf(p) + 1}`)}
+              onRotate={(p) => rotatePage(p.id)}
+              onExportPageJpg={(p) => exportJpg([p], { ...notebook, title: `${notebook.title} - page ${pages.indexOf(p) + 1}` })}
               onBookmark={(p) => toggleBookmark(id, p.id)} onTemplate={(p, t) => updatePage(p.id, { template: t })} />
           </div>
         </div>
       </div>
+      <ExportSheet open={exporting} onClose={() => setExporting(false)} total={pages.length} current={current} onExport={runExport} />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
     </div>

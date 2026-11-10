@@ -31,6 +31,8 @@ export function createHistory(capacity = 100): History {
 }
 
 const histories = new Map<string, History>();
+export function clearHistory(pageId: string): void { histories.delete(pageId); }
+
 /** Per-page undo history; module-level so it survives page virtualization unmounts. */
 export function historyFor(pageId: string): History {
   let h = histories.get(pageId);

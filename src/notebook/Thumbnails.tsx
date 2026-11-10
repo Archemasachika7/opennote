@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { Page } from "../store/schema";
 import { InsertMenu, type InsertKind } from "./InsertMenu";
+import { headingsOf } from "../text/outline";
 
 export function Thumbnails({ pages, bookmarks, current, onJump, onInsert, onReorder }: {
   pages: Page[]; bookmarks: string[]; current: number;
   onJump: (index: number) => void; onInsert: (index: number, kind: InsertKind) => void; onReorder: (from: number, to: number) => void;
 }) {
-  const [tab, setTab] = useState<"pages" | "bookmarks">("pages");
+  const [tab, setTab] = useState<"pages" | "bookmarks" | "outline">("pages");
+  const outline = pages.flatMap((p, i) => (p.kind === "text" ? headingsOf(p.doc).map((h) => ({ ...h, page: i, key: `${p.id}-${h.index}` })) : []));
   const [menuAt, setMenuAt] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
 
@@ -27,7 +29,19 @@ export function Thumbnails({ pages, bookmarks, current, onJump, onInsert, onReor
       <div className="thumb-tabs" role="tablist">
         <button role="tab" aria-selected={tab === "pages"} onClick={() => setTab("pages")}>Pages</button>
         <button role="tab" aria-selected={tab === "bookmarks"} onClick={() => setTab("bookmarks")}>Bookmarks</button>
+        <button role="tab" aria-selected={tab === "outline"} onClick={() => setTab("outline")}>Outline</button>
       </div>
+      {tab === "pages" && (
+        <div className="goto">
+          <input type="number" min={1} max={pages.length} className="input" aria-label="Go to page"
+            placeholder={`Go to page (1-${pages.length})`}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              const n = Number(e.currentTarget.value);
+              if (Number.isInteger(n) && n >= 1 && n <= pages.length) onJump(n - 1);
+            }} />
+        </div>
+      )}
       {tab === "pages" ? (
         <div className="thumb-list">
           {gap(0)}
@@ -35,6 +49,7 @@ export function Thumbnails({ pages, bookmarks, current, onJump, onInsert, onReor
             <div key={p.id}>
               <button data-testid="thumb" data-live={p.kind === "html" ? "true" : undefined}
                 className={`thumb ${i === current ? "current" : ""} ${p.kind === "html" ? "live" : ""}`}
+                style={p.kind === "ink" && p.size ? { aspectRatio: `${p.size.w} / ${p.size.h}` } : undefined}
                 draggable onClick={() => onJump(i)}
                 onDragStart={(e) => { setDragFrom(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
                 onDragOver={(e) => e.preventDefault()}
@@ -46,6 +61,14 @@ export function Thumbnails({ pages, bookmarks, current, onJump, onInsert, onReor
               </button>
               {gap(i + 1)}
             </div>
+          ))}
+        </div>
+      ) : tab === "outline" ? (
+        <div className="thumb-list">
+          {outline.length === 0 && <p className="dim" style={{ padding: 12 }}>Headings in text pages appear here.</p>}
+          {outline.map((h) => (
+            <button key={h.key} data-testid="outline-item" data-level={h.level} className="outline-row"
+              style={{ paddingLeft: 8 + (h.level - 1) * 12 }} onClick={() => onJump(h.page)}>{h.text}</button>
           ))}
         </div>
       ) : (

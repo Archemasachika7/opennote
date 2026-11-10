@@ -10,11 +10,12 @@ import { Toolbar } from "../notebook/Toolbar";
 import { ExportSheet, type ExportRequest } from "../notebook/ExportSheet";
 import { safeName } from "../notebook/NotebookView";
 import { useStudioShortcuts } from "../notebook/useStudioShortcuts";
-import { sendCommand, setTool, useTool } from "../notebook/tool";
+import { sendCommand, sendStampElement, setTool, useTool } from "../notebook/tool";
 import { InkLayer } from "../ink/InkLayer";
 import { ObjectLayer } from "../ink/ObjectLayer";
 import { TapeLayer } from "../ink/TapeLayer";
 import { LayersSheet } from "../ink/LayersSheet";
+import { ElementsSheet } from "../ink/ElementsSheet";
 import { RulerOverlay } from "../ink/RulerOverlay";
 import { addImage, getObjects, setAllTape } from "../ink/objects";
 import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
@@ -80,6 +81,7 @@ export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pag
   const board = boards.find((b) => b.id === currentId) ?? boards[0];
   const [exporting, setExporting] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [elementsOpen, setElementsOpen] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(() => !(typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth < 640));
 
@@ -141,6 +143,7 @@ export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pag
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         onOpenSettings={onOpenSettings}
+        onOpenElements={() => setElementsOpen(true)}
         onExportOptions={() => setExporting(true)}
         onExportPdf={() => runExport({ format: "pdf", indices: boards.map((_, i) => i) } as ExportRequest)}
       />
@@ -159,15 +162,21 @@ export function WhiteboardView({ id, pageId, onOpenSettings }: { id: string; pag
       <ExportSheet open={exporting} onClose={() => setExporting(false)} total={boards.length}
         current={Math.max(0, boards.findIndex((b) => b.id === board?.id))} onExport={runExport} />
       <LayersSheet page={layersOpen && board ? board : null} onClose={() => setLayersOpen(false)} />
+      <ElementsSheet
+        open={elementsOpen}
+        onClose={() => setElementsOpen(false)}
+        paper={notebook.paper}
+        onInsert={(elem) => { if (board) sendStampElement(board.id, elem); }}
+      />
       <RulerOverlay />
     </div>
   );
 }
 
 /** The toolbar for the current board (zoom lives in the stage, so the toolbar reads it from there). */
-function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSettings, onExportPdf, onExportOptions }: {
+function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSettings, onOpenElements, onExportPdf, onExportOptions }: {
   notebook: Notebook; board?: InkPage; sidebarOpen: boolean; onToggleSidebar: () => void; onOpenSettings?: () => void;
-  onExportPdf: () => void; onExportOptions: () => void;
+  onOpenElements?: () => void; onExportPdf: () => void; onExportOptions: () => void;
 }) {
   const [zoom, setZoomState] = useState(() => (board ? loadView(board.id).zoom : 1));
   useEffect(() => {
@@ -182,6 +191,7 @@ function BoardChrome({ notebook, board, sidebarOpen, onToggleSidebar, onOpenSett
       sidebarOpen={sidebarOpen}
       onToggleSidebar={onToggleSidebar}
       onOpenSettings={onOpenSettings}
+      onOpenElements={board ? onOpenElements : undefined}
       palette={inkPalette(notebook.paper)}
       currentKind="ink"
       setZoom={(z) => window.dispatchEvent(new CustomEvent("opennote:board-set-zoom", { detail: z }))}

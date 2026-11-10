@@ -3,32 +3,46 @@ import { PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
 import { addTape, putObjects, removeObjectRows, updateObject } from "./objects";
 import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selection, type Xf } from "./selection";
 import { SelectionOverlay } from "./SelectionOverlay";
-import { shapePoints, type ShapeKind } from "./shapes";
+import { shapePoints, snapLineEndpoint, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
-import { getTool, onCommand, setTool, useTool } from "../notebook/tool";
+import { getTool, onCommand, onStampElement, setTool, useTool } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
 import { historyFor, type Op } from "./history";
-import { onPageChanged } from "./pageEvents";
+import { notifyPageChanged, onPageChanged } from "./pageEvents";
 import { copyToClipboard, cutToClipboard } from "./clipboard";
-import { bbox, hitTest, snapShape, splitByEraser, type Box } from "./geometry";
+import { bbox, hitTest, hitsEraserPath, snapShape, splitByEraser, type Box } from "./geometry";
 import { paintStroke, resolveColor, strokePath } from "./render";
 import { getRuler, rulerEdges, snapToRuler, RULER_SNAP_PX, type RulerLine } from "./ruler";
 import { liveLaserPoints, paintLaser, type LaserPoint } from "./laser";
 import { BASE_LAYER, getActiveLayer, layerOf, layerOrder, lockedLayers, hiddenLayers, type Layer } from "./layers";
 import { intersects, type View } from "../board/viewport";
 import { toast } from "../ui/Toast";
-import type { Stroke } from "./model";
+import { isScribbleGesture, pointsToXYPath } from "./gestures";
+import { instantiateElement, saveStrokesAsElement } from "./elements";
+import { currentRecordingStamp, requestAudioSeek, useAudioLiveState } from "../store/audio";
+import type { GeometricShapeKind, Stroke } from "./model";
 import "./ink.css";
 
 const ERASER_RADIUS = 8;
-const SNAP_HOLD_MS = 500;
+const SNAP_HOLD_MS = 420;
 /** Tape thinner than this (a swipe) becomes a strip of TAPE_STRIP height. */
 const TAPE_MIN = 24;
 const TAPE_STRIP = 36;
 export { historyFor };
 
-type Active = { id: number; kind: "stroke" | "erase" | "lasso" | "laser" | "tape"; pts: number[]; start: number; lastMove: number; pen: boolean;
-  shape?: { kind: ShapeKind; x0: number; y0: number; x1: number; y1: number } };
+type SnappedHold = { kind: GeometricShapeKind; points: Float32Array; x0: number; y0: number };
+
+type Active = {
+  id: number;
+  kind: "stroke" | "erase" | "lasso" | "laser" | "tape";
+  pts: number[];
+  start: number;
+  lastMove: number;
+  holdAnchor: [number, number];
+  pen: boolean;
+  shape?: { kind: ShapeKind; x0: number; y0: number; x1: number; y1: number };
+  snappedShape?: SnappedHold;
+};
 
 /** Normalised tape rectangle from a drag; a swipe along a line becomes a strip. */
 export function tapeRect(x0: number, y0: number, x1: number, y1: number): Box {
@@ -45,10 +59,14 @@ const clearCanvas = (ctx: CanvasRenderingContext2D) => {
   ctx.restore();
 };
 
-export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWidth = PAGE_SIZE.w, objects = [], onPreviewObjects, disabled, onCropRequest,
-  layers, view, onPan, tapeEnabled }: {
-  pageId: string; width: number; height: number; paper: Paper; inputFilter?: (e: PointerEvent) => boolean; logicalWidth?: number;
-  objects?: PageObject[]; onPreviewObjects?: (o: PageObject[] | null) => void; disabled?: boolean; onCropRequest?: (id: string) => void;
+export function InkLayer({
+  pageId, width, height, paper, inputFilter, logicalWidth = PAGE_SIZE.w, objects = [],
+  onPreviewObjects, disabled, onCropRequest, layers, view, onPan, tapeEnabled, onMakeCardFromBox,
+}: {
+  pageId: string; width: number; height: number; paper: Paper;
+  inputFilter?: (e: PointerEvent) => boolean; logicalWidth?: number;
+  objects?: PageObject[]; onPreviewObjects?: (o: PageObject[] | null) => void;
+  disabled?: boolean; onCropRequest?: (id: string) => void;
   /** Page layers, bottom to top (absent = one layer). */
   layers?: Layer[];
   /** Whiteboard: the visible part of an unbounded board. Without it the layer shows a fixed page. */
@@ -57,11 +75,19 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   onPan?: (dx: number, dy: number) => void;
   /** Allow the tape tool on this surface (ink pages and boards). */
   tapeEnabled?: boolean;
+  /** Optional 1-click lasso -> Image Occlusion flashcard callback */
+  onMakeCardFromBox?: (box: Box, strokes: Stroke[]) => void;
 }) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [previewXf, setPreviewXf] = useState<Xf>(IDENTITY);
+  const [editLine, setEditLine] = useState<{ strokeId: string; kind: "line" | "arrow"; x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const lineDrag = useRef<{ end: "start" | "end"; origStroke: Stroke } | null>(null);
   const [tool] = useTool();
+  const audioState = useAudioLiveState();
+  const audioRef = useRef(audioState);
+  audioRef.current = audioState;
+
   const surface = useRef<HTMLDivElement>(null);
   const dry = useRef<HTMLCanvasElement>(null);
   const wet = useRef<HTMLCanvasElement>(null);
@@ -69,6 +95,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   const paths = useRef(new Map<string, Path2D>());
   const boxes = useRef(new Map<string, Box>());
   const active = useRef<Active | null>(null);
+  const holdTimer = useRef<number | null>(null);
   const pans = useRef(new Map<number, { x: number; y: number }>());
   const frame = useRef(0);
   const laserPts = useRef<LaserPoint[]>([]);
@@ -77,6 +104,13 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   const scale = view ? view.zoom : width / logicalWidth;
   const ox = view?.x ?? 0;
   const oy = view?.y ?? 0;
+
+  const clearHoldTimer = () => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  };
 
   const layerInfo = useMemo(() => {
     const p = { layers };
@@ -100,6 +134,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   }, [width, height, scale, ox, oy]);
 
   const pathOf = (s: Stroke) => {
+    if (s.shape) return undefined;
     let p = paths.current.get(s.id);
     if (!p) { p = strokePath(s); paths.current.set(s.id, p); }
     return p;
@@ -117,7 +152,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     performance.mark?.("dry-start");
     clearCanvas(ctx);
     const ov = override.current;
-    // only what is on screen (boards can be huge)
+    const pb = audioRef.current.playback;
     const visible: Box | null = view ? { x: ox, y: oy, w: width / scale, h: height / scale } : null;
     const byLayer: Stroke[][] = Array.from({ length: layerInfo.count }, () => []);
     for (const s0 of strokes.current.values()) {
@@ -126,10 +161,16 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       if (visible && !(ov && ov.ids.has(s0.id)) && !intersects(boxOf(s0), visible)) continue;
       byLayer[Math.min(layerInfo.count - 1, layerInfo.order.get(layerOf(s0)) ?? 0)].push(s);
     }
-    const pathFor = (s: Stroke) => (ov && ov.ids.has(s.id) ? strokePath(s) : pathOf(s));
+    const pathFor = (s: Stroke) => (s.shape ? undefined : ov && ov.ids.has(s.id) ? strokePath(s) : pathOf(s));
+    const alphaFor = (s: Stroke) => {
+      if (pb?.inkReplay && s.audioSync && s.audioSync.clipId === pb.clipId) {
+        return s.audioSync.offsetMs <= pb.currentMs ? 1 : 0.18;
+      }
+      return 1;
+    };
     for (const list of byLayer) {
-      for (const s of list) if (s.tool === "highlighter") paintStroke(ctx, s, paper, pathFor(s));
-      for (const s of list) if (s.tool !== "highlighter") paintStroke(ctx, s, paper, pathFor(s));
+      for (const s of list) if (s.tool === "highlighter") paintStroke(ctx, s, paper, pathFor(s), alphaFor(s));
+      for (const s of list) if (s.tool !== "highlighter") paintStroke(ctx, s, paper, pathFor(s), alphaFor(s));
     }
     performance.mark?.("dry-end");
     try { performance.measure?.("dry-redraw", "dry-start", "dry-end"); } catch { /* unsupported */ }
@@ -137,6 +178,7 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
 
   useEffect(() => {
     let alive = true;
+    setEditLine(null);
     void getStrokes(pageId).then((list) => {
       if (!alive) return;
       strokes.current = new Map(list.map((s) => [s.id, s]));
@@ -145,29 +187,36 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       redrawDry();
       setLoaded(true);
     });
-    return () => { alive = false; };
+    return () => { alive = false; clearHoldTimer(); };
   }, [pageId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { redrawDry(); }, [redrawDry]);
+  useEffect(() => { redrawDry(); }, [redrawDry, audioState.playback?.currentMs, audioState.playback?.inkReplay, audioState.playback?.clipId]);
 
-  // Paste/cut from elsewhere changed this page's strokes: reload them.
+  const suppressPageEvent = useRef(false);
   useEffect(() => onPageChanged((id) => {
-    if (id !== pageId) return;
+    if (id !== pageId || suppressPageEvent.current) return;
     void getStrokes(pageId).then((list) => {
       strokes.current = new Map(list.map((s) => [s.id, s]));
       paths.current.clear();
       boxes.current.clear();
       setSelection(null);
+      setEditLine(null);
       redrawDry();
     });
   }), [pageId, redrawDry]);
+
+  const emitPeerSync = useCallback(() => {
+    suppressPageEvent.current = true;
+    try { notifyPageChanged(pageId); } finally { suppressPageEvent.current = false; }
+  }, [pageId]);
 
   const apply = useCallback(async (remove: Stroke[], add: Stroke[]) => {
     for (const s of remove) { strokes.current.delete(s.id); paths.current.delete(s.id); boxes.current.delete(s.id); }
     for (const s of add) strokes.current.set(s.id, s);
     redrawDry();
     await replaceStrokes(pageId, remove.map((s) => s.id), add);
-  }, [pageId, redrawDry]);
+    emitPeerSync();
+  }, [pageId, redrawDry, emitPeerSync]);
 
   useEffect(() => onCommand((c, id) => {
     if (id !== pageId) return;
@@ -175,13 +224,12 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const op: Op | null = c === "undo" ? h.undo() : h.redo();
     if (!op) return;
     setSelection(null);
+    setEditLine(null);
     void (c === "undo" ? apply(op.add, op.remove) : apply(op.remove, op.add));
     if (op.objects) {
       const [target, other] = c === "undo" ? [op.objects.before, op.objects.after] : [op.objects.after, op.objects.before];
       const keep = new Set(target.map((o) => o.id));
       const existed = new Set(other.map((o) => o.id));
-      // Objects present on both sides were transformed: restore only geometry so later edits
-      // (typed text, crop) survive. Objects on one side only were created/deleted: put/remove whole.
       void (async () => {
         await removeObjectRows(other.filter((o) => !keep.has(o.id)).map((o) => o.id));
         await putObjects(target.filter((o) => !existed.has(o.id)));
@@ -192,6 +240,21 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     }
   }), [pageId, apply]);
 
+  // Stamp reusable elements onto the center of the visible page/board
+  useEffect(() => onStampElement((target, elem) => {
+    if (target !== pageId) return;
+    const cx = view ? ox + width / (2 * scale) : logicalWidth / 2;
+    const cy = view ? oy + height / (2 * scale) : (height / scale) / 2;
+    const layerId = getActiveLayer(pageId, { layers: layersRef.current });
+    const stamped = instantiateElement(elem, cx, cy, layerId !== BASE_LAYER ? layerId : undefined);
+    if (!stamped.length) return;
+    historyFor(pageId).push({ remove: [], add: stamped });
+    void apply([], stamped);
+    setTool({ tool: "lasso" });
+    setSelection({ strokeIds: stamped.map((s) => s.id), objectIds: [] });
+    toast(`Stamped "${elem.name}"`);
+  }), [pageId, view, ox, oy, width, height, scale, logicalWidth, apply]);
+
   const toLogicalXY = (cx: number, cy: number): [number, number] => {
     const r = surface.current!.getBoundingClientRect();
     const k = view ? 1 / scale : logicalWidth / (r.width || width);
@@ -199,7 +262,6 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   };
   const toLogical = (e: { clientX: number; clientY: number }): [number, number] => toLogicalXY(e.clientX, e.clientY);
 
-  /** Ruler edges in this surface's logical units. */
   const rulerLines = (): RulerLine[] => {
     const r = getRuler();
     if (!r) return [];
@@ -219,12 +281,21 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   const currentStroke = (a: Active, extra: number[] = []): Stroke => {
     const t = getTool();
     const layerId = getActiveLayer(pageId, { layers: layersRef.current });
-    let points: Float32Array = new Float32Array([...a.pts, ...extra]);
-    if (!a.shape && t.tool !== "shape") points = snapAlongRuler(points);
+    const shapeKind: GeometricShapeKind | undefined = a.shape?.kind ?? a.snappedShape?.kind;
+    let points: Float32Array = a.snappedShape ? a.snappedShape.points : new Float32Array([...a.pts, ...extra]);
+    if (!shapeKind && t.tool !== "shape") points = snapAlongRuler(points);
+    const sync = currentRecordingStamp();
     return {
-      id: crypto.randomUUID(), tool: t.tool === "highlighter" ? "highlighter" : "pen", variant: t.variant,
-      color: t.color, paletteIndex: t.paletteIndex ?? undefined, width: t.width, points,
+      id: crypto.randomUUID(),
+      tool: t.tool === "highlighter" ? "highlighter" : "pen",
+      variant: t.variant,
+      color: t.color,
+      paletteIndex: t.paletteIndex ?? undefined,
+      width: t.width,
+      points,
       ...(layerId !== BASE_LAYER ? { layerId } : {}),
+      ...(shapeKind ? { shape: { kind: shapeKind, fill: t.shapeFill, dashed: t.shapeDashed } } : {}),
+      ...(sync ? { audioSync: sync } : {}),
     };
   };
 
@@ -242,7 +313,13 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     if (a.kind === "stroke") {
       const extra: number[] = [];
       const e = lastEvent.current;
-      if (e) for (const p of predicted(e)) { const [x, y] = toLogical(p); extra.push(x, y, a.pen ? p.pressure : 0.5, 0); }
+      // Never append predicted cursor coordinates onto closed/geometric shapes (avoids stray diagonal slash)
+      if (e && !a.shape && !a.snappedShape) {
+        for (const p of predicted(e)) {
+          const [x, y] = toLogical(p);
+          extra.push(x, y, a.pen ? p.pressure : 0.5, 0);
+        }
+      }
       paintStroke(ctx, currentStroke(a, extra), paper);
       return;
     }
@@ -281,7 +358,24 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   };
   const schedule = () => { if (!frame.current) frame.current = requestAnimationFrame(paintWet); };
 
-  // The laser trail keeps fading after the pointer stops, so it runs its own frame loop.
+  const armHoldSnapTimer = () => {
+    clearHoldTimer();
+    const a = active.current;
+    if (!a || a.kind !== "stroke" || a.shape || a.snappedShape || getRuler()) return;
+    const t = getTool();
+    if (t.tool !== "shape" && !t.penGestures) return;
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      const cur = active.current;
+      if (!cur || cur.kind !== "stroke" || cur.shape || cur.snappedShape || getRuler()) return;
+      if (cur.pts.length < 12) return;
+      const snapped = snapShape(new Float32Array(cur.pts));
+      if (!snapped) return;
+      cur.snappedShape = { kind: snapped.kind, points: snapped.points, x0: snapped.points[0], y0: snapped.points[1] };
+      paintWet();
+    }, SNAP_HOLD_MS);
+  };
+
   const laserLoop = () => {
     laserFrame.current = 0;
     const ctx = setup(wet.current);
@@ -292,7 +386,6 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     paintLaser(ctx, laserPts.current, now, 1 / scale);
     if (laserPts.current.length || active.current?.kind === "laser") laserFrame.current = requestAnimationFrame(() => laserLoopRef.current());
   };
-  // always run the latest closure (the view may change while a trail fades)
   const laserLoopRef = useRef(laserLoop);
   laserLoopRef.current = laserLoop;
   const startLaserLoop = () => { if (!laserFrame.current) laserFrame.current = requestAnimationFrame(() => laserLoopRef.current()); };
@@ -303,18 +396,30 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   useEffect(() => () => {
     if (laserFrame.current) cancelAnimationFrame(laserFrame.current);
     if (frame.current) cancelAnimationFrame(frame.current);
+    clearHoldTimer();
   }, []);
 
   const onDown = (ev: React.PointerEvent) => {
     const e = ev.nativeEvent;
     if (inputFilter && !inputFilter(e)) return;
+    if (editLine) setEditLine(null);
+
+    // Tap-to-Seek during Lecture Audio playback
+    const pb = audioRef.current.playback;
+    if (pb?.tapToSeek) {
+      const [tx, ty] = toLogical(e);
+      const hit = [...strokes.current.values()].reverse().find((s) => s.audioSync && hitTest(s, tx, ty, 14));
+      if (hit?.audioSync) {
+        e.preventDefault();
+        requestAudioSeek(hit.audioSync.clipId, Math.max(0, hit.audioSync.offsetMs - 350));
+        return;
+      }
+    }
+
     const t = getTool();
     if (e.pointerType === "pen" && !t.penSeen) setTool({ penSeen: true });
     const action = classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
     if (action === "navigate") {
-      // Native touch panning stays disabled on the surface (Chromium applies touch-action to the
-      // stylus too, which would make pen strokes scroll). Fingers scroll the notebook here instead.
-      // On a board every navigating pointer (hand tool, middle mouse, touch) pans the view.
       if (e.pointerType === "touch" || onPan) {
         pans.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (onPan) { e.preventDefault(); tryCapture(surface.current, e.pointerId); }
@@ -330,19 +435,27 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       if (!editable({ layerId })) { toast("This layer is locked or hidden. Pick another layer to write on."); return; }
     }
     if (selection) setSelection(null);
-    if (kind !== "laser") stopLaser(); // a fading trail must not wipe the new stroke's preview
+    if (kind !== "laser") stopLaser();
     e.preventDefault();
     tryCapture(surface.current, e.pointerId);
     const now = performance.now();
     const pen = e.pointerType === "pen";
     const [x, y] = toLogical(e);
-    active.current = { id: e.pointerId, kind, pts: kind === "stroke" ? [x, y, pen ? e.pressure : 0.5, 0] : [x, y], start: now, lastMove: now, pen };
+    active.current = {
+      id: e.pointerId, kind,
+      pts: kind === "stroke" ? [x, y, pen ? e.pressure : 0.5, 0] : [x, y],
+      start: now, lastMove: now, holdAnchor: [x, y], pen,
+    };
     if (kind === "laser") {
       laserPts.current.push({ x, y, t: now, start: true });
       startLaserLoop();
       return;
     }
-    if (t.tool === "shape" && t.shapeKind !== "auto") active.current.shape = { kind: t.shapeKind, x0: x, y0: y, x1: x, y1: y };
+    if (t.tool === "shape" && t.shapeKind !== "auto") {
+      active.current.shape = { kind: t.shapeKind, x0: x, y0: y, x1: x, y1: y };
+    } else if (kind === "stroke") {
+      armHoldSnapTimer();
+    }
     lastEvent.current = e;
     schedule();
   };
@@ -352,7 +465,6 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     const e = ev.nativeEvent;
     const pan = pans.current.get(e.pointerId);
     if (pan) {
-      // one finger scrolls; two fingers are a pinch (handled by the notebook's / board's zoom)
       if (pans.current.size === 1) {
         const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
         if (onPan) onPan(dx, dy);
@@ -380,12 +492,31 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       schedule();
       return;
     }
+    if (a.snappedShape) {
+      const [x, y] = toLogical(e);
+      if (Math.hypot(x - a.holdAnchor[0], y - a.holdAnchor[1]) >= 4) {
+        a.snappedShape.points = shapePoints(a.snappedShape.kind, a.snappedShape.x0, a.snappedShape.y0, x, y, e.shiftKey);
+        schedule();
+      }
+      return;
+    }
+    let lastX = a.holdAnchor[0], lastY = a.holdAnchor[1];
     for (const c of coalesced(e)) {
       const [x, y] = toLogical(c);
+      lastX = x; lastY = y;
       if (a.kind === "stroke") a.pts.push(x, y, a.pen ? c.pressure : 0.5, now - a.start);
       else a.pts.push(x, y);
     }
-    a.lastMove = now;
+    if (a.kind === "stroke") {
+      // Ignore tiny stylus tilt micro-jitter (< 3.5 logical px) when measuring stillness for hold-to-snap
+      if (Math.hypot(lastX - a.holdAnchor[0], lastY - a.holdAnchor[1]) >= 3.5) {
+        a.lastMove = now;
+        a.holdAnchor = [lastX, lastY];
+        armHoldSnapTimer();
+      }
+    } else {
+      a.lastMove = now;
+    }
     lastEvent.current = e;
     schedule();
   };
@@ -403,9 +534,9 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
         add.push(...parts);
         continue;
       }
-      const swept = splitByEraser(s, a.pts, ERASER_RADIUS);
-      const touched = !(swept.length === 1 && swept[0] === s);
-      if (touched || hitTest(s, a.pts[0], a.pts[1], ERASER_RADIUS)) remove.push(s);
+      if (hitsEraserPath(s, a.pts, ERASER_RADIUS) || hitTest(s, a.pts[0], a.pts[1], ERASER_RADIUS)) {
+        remove.push(s);
+      }
     }
     if (remove.length === 0) return;
     historyFor(pageId).push({ remove, add });
@@ -413,13 +544,14 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
   };
 
   const finish = async (ev: React.PointerEvent) => {
+    clearHoldTimer();
     if (pans.current.delete(ev.nativeEvent.pointerId)) return;
     const a = active.current;
     if (!a || a.id !== ev.nativeEvent.pointerId) return;
     active.current = null;
     lastEvent.current = null;
     if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
-    if (a.kind === "laser") return; // the trail fades out on its own and is never saved
+    if (a.kind === "laser") return;
     const wctx = setup(wet.current);
     if (wctx) clearCanvas(wctx);
     if (a.kind === "erase") { await eraseWith(a); return; }
@@ -442,16 +574,43 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
       if (Math.hypot(sh.x1 - sh.x0, sh.y1 - sh.y0) < 6) return; // a click, not a shape
       a.pts = Array.from(shapePoints(sh.kind, sh.x0, sh.y0, sh.x1, sh.y1, ev.nativeEvent.shiftKey));
     }
+    const t = getTool();
     let s = currentStroke(a);
-    if (!a.shape && getTool().tool === "shape" && performance.now() - a.lastMove >= SNAP_HOLD_MS) {
+    if (!a.shape && !a.snappedShape && !getRuler() && (t.tool === "shape" || t.penGestures) && performance.now() - a.lastMove >= SNAP_HOLD_MS) {
       const snapped = snapShape(s.points);
-      if (snapped) s = { ...s, points: snapped.points };
+      if (snapped) {
+        s = { ...s, points: snapped.points, shape: { kind: snapped.kind, fill: t.shapeFill, dashed: t.shapeDashed } };
+      }
     }
+
+    // Scribble-to-Erase pen gesture over existing editable strokes
+    if (!s.shape && !getRuler() && t.tool === "pen" && t.penGestures && isScribbleGesture(s.points)) {
+      const scribblePath = pointsToXYPath(s.points);
+      const victims = [...strokes.current.values()].filter((existing) => editable(existing) && hitsEraserPath(existing, scribblePath, ERASER_RADIUS + 2));
+      if (victims.length > 0) {
+        historyFor(pageId).push({ remove: victims, add: [] });
+        await apply(victims, []);
+        toast("Erased with scribble", { label: "Undo", run: () => sendUndoFor(pageId) });
+        return;
+      }
+    }
+
     strokes.current.set(s.id, s);
-    redrawDry(); // keeps layer order correct (a new stroke may be under a higher layer)
+    redrawDry();
     historyFor(pageId).push({ remove: [], add: [s] });
     await putStroke(pageId, s);
+    emitPeerSync();
+
+    if (t.tool === "shape" && (s.shape?.kind === "line" || s.shape?.kind === "arrow") && s.points.length >= 8) {
+      setEditLine({ strokeId: s.id, kind: s.shape.kind, x0: s.points[0], y0: s.points[1], x1: s.points[4], y1: s.points[5] });
+    }
   };
+
+  function sendUndoFor(pid: string) {
+    const h = historyFor(pid);
+    const op = h.undo();
+    if (op) void apply(op.add, op.remove);
+  }
 
   const selStrokes = selection ? selection.strokeIds.map((id) => strokes.current.get(id)).filter((x): x is Stroke => !!x) : [];
   const selObjects = selection ? objects.filter((o) => selection.objectIds.includes(o.id)) : [];
@@ -499,6 +658,15 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     await apply(selStrokes, next);
   };
 
+  const toggleShapeProp = async (prop: "fill" | "dashed") => {
+    const shapeStrokes = selStrokes.filter((s) => s.shape);
+    if (!shapeStrokes.length) return;
+    const nextVal = !shapeStrokes.every((s) => Boolean(s.shape?.[prop]));
+    const next = shapeStrokes.map((s) => ({ ...s, shape: { ...s.shape!, [prop]: nextVal } }));
+    historyFor(pageId).push({ remove: shapeStrokes, add: next });
+    await apply(shapeStrokes, next);
+  };
+
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
   const copySel = () => copyToClipboard(pageId, selStrokes, selObjects);
   const cutSel = async () => { setSelection(null); await cutToClipboard(pageId, selStrokes, selObjects); };
@@ -516,18 +684,87 @@ export function InkLayer({ pageId, width, height, paper, inputFilter, logicalWid
     return () => document.removeEventListener("keydown", key);
   });
 
-  // On a fixed page the hand tool uses native scrolling; a board always pans itself.
+  const hasShape = selStrokes.some((s) => Boolean(s.shape));
+  const shapeFilled = selStrokes.some((s) => Boolean(s.shape?.fill));
+  const shapeDashed = selStrokes.some((s) => Boolean(s.shape?.dashed));
+
   const touchAction = tool.tool === "hand" && !onPan ? "auto" : "none";
-  const cursor = onPan && tool.tool === "hand" ? "grab" : tool.tool === "laser" ? "crosshair" : undefined;
+  const cursor = audioState.playback?.tapToSeek
+    ? "pointer"
+    : onPan && tool.tool === "hand" ? "grab" : tool.tool === "laser" ? "crosshair" : undefined;
+
   return (
     <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined}
       style={{ width, height, touchAction, cursor, pointerEvents: disabled ? "none" : undefined }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
       <canvas ref={dry} className="ink-canvas" style={{ width, height }} />
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />
+
+      {/* Draggable start/end handles right after drawing a geometric Line or Arrow */}
+      {editLine && tool.tool === "shape" && (["start", "end"] as const).map((end) => {
+        const px = end === "start" ? editLine.x0 : editLine.x1;
+        const py = end === "start" ? editLine.y0 : editLine.y1;
+        return (
+          <div
+            key={end}
+            data-testid={`line-handle-${end}`}
+            className="line-endpoint-handle"
+            style={{ left: (px - ox) * scale, top: (py - oy) * scale }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              const orig = strokes.current.get(editLine.strokeId);
+              if (!orig) return;
+              tryCapture(e.currentTarget as Element, e.pointerId);
+              lineDrag.current = { end, origStroke: orig };
+            }}
+            onPointerMove={(e) => {
+              const d = lineDrag.current;
+              if (!d) return;
+              e.stopPropagation();
+              let [nx, ny] = toLogical(e.nativeEvent);
+              let x0 = editLine.x0, y0 = editLine.y0, x1 = editLine.x1, y1 = editLine.y1;
+              if (d.end === "start") {
+                if (e.shiftKey) [nx, ny] = snapLineEndpoint(x1, y1, nx, ny);
+                x0 = nx; y0 = ny;
+              } else {
+                if (e.shiftKey) [nx, ny] = snapLineEndpoint(x0, y0, nx, ny);
+                x1 = nx; y1 = ny;
+              }
+              setEditLine({ ...editLine, x0, y0, x1, y1 });
+              const cur = strokes.current.get(editLine.strokeId);
+              if (cur) {
+                const pts = shapePoints(editLine.kind, x0, y0, x1, y1, false);
+                strokes.current.set(cur.id, { ...cur, points: pts });
+                boxes.current.delete(cur.id);
+                redrawDry();
+              }
+            }}
+            onPointerUp={async (e) => {
+              const d = lineDrag.current;
+              if (!d) return;
+              e.stopPropagation();
+              lineDrag.current = null;
+              const updated = strokes.current.get(editLine.strokeId);
+              if (!updated) return;
+              historyFor(pageId).push({ remove: [d.origStroke], add: [updated] });
+              await apply([d.origStroke], [updated]);
+            }}
+          />
+        );
+      })}
+
       {selBox && (
-        <SelectionOverlay box={selBox} scale={scale} origin={{ x: ox, y: oy }} xf={previewXf} onPreview={preview} onCommit={commit}
+        <SelectionOverlay box={selBox} scale={scale} origin={{ x: ox, y: oy }} xf={previewXf}
+          hasShape={hasShape} shapeFilled={shapeFilled} shapeDashed={shapeDashed}
+          onPreview={preview} onCommit={commit}
           onDelete={deleteSel} onDuplicate={duplicateSel} onRecolor={recolorSel} onCopy={copySel} onCut={cutSel}
+          onToggleFill={() => void toggleShapeProp("fill")}
+          onToggleDashed={() => void toggleShapeProp("dashed")}
+          onSaveElement={selStrokes.length > 0 ? async () => {
+            const saved = await saveStrokesAsElement(`Diagram ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, selStrokes);
+            if (saved) toast("Saved to Elements & Stamps");
+          } : undefined}
+          onMakeCard={onMakeCardFromBox ? () => onMakeCardFromBox(selBox, selStrokes) : undefined}
           onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined} />
       )}
     </div>

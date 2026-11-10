@@ -1,4 +1,6 @@
-export type ShapeKind = "line" | "arrow" | "rect" | "roundrect" | "ellipse" | "triangle" | "diamond" | "star";
+import type { GeometricShapeKind } from "./model";
+
+export type ShapeKind = GeometricShapeKind;
 
 export const SHAPES: { kind: ShapeKind; label: string }[] = [
   { kind: "line", label: "Line" },
@@ -18,20 +20,23 @@ const pack = (pts: P[]): Float32Array => {
   return a;
 };
 
-/** Points of a predefined shape dragged from (x0,y0) to (x1,y1). `even` (Shift) keeps width = height. */
+/** Snap line/arrow endpoint to 15-degree steps when `even` (Shift) is held. */
+export function snapLineEndpoint(x0: number, y0: number, x1: number, y1: number, stepRad = Math.PI / 12): P {
+  const a = Math.round(Math.atan2(y1 - y0, x1 - x0) / stepRad) * stepRad;
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  return [x0 + Math.cos(a) * len, y0 + Math.sin(a) * len];
+}
+
+/** Points of a predefined shape dragged from (x0,y0) to (x1,y1). `even` (Shift) keeps width = height or snaps angles. */
 export function shapePoints(kind: ShapeKind, x0: number, y0: number, x1: number, y1: number, even: boolean): Float32Array {
   if (kind === "line" || kind === "arrow") {
-    if (even) {
-      // snap to 45 degree steps
-      const a = Math.round(Math.atan2(y1 - y0, x1 - x0) / (Math.PI / 4)) * (Math.PI / 4);
-      const len = Math.hypot(x1 - x0, y1 - y0);
-      x1 = x0 + Math.cos(a) * len; y1 = y0 + Math.sin(a) * len;
-    }
+    if (even) [x1, y1] = snapLineEndpoint(x0, y0, x1, y1, Math.PI / 12);
     if (kind === "line") return pack([[x0, y0], [x1, y1]]);
     const back = Math.atan2(y0 - y1, x0 - x1);
-    const len = Math.min(Math.hypot(x1 - x0, y1 - y0) * 0.25, 40);
+    const dist = Math.hypot(x1 - x0, y1 - y0);
+    const len = Math.max(10, Math.min(dist * 0.24, 38));
     const head = (d: number): P => [x1 + Math.cos(back + d) * len, y1 + Math.sin(back + d) * len];
-    return pack([[x0, y0], [x1, y1], head(0.45), [x1, y1], head(-0.45)]);
+    return pack([[x0, y0], [x1, y1], head(0.48), [x1, y1], head(-0.48)]);
   }
   let w = x1 - x0;
   let h = y1 - y0;
@@ -53,12 +58,17 @@ export function shapePoints(kind: ShapeKind, x0: number, y0: number, x1: number,
     }));
     case "roundrect": {
       const rad = Math.min(W, H) * 0.18;
-      const arc = (ax: number, ay: number, from: number): P[] => Array.from({ length: 6 }, (_, i): P => {
-        const a = from + (i / 5) * (Math.PI / 2);
+      const arc = (ax: number, ay: number, from: number): P[] => Array.from({ length: 8 }, (_, i): P => {
+        const a = from + (i / 7) * (Math.PI / 2);
         return [ax + Math.cos(a) * rad, ay + Math.sin(a) * rad];
       });
       const pts = [...arc(r - rad, t + rad, -Math.PI / 2), ...arc(r - rad, b - rad, 0), ...arc(l + rad, b - rad, Math.PI / 2), ...arc(l + rad, t + rad, Math.PI)];
       return pack([...pts, pts[0]]);
     }
   }
+}
+
+/** Whether a shape kind encloses an interior area (supports fill tint). */
+export function isClosedShape(kind: ShapeKind): boolean {
+  return kind !== "line" && kind !== "arrow";
 }

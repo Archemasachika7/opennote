@@ -1,5 +1,17 @@
 export type StrokeTool = "pen" | "highlighter";
 export type PenVariant = "ball" | "fountain" | "brush";
+export type GeometricShapeKind = "line" | "arrow" | "rect" | "roundrect" | "ellipse" | "triangle" | "diamond" | "star";
+
+export interface ShapeMeta {
+  kind: GeometricShapeKind;
+  fill?: boolean;
+  dashed?: boolean;
+}
+
+export interface StrokeAudioSync {
+  clipId: string;
+  offsetMs: number;
+}
 
 /** points: Float32Array, stride 4 — x, y, pressure, t (ms since stroke start). */
 export interface Stroke {
@@ -13,6 +25,10 @@ export interface Stroke {
   points: Float32Array;
   /** Layer this stroke is on (absent = the base layer). */
   layerId?: string;
+  /** Present when this stroke is a crisp geometric shape rather than freehand ink. */
+  shape?: ShapeMeta;
+  /** Optional lecture audio timestamp sync. */
+  audioSync?: StrokeAudioSync;
 }
 
 export const STRIDE = 4;

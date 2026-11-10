@@ -11,7 +11,7 @@ const TEMPLATES: Template[] = ["blank", "ruled", "grid", "dot"];
 
 export function PageList({
   pages, notebook, mounted, width, renderPage,
-  onDuplicate, onDelete, onBookmark, onTemplate, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll,
+  onDuplicate, onDelete, onBookmark, onTemplate, onOpenStemTemplates, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll,
 }: {
   pages: Page[]; notebook: Notebook; mounted: Set<number>; width: number;
   renderPage: (p: Page, index: number, mounted: boolean, width: number) => ReactNode;
@@ -19,6 +19,7 @@ export function PageList({
   onDelete: (p: Page) => void;
   onBookmark: (p: Page) => void;
   onTemplate: (p: Page, t: Template) => void;
+  onOpenStemTemplates?: (p: Page) => void;
   onMovePage?: (from: number, to: number) => void;
   onPaste?: (p: Page) => void;
   onExportPage?: (p: Page) => void;
@@ -41,6 +42,7 @@ export function PageList({
           ...(onMovePage && i > 0 ? [{ label: "Move page up", onSelect: () => onMovePage(i, i - 1) }] : []),
           ...(onMovePage && i < pages.length - 1 ? [{ label: "Move page down", onSelect: () => onMovePage(i, i + 1) }] : []),
           ...(p.kind === "ink" ? TEMPLATES.filter((t) => t !== p.template).map((t) => ({ label: `Template: ${t}`, onSelect: () => onTemplate(p, t) })) : []),
+          ...(p.kind === "ink" && onOpenStemTemplates ? [{ label: "STEM templates...", onSelect: () => onOpenStemTemplates(p) }] : []),
           ...(p.kind === "ink" && onRotate ? [{ label: "Rotate page", onSelect: () => onRotate(p) }] : []),
           ...(p.kind === "ink" && onLayers ? [{ label: "Layers...", onSelect: () => onLayers(p) }] : []),
           ...(p.kind === "ink" && onTapeAll ? [

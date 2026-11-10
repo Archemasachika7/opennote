@@ -29,10 +29,18 @@ async function toImage(c: HTMLCanvasElement): Promise<PageImage> {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), type: "jpeg", w: c.width, h: c.height };
 }
 
+import { drawPaperTemplate, getEffectiveTemplate, isBasicTemplate } from "../store/templates";
+
 function drawTemplate(ctx: CanvasRenderingContext2D, page: Page, paper: Notebook["paper"], h: number) {
   const p = PAPER[paper];
   ctx.fillStyle = p.bg; ctx.fillRect(0, 0, W, h);
-  if (page.kind !== "ink" || page.template === "blank") return;
+  if (page.kind !== "ink") return;
+  const eff = getEffectiveTemplate(page);
+  if (eff === "blank") return;
+  if (!isBasicTemplate(eff)) {
+    drawPaperTemplate(ctx, eff, W, h, paper);
+    return;
+  }
   ctx.strokeStyle = p.rule; ctx.fillStyle = p.rule; ctx.lineWidth = 1.5;
   if (page.template === "ruled") for (let y = 62; y < h; y += 62) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   if (page.template === "grid") {

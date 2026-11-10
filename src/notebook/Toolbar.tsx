@@ -3,15 +3,16 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, Eraser, Hand, Highlighter, Image as ImageIcon, Lasso, MoreHorizontal, MousePointer2,
-  PanelLeft, PenLine, Presentation, RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes,
-  Type, Undo2, ZoomIn, ZoomOut,
+  ArrowLeft, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
+  Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine, Presentation,
+  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { useRuler } from "../ink/ruler";
 import { toggleRuler } from "../ink/RulerOverlay";
 import { navigate } from "../App";
 import type { Notebook } from "../store/schema";
 import { COVERS, renameNotebook, updateNotebook } from "../store/notebooks";
+import { useAudioLiveState } from "../store/audio";
 import { Menu } from "../ui/Menu";
 import { useTool, type ToolName, type ToolState } from "./tool";
 import { SHAPES } from "../ink/shapes";
@@ -23,6 +24,10 @@ export const DEFAULT_COLORS = ["#E8E9EE", "#4FD1C5", "#3DDC97", "#FF8A5B", "#5BB
 export function Toolbar({
   notebook, zoom, setZoom, onResetZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind,
   sidebarOpen, onToggleSidebar, onOpenSettings,
+  splitOpen, onToggleSplit,
+  audioOpen, onToggleAudio,
+  onOpenElements, onOpenTemplates, onGenerateTapeCards,
+  enableZoomBox = false,
   onExportPdf, onExportBackup, onExportOptions,
 }: {
   notebook: Notebook;
@@ -36,12 +41,21 @@ export function Toolbar({
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onOpenSettings?: () => void;
+  splitOpen?: boolean;
+  onToggleSplit?: () => void;
+  audioOpen?: boolean;
+  onToggleAudio?: () => void;
+  onOpenElements?: () => void;
+  onOpenTemplates?: () => void;
+  onGenerateTapeCards?: () => void;
+  enableZoomBox?: boolean;
   onExportPdf?: () => void;
   onExportBackup?: () => void;
   onExportOptions?: () => void;
 }) {
   const [t, set] = useTool();
   const ruler = useRuler();
+  const audioLive = useAudioLiveState();
   const [menu, setMenu] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(notebook.title);
@@ -55,11 +69,11 @@ export function Toolbar({
   }, [palette, t.paletteIndex, t.color, set]);
 
   const tools: { name: ToolName; label: string; hint: string; icon: JSX.Element }[] = [
-    { name: "pen", label: "Pen", hint: "Pen (draw) [P]", icon: <PenLine {...ICON} /> },
-    { name: "highlighter", label: "Highlighter", hint: "Highlighter [H]", icon: <Highlighter {...ICON} /> },
+    { name: "pen", label: "Pen", hint: "Pen (draw; hold still 0.4s to snap shape, scribble to erase) [P]", icon: <PenLine {...ICON} /> },
+    { name: "highlighter", label: "Highlighter", hint: "Highlighter (hold still to snap straight/shape) [H]", icon: <Highlighter {...ICON} /> },
     { name: "eraser", label: "Eraser", hint: "Eraser [E]", icon: <Eraser {...ICON} /> },
-    { name: "lasso", label: "Lasso", hint: "Lasso (select and move, does not draw) [L]", icon: <Lasso {...ICON} /> },
-    { name: "shape", label: "Shapes", hint: "Shapes (pick one, then drag on the page) [S]", icon: <Shapes {...ICON} /> },
+    { name: "lasso", label: "Lasso", hint: "Lasso (select, move, save element or make flashcard) [L]", icon: <Lasso {...ICON} /> },
+    { name: "shape", label: "Shapes", hint: "Shapes (crisp vector lines, arrows & geometry) [S]", icon: <Shapes {...ICON} /> },
     { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal) [B]", icon: <RectangleHorizontal {...ICON} /> },
     { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading trail for presenting, never saved) [K]", icon: <Presentation {...ICON} /> },
     { name: "text", label: "Text box", hint: "Text box (click on the page) [T]", icon: <Type {...ICON} /> },
@@ -85,6 +99,8 @@ export function Toolbar({
       </div>
     </div>
   );
+
+  const isRecordingHere = Boolean(audioLive.recording && audioLive.recording.notebookId === notebook.id);
 
   return (
     <header className="nb-toolbar">
@@ -138,11 +154,31 @@ export function Toolbar({
         </select>
       )}
       {t.tool === "shape" && (
-        <select className="input" aria-label="Shape" title="Drag on the page to draw. Hold Shift for perfect squares, circles and 45 degree lines. Auto: draw by hand and hold still to snap."
-          value={t.shapeKind} onChange={(e) => set({ shapeKind: e.target.value as ToolState["shapeKind"] })}>
-          <option value="auto">Auto (hold to snap)</option>
-          {SHAPES.map((s) => <option key={s.kind} value={s.kind}>{s.label}</option>)}
-        </select>
+        <>
+          <select className="input" aria-label="Shape" title="Drag on the page to draw. Hold Shift for perfect squares, circles and 15-degree lines. Auto: draw by hand and hold still to snap."
+            value={t.shapeKind} onChange={(e) => set({ shapeKind: e.target.value as ToolState["shapeKind"] })}>
+            <option value="auto">Auto (hold to snap)</option>
+            {SHAPES.map((s) => <option key={s.kind} value={s.kind}>{s.label}</option>)}
+          </select>
+          <button
+            type="button"
+            className={`btn ghost icon ${t.shapeFill ? "active" : ""}`}
+            aria-label="Fill shape"
+            aria-pressed={t.shapeFill}
+            title="Fill shape interior / solid arrowhead"
+            onClick={() => set({ shapeFill: !t.shapeFill })}>
+            <PaintBucket {...ICON} />
+          </button>
+          <button
+            type="button"
+            className={`btn ghost icon ${t.shapeDashed ? "active" : ""}`}
+            aria-label="Dashed shape"
+            aria-pressed={t.shapeDashed}
+            title="Dashed shape outline"
+            onClick={() => set({ shapeDashed: !t.shapeDashed })}>
+            <Minus {...ICON} />
+          </button>
+        </>
       )}
       {t.tool === "eraser" && (
         <select className="input" aria-label="Eraser mode" value={t.eraseMode} onChange={(e) => set({ eraseMode: e.target.value as "stroke" | "partial" })}>
@@ -165,16 +201,52 @@ export function Toolbar({
           </button>
         ))}
       </div>
-      <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
-        title="Ruler [R] (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
-        onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
+      <div className="tool-group">
+        <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
+          title="Ruler [R] (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
+          onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
+        {onOpenElements && (
+          <button className="btn ghost icon" aria-label="Elements" title="Elements & reusable STEM stamps" onClick={onOpenElements}>
+            <Stamp {...ICON} />
+          </button>
+        )}
+        {enableZoomBox && currentKind === "ink" && (
+          <button
+            className={`btn ghost icon ${t.zoomBoxOpen ? "active" : ""}`}
+            aria-label="Zoom writing window"
+            aria-pressed={t.zoomBoxOpen}
+            title="Magnified writing window with auto-advance"
+            onClick={() => set({ zoomBoxOpen: !t.zoomBoxOpen })}>
+            <Maximize2 {...ICON} />
+          </button>
+        )}
+        {onToggleAudio && (
+          <button
+            className={`btn ghost icon ${audioOpen || isRecordingHere ? "active" : ""}`}
+            aria-label="Lecture audio"
+            aria-pressed={!!audioOpen}
+            title="Record or replay lecture audio synced to ink"
+            style={isRecordingHere ? { color: "var(--danger)" } : undefined}
+            onClick={onToggleAudio}>
+            <Mic {...ICON} />
+          </button>
+        )}
+        {onToggleSplit && (
+          <button
+            className={`btn ghost icon ${splitOpen ? "active" : ""}`}
+            aria-label="Split screen"
+            aria-pressed={!!splitOpen}
+            title="Split-screen dual-pane notebook studio"
+            onClick={onToggleSplit}>
+            <Columns2 {...ICON} />
+          </button>
+        )}
+      </div>
       <div className="tool-group">
         <button className="btn ghost icon" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={onUndo}><Undo2 {...ICON} /></button>
         <button className="btn ghost icon" aria-label="Redo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" onClick={onRedo}><Redo2 {...ICON} /></button>
       </div>
       {currentKind && currentKind !== "ink" && (
-        // Ink pages are always for writing. On Text/Live pages the mouse either uses the page
-        // (type, click buttons in the artifact) or writes on top of it. A pen always writes.
         <div className="mode-switch" role="radiogroup" aria-label="Mouse on this page"
           title="A pen always writes. This chooses what the mouse or finger does on text and live pages.">
           <button role="radio" aria-checked={t.mode === "interact"} className={t.mode === "interact" ? "on" : ""}
@@ -199,6 +271,16 @@ export function Toolbar({
         <button className="btn ghost icon" aria-label="Notebook options" onClick={() => setMenu(true)}><MoreHorizontal {...ICON} /></button>
         {menu && (
           <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} footer={coverFooter} items={[
+            ...(onOpenTemplates && currentKind === "ink" ? [{
+              label: "Paper & STEM templates...",
+              icon: <LayoutTemplate size={14} strokeWidth={1.5} />,
+              onSelect: onOpenTemplates,
+            }] : []),
+            ...(onGenerateTapeCards && currentKind === "ink" ? [{
+              label: "Generate flashcards from Tape",
+              icon: <GraduationCap size={14} strokeWidth={1.5} />,
+              onSelect: onGenerateTapeCards,
+            }] : []),
             ...(onExportPdf ? [{ label: "Export PDF", onSelect: onExportPdf }] : []),
             ...(onExportOptions ? [{ label: "Export...", onSelect: onExportOptions }] : []),
             ...(onExportBackup ? [{ label: "Export backup (.opennote)", onSelect: onExportBackup }] : []),

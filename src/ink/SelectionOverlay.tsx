@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import { motion } from "motion/react";
 import { motionTokens } from "../ui/motion";
-import { ClipboardCopy, Copy, Crop, Palette, RotateCw, Scissors, Trash2 } from "lucide-react";
+import { ClipboardCopy, Copy, Crop, GraduationCap, Minus, PaintBucket, Palette, RotateCw, Scissors, Stamp, Trash2 } from "lucide-react";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
 import { tryCapture } from "./input";
@@ -10,10 +10,32 @@ import { tryCapture } from "./input";
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
 /** Selection box with move (drag body), uniform scale (corner) and rotate (top handle). */
-export function SelectionOverlay({ box, scale, origin = { x: 0, y: 0 }, xf, onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut }: {
-  box: Box; scale: number; /** logical point at the surface's top-left (boards) */ origin?: { x: number; y: number }; xf: Xf;
-  onPreview: (m: Xf) => void; onCommit: (m: Xf) => void;
-  onDelete: () => void; onDuplicate: () => void; onRecolor: () => void; onCrop?: () => void; onCopy?: () => void; onCut?: () => void;
+export function SelectionOverlay({
+  box, scale, origin = { x: 0, y: 0 }, xf,
+  hasShape, shapeFilled, shapeDashed,
+  onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut,
+  onToggleFill, onToggleDashed, onSaveElement, onMakeCard,
+}: {
+  box: Box;
+  scale: number;
+  /** logical point at the surface's top-left (boards) */
+  origin?: { x: number; y: number };
+  xf: Xf;
+  hasShape?: boolean;
+  shapeFilled?: boolean;
+  shapeDashed?: boolean;
+  onPreview: (m: Xf) => void;
+  onCommit: (m: Xf) => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onRecolor: () => void;
+  onCrop?: () => void;
+  onCopy?: () => void;
+  onCut?: () => void;
+  onToggleFill?: () => void;
+  onToggleDashed?: () => void;
+  onSaveElement?: () => void;
+  onMakeCard?: () => void;
 }) {
   const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number; sx: number; sy: number } | null>(null);
   const el = useRef<HTMLDivElement>(null);
@@ -30,17 +52,13 @@ export function SelectionOverlay({ box, scale, origin = { x: 0, y: 0 }, xf, onPr
     if (d.mode === "move") return { ...IDENTITY, dx, dy, cx, cy };
     if (d.mode === "scale") {
       const k = Math.max(0.1, (box.w + dx) / box.w);
-      // keep the top-left corner fixed: centre moves by half the growth
       return { ...IDENTITY, k, cx: box.x, cy: box.y };
     }
-    // angles measured on screen around the box centre (sx, sy)
     const r0 = Math.atan2(d.y - d.sy, d.x - d.sx);
     const r1 = Math.atan2(e.clientY - d.sy, e.clientX - d.sx);
     return { ...IDENTITY, r: r1 - r0, cx, cy };
   };
 
-  // Move/up are tracked on window so a drag always commits, even if the pointer is released
-  // outside the box or pointer capture was unavailable.
   const start = (mode: "move" | "scale" | "rotate") => (e: React.PointerEvent) => {
     e.stopPropagation();
     tryCapture(e.currentTarget as Element, e.pointerId);
@@ -71,6 +89,26 @@ export function SelectionOverlay({ box, scale, origin = { x: 0, y: 0 }, xf, onPr
       <span className="sel-scale" data-testid="sel-scale" onPointerDown={start("scale")} />
       <div className="sel-bar" onPointerDown={(e) => e.stopPropagation()}>
         <button className="btn ghost icon" aria-label="Recolour selection" onClick={onRecolor}><Palette {...I} /></button>
+        {hasShape && onToggleFill && (
+          <button className={`btn ghost icon ${shapeFilled ? "on" : ""}`} aria-label="Toggle shape fill" title="Toggle shape fill" onClick={onToggleFill}>
+            <PaintBucket {...I} />
+          </button>
+        )}
+        {hasShape && onToggleDashed && (
+          <button className={`btn ghost icon ${shapeDashed ? "on" : ""}`} aria-label="Toggle dashed outline" title="Toggle dashed outline" onClick={onToggleDashed}>
+            <Minus {...I} />
+          </button>
+        )}
+        {onSaveElement && (
+          <button className="btn ghost icon" aria-label="Save as element" title="Save to Elements & Stamps" onClick={onSaveElement}>
+            <Stamp {...I} />
+          </button>
+        )}
+        {onMakeCard && (
+          <button className="btn ghost icon" aria-label="Create flashcard from selection" title="Create occlusion flashcard" onClick={onMakeCard}>
+            <GraduationCap {...I} />
+          </button>
+        )}
         {onCopy && <button className="btn ghost icon" aria-label="Copy selection" title="Copy (Ctrl+C), then paste on any page with Ctrl+V" onClick={onCopy}><ClipboardCopy {...I} /></button>}
         {onCut && <button className="btn ghost icon" aria-label="Cut selection" title="Cut (Ctrl+X) to move it to another page" onClick={onCut}><Scissors {...I} /></button>}
         <button className="btn ghost icon" aria-label="Duplicate selection" title="Duplicate" onClick={onDuplicate}><Copy {...I} /></button>

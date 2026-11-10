@@ -1,5 +1,6 @@
 import { db, newId, now, unreferencedBlobs, type Card } from "./schema";
 import { newSrs, review, type Grade } from "../study/srs";
+import { reviewFsrs, type SrsWithFsrs } from "../study/fsrs";
 
 async function touch(notebookId: string): Promise<void> {
   await db.notebooks.update(notebookId, { updatedAt: now() });
@@ -71,10 +72,11 @@ export async function moveCard(notebookId: string, from: number, to: number): Pr
   });
 }
 
-export async function reviewCard(id: string, grade: Grade, at: number = now()): Promise<void> {
+export async function reviewCard(id: string, grade: Grade, at: number = now(), algo: "sm2" | "fsrs" = "sm2"): Promise<void> {
   const c = await db.cards.get(id);
   if (!c) return;
-  await db.cards.update(id, { srs: review(c.srs, grade, at) });
+  const nextSrs = algo === "fsrs" ? reviewFsrs(c.srs as SrsWithFsrs, grade, at) : review(c.srs, grade, at);
+  await db.cards.update(id, { srs: nextSrs });
 }
 
 /** Attach a picture to one side of a card (replacing any earlier one). */

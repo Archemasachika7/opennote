@@ -1,0 +1,67 @@
+1
+00:00:01,950 --> 00:00:08,860
+Two days before the exam. One student, one tablet, and a notebook app he was paying for.
+
+2
+00:00:11,450 --> 00:00:14,560
+Every new notebook was behind a paywall.
+
+3
+00:00:21,950 --> 00:00:26,120
+Bringing in his lecture PDFs? Premium too.
+
+4
+00:00:30,950 --> 00:00:35,900
+Then, one night, he asked Claude to visualise a damped oscillator.
+
+5
+00:00:36,950 --> 00:00:39,580
+And for the first time, he could see it.
+
+6
+00:00:45,450 --> 00:00:49,380
+But his notes couldn't hold it. A screenshot froze it.
+
+7
+00:00:49,950 --> 00:00:52,630
+The part that made it click was gone.
+
+8
+00:00:55,950 --> 00:00:58,490
+So he asked a different question.
+
+9
+00:01:07,450 --> 00:01:10,470
+Night after night, they built it together.
+
+10
+00:01:10,950 --> 00:01:15,430
+Ink that keeps up with a pen. Pages that never go black.
+
+11
+00:01:23,950 --> 00:01:28,310
+Then the first live page ran, right between his notes.
+
+12
+00:01:31,950 --> 00:01:34,690
+And he could still write on top of it.
+
+13
+00:01:44,450 --> 00:01:48,550
+Record a lecture, and tap any stroke to hear that moment.
+
+14
+00:01:50,450 --> 00:01:57,440
+Hide a word under tape, and it becomes a flashcard. Sync only if you want, encrypted first.
+
+15
+00:02:03,450 --> 00:02:09,330
+That student is Archishman. He asked Claude, and together they built OpenNote.
+
+16
+00:02:11,450 --> 00:02:16,530
+Free. No ads. No account. On the web, Android and Windows.
+
+17
+00:02:18,950 --> 00:02:23,980
+And the code is on GitHub, for the next student who hits the same wall.

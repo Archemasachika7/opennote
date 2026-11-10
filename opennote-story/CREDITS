@@ -1,0 +1,9 @@
+"The One Coloured Thing" — the OpenNote founder story (Urban Sketch · Pen & Wash style). Every drawing is made in code; no screenshots or footage.
+The paid notebook app in the story is generic and unnamed. Claude is credited in words only; no Anthropic logo or interface is drawn.
+
+Voice: Kokoro-82M (hexgrad, Apache 2.0) via kokoro-onnx, voice am_michael; the name "Archishman" voiced from explicit phonemes. Checked with faster-whisper small.en.
+Fonts (SIL Open Font License 1.1): Caveat (Impallari Type), Reenie Beanie (James Grieshaber). Licence texts in fonts/.
+Drums: "MuldjordKit" by Lars Muldjord (drumgizmo.org), FreePats version, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Samples (CC0): FreePats project (nylon guitar), Karoryfer Samples / sfzinstruments (jazz bass), VS Chamber Orchestra: Community Edition (clarinet) and Versilian Community Sample Library (vibraphone), Versilian Studios.
+Pen, paper, page-turn, brush and ambience sounds: synthesised in sound.py.
+Drawing engine: engine.js and poses.js from the Lemo-Opuscar library, MIT licence (notice in engine.LICENSE.txt).

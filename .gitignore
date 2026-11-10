@@ -12,3 +12,12 @@ src-tauri/gen/
 
 # local env (Supabase URL + publishable key)
 .env.local
+
+# launch films: renders and review frames are rebuilt by each film's build.sh
+opennote-launch/out/
+opennote-launch/stills/
+opennote-launch/*.mp4
+opennote-story/out/
+opennote-story/stills/
+opennote-story/*.mp4
+.playwright-mcp/

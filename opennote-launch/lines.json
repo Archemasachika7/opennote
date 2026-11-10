@@ -1,0 +1,16 @@
+[
+ {"id": "v01", "voice": "af_heart", "speed": 0.95, "text": "This is OpenNote. A free notebook where notes can run.", "asr": "This is OpenNote. A free notebook where notes can run."},
+ {"id": "v02", "voice": "af_heart", "speed": 0.95, "text": "Write with a stylus, a pen tablet, or a mouse."},
+ {"id": "v03", "voice": "af_heart", "speed": 0.95, "text": "Hold still, and a rough circle snaps into a clean shape."},
+ {"id": "v04", "voice": "af_heart", "speed": 0.95, "text": "Lasso your work, and move it to any page."},
+ {"id": "v05", "voice": "af_heart", "speed": 0.95, "text": "Now the good part. Copy an artifact from your AI chat, paste it, and press Save."},
+ {"id": "v06", "voice": "af_heart", "speed": 0.95, "text": "It runs, right between your pages. And you can still write on top of it."},
+ {"id": "v07", "voice": "af_heart", "speed": 0.95, "text": "It lives in a sandbox, so it never touches your notes."},
+ {"id": "v08", "voice": "af_heart", "speed": 0.95, "text": "Record the lecture while you write. Later, tap any stroke to hear that exact moment."},
+ {"id": "v09", "voice": "af_heart", "speed": 0.95, "text": "Transcripts are made on your device, even offline."},
+ {"id": "v10", "voice": "af_heart", "speed": 0.95, "text": "Hide key terms under tape, then turn them into flashcards that know when you'll forget."},
+ {"id": "v11", "voice": "af_heart", "speed": 0.95, "text": "Need more room? Open an endless whiteboard."},
+ {"id": "v12", "voice": "af_heart", "speed": 0.95, "text": "Sign in if you like. Everything is encrypted on your device before it is uploaded."},
+ {"id": "v13", "voice": "af_heart", "speed": 0.95, "text": "Web, Android and Windows. No charges. No ads."},
+ {"id": "v14", "voice": "af_heart", "speed": 0.95, "text": "OpenNote. Notes that run.", "asr": "Open note. Notes that run."}
+]

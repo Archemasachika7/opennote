@@ -1,0 +1,5 @@
+I was paying for a notebook app that charged for every new notebook and every PDF import. And the visualisers Claude made for me, the ones that finally made physics click, had nowhere to live except as dead screenshots.
+
+So I asked Claude a different question: can we build a notebook that's free, works offline, and lets those visualisers run inside my pages?
+
+Night after night we built it together. It's called OpenNote. Free, no ads, no account, on web, Android and Windows. The code is on GitHub.

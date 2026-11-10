@@ -16,6 +16,7 @@ import {
 } from "../store/audio";
 import { onPageChanged } from "../ink/pageEvents";
 import { transcribeWithSarvam, useSarvamConfig } from "../ai/sarvamStt";
+import { transcribeWithWhisper } from "../ai/whisper";
 import { insertTranscriptIntoNotebookPage } from "./SpeechNoteModal";
 import { toast } from "../ui/Toast";
 
@@ -303,15 +304,19 @@ export function AudioBar({
       toast("Audio clip data not found.");
       return;
     }
-    setTranscribing("Transcribing with Sarvam AI...");
+    const useSarvam = prefs.lectureEngine === "sarvam";
+    setTranscribing(useSarvam ? "Transcribing with Sarvam AI..." : "Preparing audio...");
     try {
-      const res = await transcribeWithSarvam(blob, {
-        languageCode: prefs.languageCode,
-        mode: prefs.mode,
-        onProgress: (done, total) => {
-          if (total > 1) setTranscribing(`Sarvam AI ${Math.min(done + 1, total)}/${total}...`);
-        },
-      });
+      const res = useSarvam
+        ? await transcribeWithSarvam(blob, {
+          languageCode: prefs.languageCode,
+          mode: prefs.mode,
+          onProgress: (done, total) => {
+            if (total > 1) setTranscribing(`Sarvam AI ${Math.min(done + 1, total)}/${total}...`);
+          },
+        })
+        // default: free, private, offline after the first model download
+        : await transcribeWithWhisper(blob, { languageCode: prefs.languageCode, onStatus: setTranscribing });
       await updateAudioClipMeta(notebookId, selectedId, {
         transcript: res.transcript || "(No speech detected)",
         languageCode: res.languageCode,
@@ -319,7 +324,7 @@ export function AudioBar({
       });
       await refreshClips(selectedId);
       setTranscriptOpen(true);
-      toast("Lecture transcribed with Sarvam AI (saaras:v3)");
+      toast(useSarvam ? "Lecture transcribed with Sarvam AI (saaras:v3)" : "Lecture transcribed on this device (Whisper)");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast(msg, onOpenSpeechSettings ? { label: "Set Key", run: onOpenSpeechSettings } : undefined);

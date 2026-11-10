@@ -19,6 +19,8 @@ export interface SarvamPrefs {
   languageCode: string;
   mode: SarvamMode;
   engine: SttEngine;
+  /** Recorded-lecture transcription: free on-device Whisper (default) or Sarvam with the user's key. */
+  lectureEngine?: "whisper" | "sarvam";
 }
 
 export const SARVAM_LANGUAGES: { code: string; label: string }[] = [
@@ -100,6 +102,7 @@ export function getSarvamPrefs(): SarvamPrefs {
       languageCode: parsed.languageCode || "unknown",
       mode: parsed.mode || "transcribe",
       engine: parsed.engine || fallbackEngine,
+      lectureEngine: parsed.lectureEngine === "sarvam" ? "sarvam" : "whisper",
     };
   } catch {
     return { languageCode: "unknown", mode: "transcribe", engine: fallbackEngine };

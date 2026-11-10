@@ -21,6 +21,7 @@ import {
   encodePcm16Wav,
   getSarvamApiKey,
   setSarvamApiKey,
+  setSarvamPrefs,
   testSarvamConnection,
   transcribeWithSarvam,
 } from "../../src/ai/sarvamStt";
@@ -431,6 +432,7 @@ describe("3. Sarvam AI Speech-to-Text (saaras:v3) & Speech-to-Text Notes", () =>
       return row ? { ...row, data: wav } : row;
     }) as never);
     setSarvamApiKey("sk_sarvam_clip_key");
+    setSarvamPrefs({ lectureEngine: "sarvam" }); // opt in: Whisper is the default
 
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ transcript: "Wave-particle duality explained clearly.", language_code: "en-IN" }), { status: 200 }),

@@ -49,3 +49,15 @@ describe("Get OpenNote section", () => {
     expect(screen.getByText(/6\.9 MB/)).toBeTruthy();
   });
 });
+
+describe("when the GitHub API is rate-limited or offline", () => {
+  it("still offers the downloads through the always-working latest/download links", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ message: "API rate limit exceeded" }), { status: 403 })) as unknown as typeof fetch;
+    render(<GetOpenNote />);
+    const apk = await screen.findByRole("link", { name: /download for android/i });
+    expect(apk.getAttribute("href")).toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-android.apk");
+    expect(screen.getByRole("link", { name: /download for windows/i }).getAttribute("href"))
+      .toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-windows-setup.exe");
+    expect(screen.queryByText(/first release coming soon/i)).toBeNull();
+  });
+});

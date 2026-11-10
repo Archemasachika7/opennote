@@ -27,6 +27,14 @@ export function parseRelease(json: unknown): ReleaseInfo | null {
   return { tag: r.tag_name, apk: pick("OpenNote-android.apk"), exe: pick("OpenNote-windows-setup.exe") };
 }
 
+const LATEST = `https://github.com/${REPO}/releases/latest/download`;
+/** Version and size unknown, but these redirect to the newest release's files without the API. */
+const FALLBACK: ReleaseInfo = {
+  tag: "latest",
+  apk: { url: `${LATEST}/OpenNote-android.apk`, mb: 0 },
+  exe: { url: `${LATEST}/OpenNote-windows-setup.exe`, mb: 0 },
+};
+
 /** The latest GitHub release (CI attaches the APK and EXE to every v* tag). null = none yet. */
 function useLatestRelease(): { loading: boolean; release: ReleaseInfo | null } {
   const [state, setState] = useState<{ loading: boolean; release: ReleaseInfo | null }>({ loading: true, release: null });
@@ -37,8 +45,10 @@ function useLatestRelease(): { loading: boolean; release: ReleaseInfo | null } {
       if (hit && Date.now() - hit.at < 10 * 60_000) { setState({ loading: false, release: hit.release }); return; }
     } catch { /* no cache */ }
     fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
-      .then(async (res) => (res.ok ? parseRelease(await res.json()) : null))
-      .catch(() => null)
+      // only a 404 means "no release yet"; a rate limit (60/hour per IP, easy on campus Wi-Fi) or being
+      // offline must not hide real downloads, so fall back to the redirect links that need no API
+      .then(async (res) => (res.ok ? parseRelease(await res.json()) : res.status === 404 ? null : FALLBACK))
+      .catch(() => FALLBACK)
       .then((release) => {
         if (!alive) return;
         setState({ loading: false, release });
@@ -78,7 +88,7 @@ export function GetOpenNote() {
             <a className="btn get-btn" href={file.url} aria-label={`Download for ${kind === "windows" ? "Windows" : "Android"}`}>
               Download {kind === "windows" ? ".exe" : ".apk"}
             </a>
-            <span className="dim small mono">{release!.tag} · {file.mb} MB</span>
+            <span className="dim small mono">{file.mb > 0 ? `${release!.tag} · ${file.mb} MB` : "Latest release"}</span>
             {kind === "android" && platform !== "android" && <QR url={file.url} />}
           </>
         ) : (

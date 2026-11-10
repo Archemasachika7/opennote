@@ -68,6 +68,12 @@ jobs:
     needs: [android, windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      # The apps read their version from package.json; a tag that disagrees would publish mislabelled builds.
+      - name: Tag matches package.json version
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "${GITHUB_REF_NAME}" = "v$v" ] || { echo "::error::tag ${GITHUB_REF_NAME} but package.json says $v; bump package.json first"; exit 1; }
       - uses: actions/download-artifact@v4
         with: { merge-multiple: true }
       - uses: softprops/action-gh-release@v2

@@ -2,6 +2,7 @@
 import { createTelegramStore, findChatId, verifyBotToken } from "../../src/sync/stores/telegram";
 import { putTiered, QuotaError, StorageFullError, SUPABASE_QUOTA_BYTES } from "../../src/sync/stores/router";
 import type { BlobStore, ChunkRef } from "../../src/sync/stores/types";
+import { createPinataStore } from "../../src/sync/stores/pinata";
 
 const TOKEN = "123456:ABC-test";
 const ok = (result: unknown) => new Response(JSON.stringify({ ok: true, result }), { status: 200 });
@@ -65,12 +66,13 @@ describe("Telegram store (the user's own bot)", () => {
   });
 });
 
-function memStore(provider: BlobStore["provider"], opts: { quotaFail?: boolean } = {}): BlobStore & { puts: number } {
+function memStore(provider: BlobStore["provider"], opts: { quotaFail?: boolean; fail?: boolean } = {}): BlobStore & { puts: number } {
   const s = {
     provider, puts: 0,
     async put(id: string, chunks: Uint8Array[]): Promise<ChunkRef[]> {
       s.puts++;
       if (opts.quotaFail) throw new QuotaError();
+      if (opts.fail) throw new Error("network down");
       return chunks.map((c, i) => ({ ref: `${provider}:${id}.${i}`, size: c.byteLength }));
     },
     async get() { return []; },
@@ -79,27 +81,58 @@ function memStore(provider: BlobStore["provider"], opts: { quotaFail?: boolean }
   return s;
 }
 
-describe("tiered storage: Supabase first, Telegram when it would cross the quota", () => {
+describe("tiered storage: Supabase under quota, then Telegram, then Pinata (IPFS)", () => {
   const chunks = [new Uint8Array(10)];
   it("uses Supabase while under the per-user quota", async () => {
     const sb = memStore("supabase"), tg = memStore("telegram");
-    const r = await putTiered("o", chunks, { primary: sb, fallback: tg, usedBytes: 0 });
+    const r = await putTiered("o", chunks, { stores: [sb, tg], usedBytes: 0 });
     expect(r.provider).toBe("supabase");
     expect(tg.puts).toBe(0);
   });
-  it("goes straight to Telegram when this upload would cross the quota", async () => {
+  it("skips Supabase when this upload would cross the quota", async () => {
     const sb = memStore("supabase"), tg = memStore("telegram");
-    const r = await putTiered("o", chunks, { primary: sb, fallback: tg, usedBytes: SUPABASE_QUOTA_BYTES - 5 });
+    const r = await putTiered("o", chunks, { stores: [sb, tg], usedBytes: SUPABASE_QUOTA_BYTES - 5 });
     expect(r.provider).toBe("telegram");
     expect(sb.puts).toBe(0);
   });
-  it("falls back to Telegram when the server rejects for quota", async () => {
-    const sb = memStore("supabase", { quotaFail: true }), tg = memStore("telegram");
-    const r = await putTiered("o", chunks, { primary: sb, fallback: tg, usedBytes: 0 });
-    expect(r.provider).toBe("telegram");
+  it("falls back when the server rejects for quota, and on to IPFS when Telegram fails", async () => {
+    const sb = memStore("supabase", { quotaFail: true }), tg = memStore("telegram", { fail: true }), ip = memStore("pinata");
+    const r = await putTiered("o", chunks, { stores: [sb, tg, ip], usedBytes: 0 });
+    expect(r.provider).toBe("pinata");
+    expect(tg.puts).toBe(1);
   });
-  it("says storage is full (instead of failing silently) when Telegram isn't connected", async () => {
+  it("says storage is full (instead of failing silently) when nothing else is connected", async () => {
     const sb = memStore("supabase", { quotaFail: true });
-    await expect(putTiered("o", chunks, { primary: sb, fallback: null, usedBytes: 0 })).rejects.toBeInstanceOf(StorageFullError);
+    await expect(putTiered("o", chunks, { stores: [sb], usedBytes: 0 })).rejects.toBeInstanceOf(StorageFullError);
+  });
+});
+
+describe("Pinata store (IPFS, the user's own key)", () => {
+  it("pins each chunk and reads it back through the gateway by CID", async () => {
+    const pinned = new Map<string, Uint8Array>();
+    const calls: string[] = [];
+    const f = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === "https://uploads.pinata.cloud/v3/files") {
+        expect((init!.headers as Record<string, string>).Authorization).toBe("Bearer jwt-1");
+        const fd = init!.body as FormData;
+        expect(fd.get("network")).toBe("public");
+        const cid = `bafy${pinned.size}`;
+        pinned.set(cid, new Uint8Array(await (fd.get("file") as Blob).arrayBuffer()));
+        return new Response(JSON.stringify({ data: { id: `id${pinned.size}`, cid } }));
+      }
+      const m = /\/ipfs\/(.+)$/.exec(url);
+      if (m) return new Response(pinned.get(m[1]) as BodyInit);
+      return new Response(JSON.stringify({ data: null }));
+    });
+    const store = createPinataStore({ jwt: "jwt-1", fetch: f as typeof fetch });
+    const refs = await store.put("obj", [new Uint8Array([9, 8]), new Uint8Array([7])]);
+    expect(refs).toEqual([{ ref: "bafy0|id1", size: 2 }, { ref: "bafy1|id2", size: 1 }]);
+    expect((await store.get(refs)).map((b) => Array.from(b))).toEqual([[9, 8], [7]]);
+    await store.remove(refs);
+    expect(calls.filter((c) => c.startsWith("DELETE"))).toEqual([
+      "DELETE https://api.pinata.cloud/v3/files/public/id1", "DELETE https://api.pinata.cloud/v3/files/public/id2",
+    ]);
   });
 });

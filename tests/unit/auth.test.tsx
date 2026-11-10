@@ -29,6 +29,14 @@ beforeEach(() => {
 });
 
 describe("auth state flow", () => {
+  it("offers Google on the web but not in the Windows (Tauri) app", async () => {
+    const a = await freshAuth();
+    expect(a.googleAvailable({})).toBe(true);
+    expect(a.googleAvailable({ __TAURI_INTERNALS__: {} })).toBe(false);
+    enabled = false;
+    expect((await freshAuth()).googleAvailable({})).toBe(false);
+  });
+
   it("is 'disabled' when Supabase is not configured", async () => {
     enabled = false;
     const a = await freshAuth();

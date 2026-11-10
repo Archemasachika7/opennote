@@ -83,9 +83,11 @@ export function restartSignIn(): void {
   if (state.status === "code-sent") set({ status: "signed-out", user: null });
 }
 
-/** Google is offered on the web and Android only (Windows uses the email code). */
-export const googleAvailable = (): boolean =>
-  !!supabase && (!Capacitor.isNativePlatform() || Capacitor.getPlatform() === "android");
+/** Google is offered on the web and Android only (Windows uses the email code).
+ *  The Windows app is Tauri, which Capacitor reports as plain "web", so it is detected on its own:
+ *  a Google redirect there would land on Tauri's local origin and never return to the app. */
+export const googleAvailable = (g: { __TAURI_INTERNALS__?: unknown } = globalThis as { __TAURI_INTERNALS__?: unknown }): boolean =>
+  !!supabase && !g.__TAURI_INTERNALS__ && (!Capacitor.isNativePlatform() || Capacitor.getPlatform() === "android");
 
 export async function signInWithGoogle(): Promise<void> {
   const c = client();

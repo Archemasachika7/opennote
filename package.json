@@ -1,7 +1,7 @@
 {
   "name": "opennote",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "copy-vendor": "node scripts/copy-vendor.mjs",

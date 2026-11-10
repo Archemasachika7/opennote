@@ -87,6 +87,21 @@ export async function checkPassphrase(master: CryptoKey, check: Uint8Array): Pro
   }
 }
 
+const JSON_AAD = new TextEncoder().encode("opennote:json-v1");
+
+/** Encrypt a small JSON value with the master key: iv ‖ AES-GCM(json). Used for settings shared across devices. */
+export async function sealJson(value: unknown, master: CryptoKey): Promise<Uint8Array> {
+  const iv = rand(IV);
+  const plain = new TextEncoder().encode(JSON.stringify(value));
+  return concat(iv, new Uint8Array(await subtle().encrypt({ name: "AES-GCM", iv: buf(iv), additionalData: buf(JSON_AAD) }, master, buf(plain))));
+}
+
+export async function openJson<T = unknown>(sealed: Uint8Array, master: CryptoKey): Promise<T> {
+  const plain = await subtle().decrypt(
+    { name: "AES-GCM", iv: buf(sealed.subarray(0, IV)), additionalData: buf(JSON_AAD) }, master, buf(sealed.subarray(IV)));
+  return JSON.parse(new TextDecoder().decode(plain)) as T;
+}
+
 export async function sha256Hex(data: Uint8Array): Promise<string> {
   const h = new Uint8Array(await subtle().digest("SHA-256", buf(data)));
   return Array.from(h, (b) => b.toString(16).padStart(2, "0")).join("");

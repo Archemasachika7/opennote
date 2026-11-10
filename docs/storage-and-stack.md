@@ -23,7 +23,7 @@ Status: plan, not built. Written 2026-11-10. Free services only. The C + F desig
 | Transcription | Web Speech API first; Sarvam `saaras:v3` as fallback (₹30/hour, user's key) | C |
 | Summaries | Gemini Flash (user's key) | C / E |
 | Handwriting OCR | Gemini | E |
-| Indian-language / scanned OCR | Sarvam Vision | E |
+| Indian-language / scanned OCR, document reading | Sarvam Vision, as the **backup to Gemini** | E |
 | Auth, DB, files | Supabase free tier (`@supabase/supabase-js` v2) | F1 |
 | Live collaboration | Supabase Realtime + Yjs (text pages) | F4 |
 | Encrypted backups | WebCrypto AES-GCM + IPFS (Storacha or Filebase free tier) | F5 |

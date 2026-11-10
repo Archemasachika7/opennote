@@ -1,0 +1,5 @@
+I built OpenNote: a free notebook where AI artifacts run between your handwritten pages. Copy an artifact from your AI chat, paste it, press Save, and it runs. You can still write on top of it.
+
+Also inside: lecture recording where tapping a stroke jumps the audio to that moment, on-device transcripts, tape-to-flashcards with spaced repetition, endless whiteboards, and optional end-to-end encrypted sync.
+
+Web, Android and Windows. No charges. No ads. No account needed.

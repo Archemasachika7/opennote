@@ -1,0 +1,10 @@
+"Notes that run." — OpenNote launch film (Living Screencast style). The OpenNote interface is redrawn in HTML/CSS/SVG (no screenshots).
+Blot, the pixel ink-drop mascot, is an original character made for this film.
+
+Voice: Kokoro-82M (hexgrad, Apache 2.0) via kokoro-onnx, voice af_heart. Checked with faster-whisper small.en.
+Fonts (SIL Open Font License 1.1): Inter (Rasmus Andersson), Space Grotesk (Florian Karsten), Caveat (Impallari Type), JetBrains Mono (JetBrains). Licence texts in fonts/.
+Icons: Lucide (lucide.dev), ISC licence, as used by the OpenNote app.
+Drums: "MuldjordKit" by Lars Muldjord (drumgizmo.org), FreePats version, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Samples (CC0): Karoryfer Samples / sfzinstruments (jazz bass), Versilian Community Sample Library (Versilian Studios) — vibraphone, bowed vibraphone, glockenspiel, claps, shaker.
+Blot's chiptune voice, UI foley and all sound effects: synthesised in sound.py.
+Built with the Lemo-Opuscar film toolkit (core/ render, TTS, sampler and mux tools).

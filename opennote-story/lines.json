@@ -1,0 +1,111 @@
+[
+ {
+  "id": "v01",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Two days before the exam. One student, one tablet, and a notebook app he was paying for."
+ },
+ {
+  "id": "v02",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Every new notebook was behind a paywall."
+ },
+ {
+  "id": "v03",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Bringing in his lecture P D Fs? Premium too.",
+  "asr": "bringing in his lecture PDFs premium 2"
+ },
+ {
+  "id": "v04",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Then, one night, he asked Claude to visualise a damped oscillator.",
+  "asr": "Then, one night, he asked Claude to visualize a damped oscillator."
+ },
+ {
+  "id": "v05",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "And for the first time, he could see it."
+ },
+ {
+  "id": "v06",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "But his notes couldn't hold it. A screenshot froze it."
+ },
+ {
+  "id": "v07",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "The part that made it click was gone."
+ },
+ {
+  "id": "v08",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "So he asked a different question."
+ },
+ {
+  "id": "v09",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Night after night, they built it together."
+ },
+ {
+  "id": "v10",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Ink that keeps up with a pen. Pages that never go black."
+ },
+ {
+  "id": "v11",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Then the first live page ran, right between his notes."
+ },
+ {
+  "id": "v12",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "And he could still write on top of it."
+ },
+ {
+  "id": "v13",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Record a lecture, and tap any stroke to hear that moment."
+ },
+ {
+  "id": "v14",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Hide a word under tape, and it becomes a flashcard. Sync only if you want, encrypted first."
+ },
+ {
+  "id": "v15",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "That student is Archishman. He asked Claude, and together they built OpenNote.",
+  "asr": "That student is Archeshman. He asked Claude and together they built open note.",
+  "phonemes": {
+   "word": "Archishman",
+   "ipa": "ˈɑːɹtʃɪʃmən"
+  }
+ },
+ {
+  "id": "v16",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "Free. No ads. No account. On the web, Android and Windows."
+ },
+ {
+  "id": "v17",
+  "voice": "am_michael",
+  "speed": 0.92,
+  "text": "And the code is on GitHub, for the next student who hits the same wall."
+ }
+]

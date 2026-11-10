@@ -20,3 +20,17 @@ it("nothing glows (no blurred coloured halos)", () => {
 it("the sync error state is not a red light", () => {
   expect(readFileSync("src/ui/account.css", "utf8")).not.toMatch(/#e5484d|#ff2a2a|var\(--danger\)/);
 });
+
+it("headline colours come from theme tokens, so light mode can't make them vanish", () => {
+  const css = readFileSync("src/landing/landing.css", "utf8");
+  expect(css).not.toMatch(/color:\s*#f4f1ea/i);
+  const tokens = readFileSync("src/ui/tokens.css", "utf8");
+  expect(tokens.match(/--display:/g)?.length).toBe(2); // dark and light
+});
+
+it("the landing page has no green or teal (mint/cyan) anywhere", () => {
+  const dir = "src/landing";
+  for (const f of readdirSync(dir).map((x) => join(dir, x))) {
+    expect(readFileSync(f, "utf8"), f).not.toMatch(/3ddc97|4fd1c5|0d7a4e|0e7490|var\(--live\)|var\(--study\)/i);
+  }
+});

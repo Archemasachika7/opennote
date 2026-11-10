@@ -142,8 +142,8 @@ export function LandingPage({
             <svg className="lp-logo" viewBox="0 0 32 32" fill="none" aria-hidden>
               <rect x="3" y="2" width="26" height="28" rx="5" fill="var(--surface)" stroke="var(--line)" strokeWidth="1.5" />
               <path d="M3 7C3 4.23858 5.23858 2 8 2H9.5V30H8C5.23858 30 3 27.7614 3 25V7Z" fill="var(--accent)" />
-              <path d="M13 19.5C15.2 15 17.5 22.5 20.4 16.8C22 13.8 23.5 18 25.2 15.5" stroke="var(--live)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="24.5" cy="8.5" r="2" fill="var(--live)" />
+              <path d="M13 19.5C15.2 15 17.5 22.5 20.4 16.8C22 13.8 23.5 18 25.2 15.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="24.5" cy="8.5" r="2" fill="var(--accent)" />
             </svg>
             <span className="lp-brand-name">OpenNote</span>
             <span className="lp-version mono">LOCAL-FIRST STUDIO</span>
@@ -208,9 +208,9 @@ export function LandingPage({
             <h1 className="lp-title" aria-label="Notes that run.">
               {HEADLINE.map((w, i) => (
                 <motion.span key={w} className={`lp-title-word${i === 2 ? " lp-title-accent" : ""}`} aria-hidden
-                  initial={{ opacity: 0, y: 18, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.08 + i * 0.09, ease: [0.22, 1, 0.36, 1] }}>
-                  {w}{" "}
+                  {w}
                 </motion.span>
               ))}
             </h1>

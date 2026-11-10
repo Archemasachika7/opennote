@@ -53,14 +53,14 @@ export function SpotlightCard({
 
 const FILL_SWATCHES = [
   { name: "Amber", hex: "#F5A524" },
-  { name: "Mint", hex: "#3DDC97" },
-  { name: "Cyan", hex: "#4FD1C5" },
+  { name: "White", hex: "#FAFAFA" },
+  { name: "Grey", hex: "#A1A1AA" },
   { name: "Coral", hex: "#FF8A5B" },
 ];
 
 function ShapeSnapDemo() {
   const [snapped, setSnapped] = useState(true);
-  const [fillHex, setFillHex] = useState("#4FD1C5");
+  const [fillHex, setFillHex] = useState("#A1A1AA");
   const [solidFill, setSolidFill] = useState(false);
   const [dashed, setDashed] = useState(false);
 
@@ -261,7 +261,7 @@ function AudioInkReplayDemo() {
         <path
           d="M 28 66 C 72 22, 112 110, 156 66 C 200 22, 240 110, 284 66 C 328 22, 368 110, 436 66"
           fill="none"
-          stroke="#3DDC97"
+          stroke="#FAFAFA"
           strokeWidth="3.5"
           strokeLinecap="round"
           strokeDasharray={pathLen}
@@ -306,7 +306,7 @@ function LiveOscillatorDemo() {
       <svg viewBox="0 0 464 116" className="lp-demo-svg" role="img" aria-label="Live sandboxed harmonic simulation">
         <line x1="18" y1="58" x2="446" y2="58" stroke="rgba(232,233,238,0.12)" strokeWidth="1" />
         <path d={envPath} fill="none" stroke="rgba(245, 165, 36, 0.5)" strokeWidth="1.4" strokeDasharray="4 4" />
-        <path d={wavePath} fill="none" stroke="#3DDC97" strokeWidth="2.5" strokeLinecap="round" />
+        <path d={wavePath} fill="none" stroke="#FAFAFA" strokeWidth="2.5" strokeLinecap="round" />
       </svg>
       <div className="lp-dual-sliders mono">
         <label>

@@ -91,3 +91,14 @@ describe("landing downloads and film", () => {
     expect(document.querySelector("video source")?.getAttribute("src")).toBe("/media/opennote-launch.mp4");
   });
 });
+
+describe("hero headline", () => {
+  it("renders 'Notes that run.' as three separate words (no collapsed spaces)", async () => {
+    globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as unknown as typeof fetch;
+    window.location.hash = "#/welcome";
+    render(<App />);
+    const h1 = await screen.findByRole("heading", { level: 1, name: "Notes that run." });
+    const words = Array.from(h1.querySelectorAll(".lp-title-word")).map((w) => w.textContent);
+    expect(words).toEqual(["Notes", "that", "run."]); // no trailing space trapped inside an inline-block
+  });
+});

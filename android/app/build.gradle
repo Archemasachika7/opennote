@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+// One version for every platform: package.json. versionCode = major*10000 + minor*100 + patch, so each release installs over the last.
+def appVersion = new groovy.json.JsonSlurper().parse(file('../../package.json')).version
+def (vMaj, vMin, vPat) = appVersion.tokenize('.-')[0..2].collect { it as int }
+
 android {
     namespace = "app.opennote.notes"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +11,8 @@ android {
         applicationId "app.opennote.notes"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode vMaj * 10000 + vMin * 100 + vPat
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +20,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Every APK (CI and local) is signed with the same key, committed on purpose: without it each CI run
+    // signed with a new throwaway debug key, and Android refused to install an update over an older APK.
+    // It is a public key pair, so it proves nothing about the author; it only keeps updates installable.
+    signingConfigs {
+        shared {
+            storeFile file('opennote-shared.keystore')
+            storePassword 'opennote-shared'
+            keyAlias 'opennote'
+            keyPassword 'opennote-shared'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
         release {
+            signingConfig signingConfigs.shared
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

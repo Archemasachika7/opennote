@@ -130,6 +130,8 @@ All downloads are on the **[Releases page](https://github.com/Archemasachika7/op
 
 To update, install the newer APK over the old one. Your notebooks stay.
 
+> **Coming from v0.2.0?** That APK was signed with a different key, so Android won't install v0.2.1 or later over it. Before uninstalling, back up each notebook from its **⋯ menu → Export backup (.opennote)**. Then uninstall v0.2.0, install the new APK, and use **Import** in the library to bring the notebooks back. From v0.2.1 on, every APK installs over the previous one.
+
 </details>
 
 <details open>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PageObject } from "../store/schema";
 import { updateObject, addTextBox } from "./objects";
+import { BASE_LAYER } from "./layers";
 import { useBlobUrl } from "../ui/useBlobUrl";
 import { tryCapture } from "./input";
 
@@ -8,7 +9,9 @@ import { tryCapture } from "./input";
 type Crop = { x: number; y: number; w: number; h: number };
 const FULL: Crop = { x: 0, y: 0, w: 1, h: 1 };
 
-function ImageObj({ o, scale, cropping, onCrop }: { o: PageObject; scale: number; cropping: boolean; onCrop: (on: boolean) => void }) {
+const ZERO = { x: 0, y: 0 };
+
+function ImageObj({ o, scale, cropping, onCrop, origin }: { o: PageObject; scale: number; cropping: boolean; onCrop: (on: boolean) => void; origin: { x: number; y: number } }) {
   const url = useBlobUrl(o.blobId);
   const [draft, setDraft] = useState<PageObject | null>(null);
   const drag = useRef<{ edge: string; x: number; y: number; start: PageObject } | null>(null);
@@ -54,7 +57,7 @@ function ImageObj({ o, scale, cropping, onCrop }: { o: PageObject; scale: number
 
   return (
     <div className={`obj obj-image ${cropping ? "cropping" : ""}`} data-testid={`obj-${o.id}`} onDoubleClick={() => onCrop(!cropping)}
-      style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale, transform: `rotate(${v.rotation}deg)` }}>
+      style={{ left: (v.x - origin.x) * scale, top: (v.y - origin.y) * scale, width: v.w * scale, height: v.h * scale, transform: `rotate(${v.rotation}deg)` }}>
       <div className="obj-clip">
         {url && <img src={url} alt="" draggable={false}
           style={{ width: imgW * scale, height: imgH * scale, left: -c.x * imgW * scale, top: -c.y * imgH * scale }} />}
@@ -67,7 +70,7 @@ function ImageObj({ o, scale, cropping, onCrop }: { o: PageObject; scale: number
   );
 }
 
-function TextObj({ o, scale, color, active }: { o: PageObject; scale: number; color: string; active: boolean }) {
+function TextObj({ o, scale, color, active, origin }: { o: PageObject; scale: number; color: string; active: boolean; origin: { x: number; y: number } }) {
   const [text, setText] = useState(o.text ?? "");
   const el = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (document.activeElement !== el.current) setText(o.text ?? ""); }, [o.text]);
@@ -75,26 +78,34 @@ function TextObj({ o, scale, color, active }: { o: PageObject; scale: number; co
     <textarea ref={el} className="obj obj-text" aria-label="Text box" value={text} data-testid={`obj-${o.id}`}
       autoFocus={active && !o.text}
       onChange={(e) => { setText(e.target.value); void updateObject(o.id, { text: e.target.value }); }}
-      style={{ left: o.x * scale, top: o.y * scale, width: o.w * scale, minHeight: o.h * scale, fontSize: 28 * scale, color,
+      style={{ left: (o.x - origin.x) * scale, top: (o.y - origin.y) * scale, width: o.w * scale, minHeight: o.h * scale, fontSize: 28 * scale, color,
         transform: `rotate(${o.rotation}deg)`, pointerEvents: active ? "auto" : "none" }} />
   );
 }
 
-export function ObjectLayer({ pageId, objects, scale, tool, textColor, cropping, setCropping }: {
+export function ObjectLayer({ pageId, objects, scale, tool, textColor, cropping, setCropping, origin = ZERO, hidden, layerId }: {
   pageId: string; objects: PageObject[]; scale: number; tool: string; textColor: string;
   cropping: string | null; setCropping: (id: string | null) => void;
+  /** logical point at the layer's top-left (boards scroll; pages stay at 0,0) */
+  origin?: { x: number; y: number };
+  /** layer ids whose objects are not shown */
+  hidden?: Set<string>;
+  /** layer that new text boxes go on */
+  layerId?: string;
 }) {
   const onDown = async (e: React.PointerEvent) => {
     if (tool !== "text" || e.target !== e.currentTarget) return;
     const r = e.currentTarget.getBoundingClientRect();
-    await addTextBox(pageId, { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale });
+    await addTextBox(pageId, { x: (e.clientX - r.left) / scale + origin.x, y: (e.clientY - r.top) / scale + origin.y }, layerId);
   };
+  // tape is drawn above the ink by TapeLayer
+  const shown = objects.filter((o) => o.kind !== "tape" && !hidden?.has(o.layerId ?? BASE_LAYER));
   return (
     <div className="object-layer" data-testid="object-layer" onPointerDown={onDown}
       style={{ pointerEvents: tool === "text" || cropping ? "auto" : "none" }}>
-      {objects.map((o) => o.kind === "image"
-        ? <ImageObj key={o.id} o={o} scale={scale} cropping={cropping === o.id} onCrop={(on) => setCropping(on ? o.id : null)} />
-        : <TextObj key={o.id} o={o} scale={scale} color={textColor} active={tool === "text"} />)}
+      {shown.map((o) => o.kind === "image"
+        ? <ImageObj key={o.id} o={o} origin={origin} scale={scale} cropping={cropping === o.id} onCrop={(on) => setCropping(on ? o.id : null)} />
+        : <TextObj key={o.id} o={o} origin={origin} scale={scale} color={textColor} active={tool === "text"} />)}
     </div>
   );
 }

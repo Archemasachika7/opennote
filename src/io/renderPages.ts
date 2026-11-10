@@ -6,6 +6,8 @@ import { buildSrcdoc } from "../live/srcdoc";
 import { loadVendor } from "../live/vendor";
 import { layoutText, LINE_HEIGHT, type TextStyle } from "./textLayout";
 import type { PageImage } from "./exportPdf";
+import { hiddenLayers, layerOf, layerOrder, type Layer } from "../ink/layers";
+import { contentBounds } from "../board/viewport";
 
 const W = PAGE_SIZE.w;
 const H = PAGE_SIZE.h;
@@ -61,14 +63,45 @@ async function drawObjects(ctx: CanvasRenderingContext2D, objs: PageObject[], pa
   }
 }
 
-async function drawStrokes(ctx: CanvasRenderingContext2D, pageId: string, paper: Notebook["paper"], dy = 0) {
-  const strokes = await getStrokes(pageId);
+/** Ink in layer order; hidden layers are left out of exports. */
+async function drawStrokes(ctx: CanvasRenderingContext2D, pageId: string, paper: Notebook["paper"], dy = 0, page?: { layers?: Layer[] }) {
+  const p = page ?? {};
+  const hidden = hiddenLayers(p);
+  const order = layerOrder(p);
+  const groups = new Map<number, Awaited<ReturnType<typeof getStrokes>>>();
+  for (const s of await getStrokes(pageId)) {
+    if (hidden.has(layerOf(s))) continue;
+    const k = order.get(layerOf(s)) ?? 0;
+    const g = groups.get(k);
+    if (g) g.push(s); else groups.set(k, [s]);
+  }
   ctx.save();
   ctx.translate(0, dy);
-  for (const s of strokes) if (s.tool === "highlighter") paintStroke(ctx, s, paper);
-  for (const s of strokes) if (s.tool !== "highlighter") paintStroke(ctx, s, paper);
+  for (const k of [...groups.keys()].sort((a, b) => a - b)) {
+    const list = groups.get(k)!;
+    for (const s of list) if (s.tool === "highlighter") paintStroke(ctx, s, paper);
+    for (const s of list) if (s.tool !== "highlighter") paintStroke(ctx, s, paper);
+  }
   ctx.restore();
 }
+
+/** Tape that is covering (not peeled back) is exported as covered. */
+function drawTape(ctx: CanvasRenderingContext2D, objs: PageObject[]) {
+  for (const o of objs) {
+    if (o.kind !== "tape" || o.revealed) continue;
+    ctx.save();
+    ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
+    ctx.rotate((o.rotation * Math.PI) / 180);
+    ctx.fillStyle = o.color ?? "#F5A524";
+    ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+    ctx.restore();
+  }
+}
+
+const visibleObjects = (objs: PageObject[], page: { layers?: Layer[] }) => {
+  const hidden = hiddenLayers(page);
+  return objs.filter((o) => !hidden.has(layerOf(o)));
+};
 
 export async function renderInkPage(page: InkPage, nb: Notebook): Promise<PageImage[]> {
   const h = page.size?.h ?? H;
@@ -85,8 +118,35 @@ export async function renderInkPage(page: InkPage, nb: Notebook): Promise<PageIm
       ctx.restore(); bmp.close();
     }
   }
-  await drawObjects(ctx, await getObjects(page.id), nb.paper);
-  await drawStrokes(ctx, page.id, nb.paper);
+  const objs = visibleObjects(await getObjects(page.id), page);
+  await drawObjects(ctx, objs, nb.paper);
+  await drawStrokes(ctx, page.id, nb.paper, 0, page);
+  drawTape(ctx, objs);
+  return [await toImage(c)];
+}
+
+/** Largest side of an exported board, in canvas px. */
+const BOARD_MAX_SIDE = 4096;
+const BOARD_PAD = 60;
+
+/** A whiteboard board: everything on it, cropped to its content (at most 4096 px a side). */
+export async function renderBoard(page: InkPage, nb: Notebook): Promise<PageImage[]> {
+  const objs = visibleObjects(await getObjects(page.id), page);
+  const hidden = hiddenLayers(page);
+  const strokes = (await getStrokes(page.id)).filter((s) => !hidden.has(layerOf(s)));
+  const b = contentBounds(strokes, objs) ?? { x: 0, y: 0, w: W, h: H * 0.6 };
+  const box = { x: b.x - BOARD_PAD, y: b.y - BOARD_PAD, w: b.w + BOARD_PAD * 2, h: b.h + BOARD_PAD * 2 };
+  const k = Math.min(1, BOARD_MAX_SIDE / Math.max(box.w, box.h));
+  const [c, ctx] = canvas(Math.max(1, Math.round(box.w * k)), Math.max(1, Math.round(box.h * k)));
+  ctx.fillStyle = page.bgColor ?? PAPER[nb.paper].bg;
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.translate(-box.x, -box.y);
+  await drawObjects(ctx, objs, nb.paper);
+  await drawStrokes(ctx, page.id, nb.paper, 0, page);
+  drawTape(ctx, objs);
+  ctx.restore();
   return [await toImage(c)];
 }
 
@@ -212,7 +272,7 @@ export async function renderLivePage(page: HtmlPage, nb: Notebook): Promise<{ im
 }
 
 export async function renderPage(page: Page, nb: Notebook): Promise<{ images: PageImage[]; captured?: boolean }> {
-  if (page.kind === "ink") return { images: await renderInkPage(page, nb) };
+  if (page.kind === "ink") return { images: page.board ? await renderBoard(page, nb) : await renderInkPage(page, nb) };
   if (page.kind === "text") return { images: await renderTextPage(page, nb) };
   return renderLivePage(page, nb);
 }

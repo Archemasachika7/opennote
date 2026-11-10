@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { motion } from "motion/react";
 import { MoreHorizontal, Pencil, RotateCcw, Star, Trash2 } from "lucide-react";
 import type { Notebook } from "../store/schema";
@@ -8,12 +8,15 @@ import { motionTokens, springs, useSafeMotion } from "../ui/motion";
 
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
-export function NotebookCard({ nb, liveCount, view, inTrash, selecting, selected, onToggleSelect, onOpen, onRename, onTrash, onFavorite, onRestore, onDeleteForever }: {
-  nb: Notebook; liveCount: number; view: "grid" | "list"; inTrash: boolean;
+type NotebookCardProps = {
+  nb: Notebook; liveCount: number; cardCount?: number; view: "grid" | "list"; inTrash: boolean;
   selecting: boolean; selected: boolean; onToggleSelect: () => void;
   onOpen: () => void; onRename: (title: string) => void; onTrash: () => void; onFavorite: () => void;
   onRestore: () => void; onDeleteForever: () => void;
-}) {
+};
+
+// forwardRef: the library list animates cards out with AnimatePresence "popLayout", which needs a ref
+export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function NotebookCard({ nb, liveCount, cardCount = 0, view, inTrash, selecting, selected, onToggleSelect, onOpen, onRename, onTrash, onFavorite, onRestore, onDeleteForever }, ref) {
   const [menu, setMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(nb.title);
@@ -30,9 +33,13 @@ export function NotebookCard({ nb, liveCount, view, inTrash, selecting, selected
     ];
   const open = () => (selecting ? onToggleSelect() : inTrash ? undefined : onOpen());
   const daysLeft = nb.trashedAt ? Math.max(0, 30 - Math.floor((Date.now() - nb.trashedAt) / 864e5)) : 0;
-  const pages = `${nb.pageIds.length} ${nb.pageIds.length === 1 ? "page" : "pages"}`;
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const pages = nb.kind === "studyset" ? count(cardCount, "card", "cards")
+    : nb.kind === "whiteboard" ? count(nb.pageIds.length, "board", "boards")
+    : count(nb.pageIds.length, "page", "pages");
+  const kindTag = nb.kind === "studyset" ? "STUDY" : nb.kind === "whiteboard" ? "BOARD" : null;
   return (
-    <motion.article className={`nb-card ${view} ${selected ? "selected" : ""}`} variants={{ hidden: safe.initial, visible: safe.animate }} exit={safe.exit}
+    <motion.article ref={ref} className={`nb-card ${view} ${selected ? "selected" : ""}`} variants={{ hidden: safe.initial, visible: safe.animate }} exit={safe.exit}
       transition={safe.reduce ? safe.transition : springs.gentle}>
       {selecting && (
         <input type="checkbox" className="nb-check" aria-label={`Select ${nb.title}`} checked={selected} onChange={onToggleSelect} />
@@ -43,6 +50,7 @@ export function NotebookCard({ nb, liveCount, view, inTrash, selecting, selected
         <span className="nb-spine" style={{ background: nb.coverColor }} />
         {view === "grid" && <span className="nb-pages mono">{pages}</span>}
         {liveCount > 0 && <span className="live-tag mono">LIVE {liveCount}</span>}
+        {kindTag && <span className="kind-tag mono" data-kind={nb.kind}>{kindTag}</span>}
       </motion.button>
       <footer className="nb-meta">
         {editing ? (
@@ -72,4 +80,4 @@ export function NotebookCard({ nb, liveCount, view, inTrash, selecting, selected
       </footer>
     </motion.article>
   );
-}
+});

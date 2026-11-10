@@ -1,4 +1,5 @@
 import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PagePatch } from "./schema";
+import { layerOf, pageLayers, type Layer } from "../ink/layers";
 
 export const TOO_LARGE = "Too large (max 5 MB)";
 
@@ -9,6 +10,7 @@ function build(notebookId: string, init: NewPage): Page {
     case "ink": return {
       ...base, kind: "ink", template: init.template, ...(init.size ? { size: { ...init.size } } : {}),
       ...(init.background ? { background: { ...init.background } } : {}),
+      ...(init.board ? { board: true } : {}), ...(init.title ? { title: init.title } : {}),
     };
     case "text": return { ...base, kind: "text", doc: null };
     case "html": return { ...base, ...init, kind: "html", height: PAGE_SIZE.h };
@@ -61,6 +63,46 @@ export async function updatePage(id: string, patch: PagePatch): Promise<void> {
   });
 }
 
+/** Add a whiteboard board at the end, named "Board N". */
+export async function insertBoard(notebookId: string): Promise<Page> {
+  const nb = await db.notebooks.get(notebookId);
+  const n = (nb?.pageIds.length ?? 0) + 1;
+  return insertPage(notebookId, n, { kind: "ink", template: "dot", board: true, title: `Board ${n}` });
+}
+
+export async function setLayers(pageId: string, layers: Layer[]): Promise<void> {
+  await updatePage(pageId, { layers });
+}
+
+/** Add a new layer on top of the page's layers. */
+export async function addLayer(pageId: string): Promise<Layer> {
+  const p = await db.pages.get(pageId);
+  if (!p || p.kind !== "ink") throw new Error("Layers are only on ink pages");
+  const ls = pageLayers(p);
+  const names = new Set(ls.map((l) => l.name));
+  let n = ls.length + 1;
+  while (names.has(`Layer ${n}`)) n++;
+  const l: Layer = { id: newId(), name: `Layer ${n}`, visible: true, locked: false };
+  await setLayers(pageId, [...ls, l]);
+  return l;
+}
+
+/** Delete a layer and everything on it. The last remaining layer is never deleted. */
+export async function deleteLayer(pageId: string, layerId: string): Promise<void> {
+  await db.transaction("rw", [db.pages, db.notebooks, db.strokes, db.objects, db.blobs, db.cards], async () => {
+    const p = await db.pages.get(pageId);
+    if (!p || p.kind !== "ink") return;
+    const ls = pageLayers(p);
+    if (ls.length <= 1 || !ls.some((l) => l.id === layerId)) return;
+    const strokeIds = (await db.strokes.where("pageId").equals(pageId).toArray()).filter((r) => layerOf(r.stroke) === layerId).map((r) => r.id);
+    await db.strokes.bulkDelete(strokeIds);
+    const objs = (await db.objects.where("pageId").equals(pageId).toArray()).filter((o) => layerOf(o) === layerId);
+    await db.objects.bulkDelete(objs.map((o) => o.id));
+    await db.blobs.bulkDelete(await unreferencedBlobs(objs.map((o) => o.blobId).filter((x): x is string => !!x)));
+    await updatePage(pageId, { layers: ls.filter((l) => l.id !== layerId) });
+  });
+}
+
 export async function duplicatePage(pageId: string): Promise<Page> {
   return db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects], async () => {
     const p = await db.pages.get(pageId);
@@ -86,7 +128,7 @@ export async function duplicatePage(pageId: string): Promise<Page> {
 }
 
 export async function deletePage(pageId: string): Promise<void> {
-  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs], async () => {
+  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards], async () => {
     const p = await db.pages.get(pageId);
     if (!p) return;
     const objs = await db.objects.where("pageId").equals(pageId).toArray();

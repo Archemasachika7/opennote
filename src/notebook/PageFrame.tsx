@@ -36,7 +36,7 @@ export function PageFrame({ page, notebook, mounted, width, priority = 0, onEdit
           : rot ? { transform: `rotate(${rot}deg)` } : undefined;
         return <img className="pdf-bg" src={bg} alt="" draggable={false} data-testid="pdf-background" style={style} />;
       })()}
-      {mounted && page.kind === "ink" && <InkPage pageId={page.id} width={width} height={height} paper={notebook.paper} />}
+      {mounted && page.kind === "ink" && <InkPage pageId={page.id} width={width} height={height} paper={notebook.paper} layers={page.layers} />}
     </div>
   );
 }

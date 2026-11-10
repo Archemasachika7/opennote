@@ -10,11 +10,13 @@ import { tryCapture } from "./input";
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
 /** Selection box with move (drag body), uniform scale (corner) and rotate (top handle). */
-export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut }: {
-  box: Box; scale: number; xf: Xf; onPreview: (m: Xf) => void; onCommit: (m: Xf) => void;
+export function SelectionOverlay({ box, scale, origin = { x: 0, y: 0 }, xf, onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut }: {
+  box: Box; scale: number; /** logical point at the surface's top-left (boards) */ origin?: { x: number; y: number }; xf: Xf;
+  onPreview: (m: Xf) => void; onCommit: (m: Xf) => void;
   onDelete: () => void; onDuplicate: () => void; onRecolor: () => void; onCrop?: () => void; onCopy?: () => void; onCut?: () => void;
 }) {
-  const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number } | null>(null);
+  const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number; sx: number; sy: number } | null>(null);
+  const el = useRef<HTMLDivElement>(null);
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
 
@@ -31,8 +33,9 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
       // keep the top-left corner fixed: centre moves by half the growth
       return { ...IDENTITY, k, cx: box.x, cy: box.y };
     }
-    const r0 = Math.atan2(d.y / scale - cy, d.x / scale - cx);
-    const r1 = Math.atan2(d.y / scale + dy - cy, d.x / scale + dx - cx);
+    // angles measured on screen around the box centre (sx, sy)
+    const r0 = Math.atan2(d.y - d.sy, d.x - d.sx);
+    const r1 = Math.atan2(e.clientY - d.sy, e.clientX - d.sx);
     return { ...IDENTITY, r: r1 - r0, cx, cy };
   };
 
@@ -42,7 +45,8 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
     e.stopPropagation();
     tryCapture(e.currentTarget as Element, e.pointerId);
     const id = e.pointerId;
-    drag.current = { mode, x: e.clientX, y: e.clientY };
+    const r = el.current?.getBoundingClientRect();
+    drag.current = { mode, x: e.clientX, y: e.clientY, sx: r ? r.left + r.width / 2 : e.clientX, sy: r ? r.top + r.height / 2 : e.clientY + 1 };
     const move = (ev: PointerEvent) => { if (ev.pointerId === id && drag.current) latest.current.onPreview(compute(ev)); };
     const end = (ev: PointerEvent) => {
       if (ev.pointerId !== id || !drag.current) return;
@@ -60,9 +64,9 @@ export function SelectionOverlay({ box, scale, xf, onPreview, onCommit, onDelete
 
   const t = `translate(${xf.dx * scale}px, ${xf.dy * scale}px)`;
   return (
-    <motion.div className="sel" data-testid="selection" onPointerDown={start("move")}
+    <motion.div ref={el} className="sel" data-testid="selection" onPointerDown={start("move")}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: motionTokens.duration.fast }}
-      style={{ left: box.x * scale, top: box.y * scale, width: box.w * scale, height: box.h * scale, transform: t }}>
+      style={{ left: (box.x - origin.x) * scale, top: (box.y - origin.y) * scale, width: box.w * scale, height: box.h * scale, transform: t }}>
       <span className="sel-rot" data-testid="sel-rotate" onPointerDown={start("rotate")}><RotateCw {...I} /></span>
       <span className="sel-scale" data-testid="sel-scale" onPointerDown={start("scale")} />
       <div className="sel-bar" onPointerDown={(e) => e.stopPropagation()}>

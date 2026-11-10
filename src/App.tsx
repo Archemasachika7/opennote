@@ -2,6 +2,11 @@ import { useSyncExternalStore } from "react";
 import { ToastHost } from "./ui/Toast";
 import { LibraryView } from "./library/LibraryView";
 import { NotebookView } from "./notebook/NotebookView";
+import { WhiteboardView } from "./board/WhiteboardView";
+import { StudySetView } from "./study/StudySetView";
+import { useLive } from "./store/useLive";
+import { getNotebook } from "./store/notebooks";
+import type { Notebook } from "./store/schema";
 
 export type Route = { name: "library" } | { name: "notebook"; id: string; pageId?: string };
 
@@ -31,13 +36,23 @@ export function navigate(path: string): void {
   window.location.hash = path.startsWith("#") ? path : `#${path}`;
 }
 
+/** Opens a document in the view for its type: notebook, whiteboard or study set. */
+function DocView({ id, pageId }: { id: string; pageId?: string }) {
+  // undefined = still loading; null = not found (NotebookView shows its loading state then)
+  const nb = useLive(async () => (await getNotebook(id)) ?? null, [id], undefined as Notebook | null | undefined);
+  if (nb === undefined) return <main className="nb-loading dim">Loading...</main>;
+  if (nb?.kind === "whiteboard") return <WhiteboardView id={id} pageId={pageId} />;
+  if (nb?.kind === "studyset") return <StudySetView id={id} />;
+  return <NotebookView id={id} pageId={pageId} />;
+}
+
 export function App() {
   const route = useRoute();
   return (
     <>
       {route.name === "library"
         ? <LibraryView />
-        : <NotebookView key={route.id} id={route.id} pageId={route.pageId} />}
+        : <DocView key={route.id} id={route.id} pageId={route.pageId} />}
       <ToastHost />
     </>
   );

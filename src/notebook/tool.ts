@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { PenVariant } from "../ink/model";
 import type { ShapeKind } from "../ink/shapes";
 
-export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "image" | "hand";
+export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "image" | "hand" | "laser" | "tape";
 export interface ToolState {
   tool: ToolName;
   variant: PenVariant;

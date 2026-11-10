@@ -11,6 +11,8 @@ export interface Stroke {
   paletteIndex?: number;
   width: number;
   points: Float32Array;
+  /** Layer this stroke is on (absent = the base layer). */
+  layerId?: string;
 }
 
 export const STRIDE = 4;

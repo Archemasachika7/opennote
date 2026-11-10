@@ -1,0 +1,57 @@
+.study { display: flex; flex-direction: column; height: 100%; }
+.study-title { font-family: var(--font-title); font-weight: 600; font-size: 15px; background: transparent; border: 1px solid transparent;
+  color: var(--text); padding: 4px 6px; border-radius: var(--radius); min-width: 0; width: 240px; }
+.study-title:hover, .study-title:focus { border-color: var(--line); outline: none; }
+.study-tabs { display: flex; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--line); border-radius: 999px; }
+.study-tabs button { position: relative; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px;
+  padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+.study-tabs button.on { color: var(--bg); }
+.study-tabs button > span:not(.mode-pill) { position: relative; }
+.study-tabs .mode-pill { position: absolute; inset: 0; background: var(--accent); border-radius: 999px; z-index: -1; }
+.study-tabs button { isolation: isolate; }
+.study-body { flex: 1; overflow: auto; padding: 24px 16px 80px; }
+
+.card-editor { max-width: 920px; margin: 0 auto; display: grid; gap: 12px; }
+.card-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.card-row { display: grid; grid-template-columns: 28px 1fr 1fr auto; gap: 10px; align-items: start; padding: 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.card-n { padding-top: 8px; text-align: right; }
+.card-side { display: grid; gap: 6px; }
+.card-side textarea { width: 100%; min-height: 64px; resize: vertical; font: inherit; line-height: 1.4; padding: 8px; }
+.card-actions { display: grid; grid-template-columns: repeat(2, auto); gap: 2px; }
+.card-img { position: relative; display: inline-block; max-width: 100%; }
+.card-img img { display: block; max-width: 100%; max-height: 160px; border-radius: 4px; }
+.card-img button { position: absolute; top: 2px; right: 2px; background: var(--surface); }
+
+.practice { max-width: 680px; margin: 0 auto; display: grid; gap: 14px; justify-items: center; }
+.flash-wrap { width: 100%; border: 0; padding: 0; background: none; cursor: pointer; perspective: 1000px; color: inherit; font: inherit; }
+.flash-wrap.static { cursor: default; }
+.flash-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 14px; }
+.flashcard { min-height: 280px; display: grid; place-items: center; align-content: center; gap: 12px; padding: 32px; text-align: center;
+  background: var(--page-dark, #1e2028); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+.flashcard.back { border-top-color: #4FD1C5; }
+.flash-side { font-size: 11px; letter-spacing: 0.12em; }
+.flash-text { font-size: 24px; line-height: 1.35; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.flashcard .card-img img { max-height: 220px; }
+.practice-bar { display: flex; gap: 8px; align-items: center; }
+.btn.big { height: 40px; padding: 0 22px; font-size: 15px; }
+.grades { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.grades .btn { height: 52px; flex-direction: column; gap: 2px; justify-content: center; }
+.grade-again { border-color: #FF6B6B !important; }
+.grade-hard { border-color: #F2C94C !important; }
+.grade-good { border-color: #4FD1C5 !important; }
+.grade-easy { border-color: #5BB8FF !important; }
+.progress { display: flex; width: 100%; height: 8px; border-radius: 999px; overflow: hidden; background: var(--line); }
+.progress-key { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+.progress-key i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.p-new { background: #6B6F7D; }
+.p-learning { background: var(--accent); }
+.p-mastered { background: #4FD1C5; }
+@media (max-width: 640px) {
+  .card-row { grid-template-columns: 1fr; }
+  .card-n { text-align: left; padding: 0; }
+  .card-actions { grid-template-columns: repeat(5, auto); }
+  .grades { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .study-title { width: 140px; }
+}

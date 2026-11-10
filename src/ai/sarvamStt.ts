@@ -264,28 +264,22 @@ async function invokeSingleSarvamChunk(
   const key = (opts.apiKey ?? getSarvamApiKey()).trim();
   const buildBody = () => buildSarvamFormData(chunkBlob, ext, opts);
 
-  if (key) {
-    try {
-      return await fetch(SARVAM_ENDPOINT, {
-        method: "POST",
-        headers: { "api-subscription-key": key },
-        body: buildBody(),
-      });
-    } catch {
-      // Network/CORS fallback when hosted on Vercel with /api/sarvam-stt Edge route
-      return await fetch(VERCEL_PROXY_ENDPOINT, {
-        method: "POST",
-        headers: { "x-sarvam-key": key },
-        body: buildBody(),
-      });
-    }
+  // the user's own key only: there is no shared key anywhere (free, no charges to anyone else)
+  if (!key) return new Response(JSON.stringify({ error: "no key" }), { status: 401 });
+  try {
+    return await fetch(SARVAM_ENDPOINT, {
+      method: "POST",
+      headers: { "api-subscription-key": key },
+      body: buildBody(),
+    });
+  } catch {
+    // Network/CORS fallback: same-origin /api/sarvam-stt pass-through (web build on Vercel only)
+    return await fetch(VERCEL_PROXY_ENDPOINT, {
+      method: "POST",
+      headers: { "x-sarvam-key": key },
+      body: buildBody(),
+    });
   }
-
-  // No browser key set: try server-managed Vercel env key (/api/sarvam-stt)
-  return await fetch(VERCEL_PROXY_ENDPOINT, {
-    method: "POST",
-    body: buildBody(),
-  });
 }
 
 function describeSarvamError(status: number, bodyText: string, hadKey: boolean): string {

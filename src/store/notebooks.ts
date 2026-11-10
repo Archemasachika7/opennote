@@ -34,7 +34,11 @@ export async function updateNotebook(id: string, patch: Partial<Pick<Notebook, "
 }
 
 export async function deleteNotebook(id: string): Promise<void> {
-  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards], async () => {
+  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards, db.recordings], async () => {
+    // recordings belong to the notebook alone: their audio goes with them
+    const recs = await db.recordings.where("notebookId").equals(id).toArray();
+    await db.blobs.bulkDelete(recs.map((r) => r.blobId));
+    await db.recordings.where("notebookId").equals(id).delete();
     const pageIds = (await db.pages.where("notebookId").equals(id).primaryKeys()) as string[];
     const objs = await db.objects.where("pageId").anyOf(pageIds).toArray();
     const pages = await db.pages.bulkGet(pageIds);

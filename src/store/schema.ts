@@ -103,6 +103,26 @@ export interface Card {
 
 export interface BlobRow { id: string; data: Blob }
 
+export interface TranscriptSegment { offsetMs: number; endMs: number; text: string }
+
+/** A lecture recording. The audio itself is one row in `blobs` (`blobId`). */
+export interface Recording {
+  id: string;
+  notebookId: string;
+  blobId: string;
+  title: string;
+  durationMs: number;
+  mimeType: string;
+  createdAt: number;
+  updatedAt: number;
+  transcript?: string;
+  languageCode?: string;
+  transcriptSegments?: TranscriptSegment[];
+}
+
+const LEGACY_INDEX = "opennote:audio-index:";
+const LEGACY_CLIP = "opennote:audio-clip:";
+
 class OpenNoteDB extends Dexie {
   notebooks!: Table<Notebook, string>;
   pages!: Table<Page, string>;
@@ -111,6 +131,7 @@ class OpenNoteDB extends Dexie {
   blobs!: Table<BlobRow, string>;
   folders!: Table<Folder, string>;
   cards!: Table<Card, string>;
+  recordings!: Table<Recording, string>;
   constructor() {
     super("opennote");
     this.version(1).stores({
@@ -122,6 +143,31 @@ class OpenNoteDB extends Dexie {
       folders: "id, parentId",
     });
     this.version(2).stores({ cards: "id, notebookId" });
+    // v3: recordings get a real table (they used to be a JSON index row inside `blobs`)
+    this.version(3).stores({ recordings: "id, notebookId, createdAt" }).upgrade(async (tx) => {
+      const blobs = tx.table("blobs");
+      const recordings = tx.table("recordings");
+      const legacy = await blobs.where("id").startsWith(LEGACY_INDEX).toArray();
+      for (const row of legacy as { id: string; data?: Blob; json?: string }[]) {
+        let list: Omit<Recording, "blobId" | "updatedAt">[] = [];
+        try {
+          const raw = row.json ?? (row.data ? await row.data.text() : "");
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) list = parsed;
+        } catch { /* unreadable index: nothing to migrate */ }
+        for (const c of list) {
+          if (!c || typeof c.id !== "string") continue;
+          const blobId = LEGACY_CLIP + c.id;
+          const clip = (await blobs.get(blobId)) as { data?: Blob; bytes?: ArrayBuffer; mimeType?: string } | undefined;
+          if (!clip) continue;
+          // keep a single copy of the audio
+          const data = clip.data instanceof Blob ? clip.data : new Blob([clip.bytes ?? new ArrayBuffer(0)], { type: clip.mimeType || c.mimeType || "audio/webm" });
+          await blobs.put({ id: blobId, data });
+          await recordings.put({ ...c, blobId, updatedAt: c.createdAt ?? Date.now() });
+        }
+        await blobs.delete(row.id);
+      }
+    });
   }
 }
 

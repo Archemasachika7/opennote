@@ -1,5 +1,5 @@
 import { strToU8, strFromU8, unzipSync, zipSync } from "fflate";
-import { db, newId, now, MAX_HTML_BYTES, type Card, type Notebook, type Page, type PageObject } from "../store/schema";
+import { db, newId, now, MAX_HTML_BYTES, type Card, type Notebook, type Page, type PageObject, type Recording } from "../store/schema";
 import { newSrs } from "../study/srs";
 import type { Stroke } from "../ink/model";
 
@@ -21,6 +21,8 @@ type Manifest = {
   blobs: { id: string; type: string }[];
   /** Study set cards (absent in older backups). */
   cards?: Card[];
+  /** Lecture recordings; audio sits in `blobs/<blobId>` (absent in older backups). */
+  recordings?: Recording[];
 };
 
 /** Zip one notebook (pages, ink, pictures, live pages) into a .opennote file. */
@@ -32,8 +34,9 @@ export async function exportBackup(notebookId: string): Promise<Blob> {
   const strokeRows = await db.strokes.where("pageId").anyOf(pageIds).toArray();
   const objects = await db.objects.where("pageId").anyOf(pageIds).toArray();
   const cards = await db.cards.where("notebookId").equals(notebookId).toArray();
+  const recordings = await db.recordings.where("notebookId").equals(notebookId).toArray();
   const blobIds = [...new Set([...objects.map((o) => o.blobId), ...pages.map((p) => (p.kind === "ink" ? p.background?.blobId : undefined)),
-    ...cards.flatMap((c) => [c.frontImage, c.backImage])]
+    ...cards.flatMap((c) => [c.frontImage, c.backImage]), ...recordings.map((r) => r.blobId)]
     .filter((x): x is string => !!x))];
   const files: Record<string, Uint8Array> = {};
   const blobs: Manifest["blobs"] = [];
@@ -44,7 +47,7 @@ export async function exportBackup(notebookId: string): Promise<Blob> {
     blobs.push({ id, type: row.data.type });
   }
   const manifest: Manifest = {
-    format: "opennote", formatVersion: BACKUP_FORMAT, exportedAt: now(), notebook, pages, objects, blobs, cards,
+    format: "opennote", formatVersion: BACKUP_FORMAT, exportedAt: now(), notebook, pages, objects, blobs, cards, recordings,
     strokes: strokeRows.map((r) => ({ pageId: r.pageId, stroke: { ...r.stroke, points: Array.from(r.stroke.points) } })),
   };
   files["manifest.json"] = strToU8(JSON.stringify(manifest));
@@ -110,17 +113,47 @@ export async function importBackup(file: Blob): Promise<Notebook> {
     // learning progress is personal: an imported set starts fresh
     srs: newSrs(t0), createdAt: t0, updatedAt: t0,
   }));
-  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards], async () => {
+  // untrusted file: a recording needs its audio inside the file, and only known fields are kept
+  const clipMap = new Map<string, string>();
+  const recordings: Recording[] = [];
+  for (const r of Array.isArray(m.recordings) ? m.recordings : []) {
+    if (!r || typeof r !== "object" || typeof r.id !== "string" || typeof r.blobId !== "string") continue;
+    const blobId = blobMap.get(r.blobId);
+    if (!blobId) continue;
+    const id = newId();
+    clipMap.set(r.id, id);
+    const segs = Array.isArray(r.transcriptSegments)
+      ? r.transcriptSegments.filter((s) => s && typeof s.offsetMs === "number" && typeof s.endMs === "number" && typeof s.text === "string")
+        .map((s) => ({ offsetMs: s.offsetMs, endMs: s.endMs, text: s.text }))
+      : undefined;
+    recordings.push({
+      id, notebookId: nb.id, blobId,
+      title: String(r.title ?? "Recording"),
+      durationMs: Number.isFinite(r.durationMs) ? Math.max(0, r.durationMs) : 0,
+      mimeType: typeof r.mimeType === "string" ? r.mimeType : "audio/webm",
+      createdAt: Number.isFinite(r.createdAt) ? r.createdAt : t0, updatedAt: t0,
+      ...(typeof r.transcript === "string" ? { transcript: r.transcript } : {}),
+      ...(typeof r.languageCode === "string" ? { languageCode: r.languageCode } : {}),
+      ...(segs ? { transcriptSegments: segs } : {}),
+    });
+  }
+  await db.transaction("rw", [db.notebooks, db.pages, db.strokes, db.objects, db.blobs, db.cards, db.recordings], async () => {
     await db.cards.bulkAdd(cards);
     for (const b of m.blobs) {
       const bytes = files[`blobs/${b.id}`];
       if (bytes) await db.blobs.add({ id: blobMap.get(b.id)!, data: new Blob([bytes as BlobPart], { type: b.type }) });
     }
+    await db.recordings.bulkAdd(recordings);
     await db.notebooks.add(nb);
     await db.pages.bulkAdd(pages);
     await db.strokes.bulkAdd(m.strokes.filter((s) => pageMap.has(s.pageId)).map((s) => {
       const id = newId();
-      return { id, pageId: pageMap.get(s.pageId)!, stroke: { ...s.stroke, id, points: new Float32Array(s.stroke.points) } };
+      const { audioSync, ...rest } = s.stroke;
+      const clipId = audioSync && Number.isFinite(audioSync.offsetMs) ? clipMap.get(audioSync.clipId) : undefined;
+      return {
+        id, pageId: pageMap.get(s.pageId)!,
+        stroke: { ...rest, id, points: new Float32Array(s.stroke.points), ...(clipId ? { audioSync: { clipId, offsetMs: audioSync!.offsetMs } } : {}) },
+      };
     }));
     await db.objects.bulkAdd(m.objects.filter((o) => pageMap.has(o.pageId)).map((o) => ({
       ...o, id: newId(), pageId: pageMap.get(o.pageId)!, blobId: o.blobId ? blobMap.get(o.blobId) : undefined,

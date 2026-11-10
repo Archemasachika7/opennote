@@ -25,7 +25,7 @@ async function penLine(page: Page, selector = "[data-testid=ink-surface]") {
 }
 
 test("whiteboard: create, draw, zoom, keep after reload", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/#/library");
   await page.getByRole("button", { name: "More new items" }).click();
   await page.getByRole("menuitem", { name: "New whiteboard" }).click();
   const stage = page.getByTestId("board-stage");
@@ -53,7 +53,7 @@ test("whiteboard: create, draw, zoom, keep after reload", async ({ page }) => {
 });
 
 test("study set: write a card, practise it, learn it", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/#/library");
   await page.getByRole("button", { name: "More new items" }).click();
   await page.getByRole("menuitem", { name: "New study set" }).click();
   await expect(page.getByTestId("study-set")).toBeVisible();

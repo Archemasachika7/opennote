@@ -41,20 +41,32 @@ it("never stores the passphrase, only a non-extractable key", async () => {
 
 /* ---- storage keys shared across devices (encrypted in profiles.storage_settings) ---- */
 
-/** One account row shared by every "device" in a test. `failNext` makes the next update fail like a network error. */
+/**
+ * One account row shared by every "device" in a test. Updates honour .eq() filters like PostgREST, so a
+ * version check can miss. `failNext` fails the next update like a network error; `beforeUpdate` runs
+ * just before an update lands, to play another device writing at the same moment.
+ */
 function fakeAccount() {
-  const row: { storage_settings: string | null } = { storage_settings: null };
-  const state = { failNext: false };
+  const row: { storage_settings: string | null; storage_settings_version: number } = { storage_settings: null, storage_settings_version: 0 };
+  const state: { failNext: boolean; beforeUpdate: null | (() => void) } = { failNext: false, beforeUpdate: null };
   const client = {
     from: () => ({
       select: () => ({ eq: () => ({ single: async () => ({ data: { ...row }, error: null }) }) }),
-      update: (patch: typeof row) => ({
-        eq: async () => {
-          if (state.failNext) { state.failNext = false; return { error: { message: "offline" } }; }
-          Object.assign(row, patch);
-          return { error: null };
-        },
-      }),
+      update: (patch: Partial<typeof row>) => {
+        const filters: [string, unknown][] = [];
+        const b = {
+          eq: (col: string, val: unknown) => { filters.push([col, val]); return b; },
+          select: async () => {
+            if (state.failNext) { state.failNext = false; return { data: null, error: { message: "offline" } }; }
+            const hook = state.beforeUpdate; state.beforeUpdate = null; hook?.();
+            const r = row as Record<string, unknown>;
+            if (!filters.every(([c, v]) => c === "id" || r[c] === v)) return { data: [], error: null };
+            Object.assign(row, patch);
+            return { data: [{ id: "u1" }], error: null };
+          },
+        };
+        return b;
+      },
     }),
   };
   return { client: client as never, row, state };
@@ -225,4 +237,29 @@ it("restoring a login for a different account than the one that unlocked locks s
   await db.syncMeta.bulkPut([{ key: "dev:owner", value: "alice" }, { key: "dev:master", value: "k" }]);
   await reactToAuth(null, "bob");
   expect(await db.syncMeta.get("dev:master")).toBeUndefined();
+});
+
+/* ---- Codex review: ownerless keys, and two devices writing at once ---- */
+
+it("keys left by the previous app version (no owner) are not taken into the account that signs in", async () => {
+  await db.syncMeta.bulkPut([{ key: "dev:telegram", value: TG }, { key: "dev:pinata", value: PIN }]); // no dev:owner
+  await reactToAuth(null, "bob");
+  expect(await local("telegram")).toBeUndefined();
+  expect(await local("pinata")).toBeUndefined();
+});
+
+it("two devices changing settings at the same moment both keep their change", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  await updateSharedSettings(a.client, "u1", k, (cur) => ({ ...cur, telegram: TG, pinata: PIN }));
+
+  // device A disconnects Telegram right as device B (which read the old copy) changes Pinata
+  const aWrite = toPgBytea(await sealJson({ telegram: null, pinata: PIN }, k));
+  a.state.beforeUpdate = () => { a.row.storage_settings = aWrite; a.row.storage_settings_version += 1; };
+  await updateSharedSettings(a.client, "u1", k, (cur) => ({ ...cur, pinata: { jwt: "x.y.z" } }));
+
+  await otherDevice();
+  await loadSharedSettings(a.client, "u1", k);
+  expect(await local("telegram")).toBeUndefined(); // A's disconnect survived
+  expect(await local("pinata")).toEqual({ jwt: "x.y.z" }); // and so did B's change
 });

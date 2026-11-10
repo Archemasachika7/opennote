@@ -56,22 +56,32 @@ async function refreshStorage(): Promise<void> {
 export type SharedSettings = { telegram?: TelegramSettings | null; pinata?: PinataSettings | null };
 const FIELDS = ["telegram", "pinata"] as const;
 
-async function fetchShared(client: SupabaseClient, userId: string, master: CryptoKey): Promise<SharedSettings> {
-  const { data, error } = await client.from("profiles").select("storage_settings").eq("id", userId).single();
+/** The account's copy and its version (profiles.storage_settings_version). */
+async function fetchShared(client: SupabaseClient, userId: string, master: CryptoKey): Promise<{ value: SharedSettings; version: number }> {
+  const { data, error } = await client.from("profiles").select("storage_settings,storage_settings_version").eq("id", userId).single();
   if (error) throw new Error(`Couldn't read your storage settings: ${error.message}`);
-  const raw = (data as { storage_settings: string | null }).storage_settings;
-  if (!raw) return {};
+  const row = data as { storage_settings: string | null; storage_settings_version: number | null };
+  const version = row.storage_settings_version ?? 0;
+  if (!row.storage_settings) return { value: {}, version };
   try {
-    return await openJson<SharedSettings>(fromPgBytea(raw), master);
+    return { value: await openJson<SharedSettings>(fromPgBytea(row.storage_settings), master), version };
   } catch {
     throw new Error("Your saved storage settings couldn't be read. Connect Telegram or Pinata again.");
   }
 }
 
-async function pushShared(client: SupabaseClient, userId: string, master: CryptoKey, value: SharedSettings): Promise<void> {
-  const { error } = await client.from("profiles").update({ storage_settings: toPgBytea(await sealJson(value, master)) }).eq("id", userId);
+/**
+ * Upload only if the account copy is still at `version`, the one this device read. Returns false when
+ * another device wrote in between, so the caller reads again instead of erasing that change.
+ */
+async function pushShared(client: SupabaseClient, userId: string, master: CryptoKey, value: SharedSettings, version: number): Promise<boolean> {
+  const { data, error } = await client.from("profiles")
+    .update({ storage_settings: toPgBytea(await sealJson(value, master)), storage_settings_version: version + 1 })
+    .eq("id", userId).eq("storage_settings_version", version).select("id");
   if (error) throw new Error(`Couldn't save your storage settings to your account: ${error.message}`);
+  return Array.isArray(data) && data.length > 0;
 }
+const WRITE_TRIES = 3;
 
 async function applyLocal(value: SharedSettings): Promise<void> {
   await db.transaction("rw", db.syncMeta, async () => {
@@ -84,33 +94,46 @@ async function applyLocal(value: SharedSettings): Promise<void> {
 
 /** The account's settings plus any key this device has that the account has never seen. */
 async function mergedShared(client: SupabaseClient, userId: string, master: CryptoKey) {
-  const value = { ...(await fetchShared(client, userId, master)) };
+  const fetched = await fetchShared(client, userId, master);
+  const value = { ...fetched.value };
   let added = false;
   for (const f of FIELDS) {
     const mine = await read<TelegramSettings & PinataSettings>(K[f]);
     if (value[f] === undefined && mine) { value[f] = mine; added = true; }
   }
-  return { value, added };
+  return { value, added, version: fetched.version };
 }
 
 /** Take the account's storage settings onto this device (adding this device's never-shared keys first). Testable core. */
 export async function loadSharedSettings(client: SupabaseClient, userId: string, master: CryptoKey): Promise<void> {
-  const { value, added } = await mergedShared(client, userId, master);
-  if (added) await pushShared(client, userId, master, value);
-  await applyLocal(value);
+  for (let i = 0; i < WRITE_TRIES; i++) {
+    const { value, added, version } = await mergedShared(client, userId, master);
+    if (!added || (await pushShared(client, userId, master, value, version))) {
+      await applyLocal(value);
+      return;
+    }
+  }
+  // another device kept writing: take its copy as is; this device's extra keys go up on the next pull
+  await applyLocal((await fetchShared(client, userId, master)).value);
 }
 
 /**
  * Change the storage settings: read the account's current copy, apply the change, upload, and only
- * then change this device. A failed upload leaves everything as it was. Testable core.
+ * then change this device. A failed upload leaves everything as it was. If another device wrote in
+ * between, read again and reapply the change. Testable core.
  */
 export async function updateSharedSettings(
   client: SupabaseClient, userId: string, master: CryptoKey, change: (current: SharedSettings) => SharedSettings,
 ): Promise<void> {
-  const { value } = await mergedShared(client, userId, master);
-  const next = change(value);
-  await pushShared(client, userId, master, next);
-  await applyLocal(next);
+  for (let i = 0; i < WRITE_TRIES; i++) {
+    const { value, version } = await mergedShared(client, userId, master);
+    const next = change(value);
+    if (await pushShared(client, userId, master, next, version)) {
+      await applyLocal(next);
+      return;
+    }
+  }
+  throw new Error("Your storage settings were changed on another device at the same time. Try again.");
 }
 
 /**
@@ -119,8 +142,9 @@ export async function updateSharedSettings(
  */
 export async function forgetOtherAccount(userId: string | null): Promise<void> {
   const owner = await read<string>(K.owner);
-  // no owner yet: keys saved before this feature, on a device that has stayed signed in to this account
-  if (userId && (owner === userId || owner === null)) return;
+  // No owner means keys from the previous app version. Their account can't be checked (that version
+  // kept them after sign-out), so they're cleared: re-enter them once, then they're shared.
+  if (userId && owner === userId) return;
   await db.syncMeta.bulkDelete([K.master, K.telegram, K.pinata, K.owner]);
 }
 

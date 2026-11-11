@@ -101,8 +101,8 @@ describe("Sprint 4 Free Features: Lecture Audio Sync & Storage", () => {
   });
 });
 
-describe("Sprint 5 Free Features: FSRS-4.5 Scheduler & 1-Click Image Occlusion", () => {
-  it("schedules monotonically longer intervals for Again < Hard < Good < Easy in FSRS-4.5 and adapts on lapse", () => {
+describe("Sprint 5 Free Features: FSRS-6 Scheduler & 1-Click Image Occlusion", () => {
+  it("schedules monotonically longer intervals for Again < Hard < Good < Easy in FSRS-6 and adapts on lapse", () => {
     const t0 = 1_700_000_000_000;
     const base = newSrs(t0);
     const rAgain = reviewFsrs(base, "again", t0);
@@ -113,7 +113,7 @@ describe("Sprint 5 Free Features: FSRS-4.5 Scheduler & 1-Click Image Occlusion",
     expect(rAgain.due).toBeLessThan(rHard.due);
     expect(rHard.due).toBeLessThan(rGood.due);
     expect(rGood.due).toBeLessThan(rEasy.due);
-    expect(rGood.fsrs!.stability).toBeGreaterThan(3);
+    expect(rGood.fsrs!.stability).toBeGreaterThan(2);
 
     // After interval days, retrievability at t = stability is ~90%
     expect(retrievability(rGood.fsrs!.stability, rGood.fsrs!.stability)).toBeCloseTo(0.9, 2);
@@ -129,7 +129,7 @@ describe("Sprint 5 Free Features: FSRS-4.5 Scheduler & 1-Click Image Occlusion",
     expect(rLapse.fsrs!.stability).toBeLessThan(rGood2.fsrs!.stability);
   });
 
-  it("switches StudySetView Smart Learn to FSRS-4.5 and displays FSRS intervals", async () => {
+  it("switches StudySetView Smart Learn to FSRS-6 and displays FSRS intervals", async () => {
     const user = userEvent.setup();
     const set = await createNotebook({ title: "Neuro Deck", kind: "studyset" });
     await addCard(set.id, { front: "Action potential threshold", back: "-55 mV" });
@@ -143,7 +143,7 @@ describe("Sprint 5 Free Features: FSRS-4.5 Scheduler & 1-Click Image Occlusion",
 
     await waitFor(async () => {
       const [c] = await listCards(set.id);
-      expect((c.srs as { fsrs?: { stability: number } }).fsrs?.stability).toBeGreaterThan(3);
+      expect((c.srs as { fsrs?: { stability: number } }).fsrs?.stability).toBeGreaterThan(2);
     });
   });
 

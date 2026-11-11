@@ -90,8 +90,9 @@ export async function trashNotebook(id: string, at: number = now()): Promise<voi
   await db.notebooks.update(id, { trashedAt: at });
 }
 
+/** Restoring moves updatedAt, so sync sees it as a change and restores it on the other devices too. */
 export async function restoreNotebook(id: string): Promise<void> {
-  await db.notebooks.update(id, { trashedAt: null });
+  await db.notebooks.update(id, { trashedAt: null, updatedAt: now() });
 }
 
 export const TRASH_DAYS = 30;

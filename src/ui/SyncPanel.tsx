@@ -4,6 +4,8 @@ import { toast } from "./Toast";
 import {
   connectPinata, connectTelegram, disconnectStorage, linkTelegramChat, lockSync, syncNow, unlockSync, useSyncStatus,
 } from "../sync/run";
+import { listTombstones, restoreToDevice, type Tombstone } from "../sync/deletion";
+import { useLive } from "../store/useLive";
 
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
@@ -29,6 +31,7 @@ export function SyncPanel() {
   const [token, setToken] = useState("");
   const [jwt, setJwt] = useState("");
   const [, tick] = useState(0);
+  const removed = useLive(() => listTombstones("device"), [], [] as Tombstone[]);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(t); }, []);
 
   if (s.state === "off" || s.state === "locked") {
@@ -118,6 +121,22 @@ export function SyncPanel() {
           </span>
         </li>
       </ol>
+      {removed.length > 0 && (
+        <>
+          <h4 className="sync-h">Removed from this device</h4>
+          <ul className="sync-removed">
+            {removed.map((t) => (
+              <li key={t.id}>
+                <span>{t.title}</span>
+                <button type="button" className="btn ghost" disabled={busy}
+                  onClick={() => void run(async () => { await restoreToDevice(t.id); await syncNow(); toast(`Downloading "${t.title}" again`); })}>
+                  Download again
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <p className="dim small" style={{ margin: 0 }}>Tokens and keys are saved to your account, encrypted with your passphrase, so your other devices get them too. Storage only ever sees encrypted data.</p>
     </section>
   );

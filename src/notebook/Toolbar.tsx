@@ -4,8 +4,8 @@ import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
   ArrowLeft, AudioLines, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
-  Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine, Presentation,
-  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut,
+  Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine,
+  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
 } from "lucide-react";
 import { useRuler } from "../ink/ruler";
 import { toggleRuler } from "../ink/RulerOverlay";
@@ -17,6 +17,7 @@ import { Menu } from "../ui/Menu";
 import { sendShapeStylePatch, useTool, type ToolName, type ToolState } from "./tool";
 import { SHAPES } from "../ink/shapes";
 import type { PenVariant } from "../ink/model";
+import { PenPresets } from "./PenPresets";
 
 const ICON = { size: 16, strokeWidth: 1.5 } as const;
 export const DEFAULT_COLORS = ["#E8E9EE", "#4FD1C5", "#3DDC97", "#FF8A5B", "#5BB8FF", "#F2C94C", "#FF6B6B", "#9A9DAB"];
@@ -83,7 +84,7 @@ export function Toolbar({
     { name: "lasso", label: "Lasso", hint: "Lasso (select, move, save element or make flashcard) [L]", icon: <Lasso {...ICON} /> },
     { name: "shape", label: "Shapes", hint: "Shapes (crisp vector lines, arrows & geometry) [S]", icon: <Shapes {...ICON} /> },
     { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal) [B]", icon: <RectangleHorizontal {...ICON} /> },
-    { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading trail for presenting, never saved) [K]", icon: <Presentation {...ICON} /> },
+    { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading red trail for presenting, never saved) [K]", icon: <LocateFixed {...ICON} color="#FF1F3D" /> },
     { name: "text", label: "Text box", hint: "Text box (click on the page) [T]", icon: <Type {...ICON} /> },
     { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
     { name: "hand", label: "Hand", hint: "Hand (scroll, or hold Space) [V]", icon: <Hand {...ICON} /> },
@@ -159,8 +160,11 @@ export function Toolbar({
       {t.tool === "pen" && (
         <select className="input" aria-label="Pen type" value={t.variant} onChange={(e) => set({ variant: e.target.value as PenVariant })}>
           <option value="ball">Ballpoint</option><option value="fountain">Fountain</option><option value="brush">Brush</option>
+          <option value="pencil">Pencil</option><option value="calligraphy">Calligraphy</option><option value="marker">Marker</option>
+          <option value="beautify">Beautify</option>
         </select>
       )}
+      <PenPresets paper={notebook.paper} />
       {t.tool === "shape" && (
         <>
           <select className="input" aria-label="Shape" title="Drag on the page to draw. Hold Shift for perfect squares, circles and 15-degree lines. Auto: draw by hand and hold still to snap."

@@ -11,7 +11,7 @@ const TEMPLATES: Template[] = ["blank", "ruled", "grid", "dot"];
 
 export function PageList({
   pages, notebook, mounted, width, renderPage,
-  onDuplicate, onDelete, onBookmark, onTemplate, onOpenStemTemplates, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll,
+  onDuplicate, onDelete, onBookmark, onTemplate, onOpenStemTemplates, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll, onReadHandwriting,
 }: {
   pages: Page[]; notebook: Notebook; mounted: Set<number>; width: number;
   renderPage: (p: Page, index: number, mounted: boolean, width: number) => ReactNode;
@@ -27,6 +27,7 @@ export function PageList({
   onRotate?: (p: Page) => void;
   onLayers?: (p: Page) => void;
   onTapeAll?: (p: Page, revealed: boolean) => void;
+  onReadHandwriting?: (p: Page) => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const safe = useSafeMotion(motionTokens.distance.lg);
@@ -49,6 +50,7 @@ export function PageList({
             { label: "Reveal all tape", onSelect: () => onTapeAll(p, true) },
             { label: "Cover all tape", onSelect: () => onTapeAll(p, false) },
           ] : []),
+          ...(p.kind === "ink" && onReadHandwriting ? [{ label: "Make handwriting searchable", onSelect: () => onReadHandwriting(p) }] : []),
           ...(onExportPage ? [{ label: "Export page as PDF", onSelect: () => onExportPage(p) }] : []),
           ...(onExportPageJpg ? [{ label: "Export page as JPG", onSelect: () => onExportPageJpg(p) }] : []),
           { label: "Delete", danger: true, onSelect: () => onDelete(p) },

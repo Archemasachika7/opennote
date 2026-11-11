@@ -49,6 +49,9 @@ export interface InkPage extends PageBase {
   title?: string;
   /** Background colour override (whiteboards). */
   bgColor?: string;
+  /** Handwriting read on this device (for search), and when it was read. */
+  inkText?: string;
+  inkTextAt?: number;
 }
 export interface TextPage extends PageBase { kind: "text"; doc: unknown | null }
 export interface HtmlPage extends PageBase {

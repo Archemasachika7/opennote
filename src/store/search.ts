@@ -1,7 +1,7 @@
 import { db } from "./schema";
 import { textOf } from "../text/textOf";
 
-export type SearchHitKind = "notebook" | "text" | "live" | "pdf" | "card";
+export type SearchHitKind = "notebook" | "text" | "live" | "pdf" | "card" | "ink";
 export type SearchHit = { notebookId: string; pageId?: string; title: string; snippet: string; kind?: SearchHitKind };
 
 export function stripTags(html: string): string {
@@ -26,7 +26,9 @@ export async function searchAll(raw: string): Promise<SearchHit[]> {
   await db.pages.each((p) => {
     if (!titles.has(p.notebookId)) return; // trashed notebook
     const nbTitle = titles.get(p.notebookId) ?? "";
-    if (p.kind === "ink" && p.background?.pdfText) {
+    if (p.kind === "ink" && p.inkText && p.inkText.toLowerCase().includes(q)) {
+      hits.push({ notebookId: p.notebookId, pageId: p.id, title: nbTitle, snippet: snippetAround(p.inkText.replace(/\s+/g, " "), q), kind: "ink" });
+    } else if (p.kind === "ink" && p.background?.pdfText) {
       const t = p.background.pdfText;
       if (t.toLowerCase().includes(q)) hits.push({ notebookId: p.notebookId, pageId: p.id, title: nbTitle, snippet: snippetAround(t, q), kind: "pdf" });
     } else if (p.kind === "text") {

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, PenLine, Sparkles, X, ZoomIn, ZoomOut } from "lucide-react";
-import type { HtmlPage, InkPage, Notebook, Page } from "../store/schema";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { FileText, PenLine, Plus, Sparkles, X, ZoomIn, ZoomOut } from "lucide-react";
+import { MAX_HTML_BYTES, type HtmlPage, type InkPage, type Notebook, type Page } from "../store/schema";
+import { detectArtifactType, titleOf } from "../live/detect";
 import { getNotebook, listNotebooks, restoreNotebook, toggleBookmark } from "../store/notebooks";
 import { navigate } from "../App";
 import { deletePageWithUndo, duplicatePage, getPages, insertPage, movePage, restoreDeletedPage, updatePage } from "../store/pages";
@@ -10,12 +11,13 @@ import { Thumbnails } from "./Thumbnails";
 import { PageList } from "./PageList";
 import { PageFrame } from "./PageFrame";
 import { useVisiblePages } from "./useVisiblePages";
-import { usePinchZoom } from "./usePinchZoom";
+import { restoreAnchor, usePinchZoom, type ZoomAnchor } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
 import { sendCommand, sendStampElement, setTool, useTool } from "./tool";
 import { addImage, pasteImages, setAllTape } from "../ink/objects";
 import { resolveImageTarget } from "./imageTarget";
-import { CLIP_MARKER, hasClipboard, pasteClipboard } from "../ink/clipboard";
+import { CLIP_MARKER, clipboardSize, hasClipboard, pasteClipboard, useClipboardVersion } from "../ink/clipboard";
+import { askPlace, PlaceHost } from "./PlacePicker";
 import { exportPagesPdf } from "../io/exportPdf";
 import { BACKUP_EXT, exportBackup } from "../io/backup";
 import { exportPagesJpg } from "../io/exportImages";
@@ -30,12 +32,15 @@ import { useSmartPaste } from "../live/useSmartPaste";
 import { LayersSheet } from "../ink/LayersSheet";
 import { ElementsSheet } from "../ink/ElementsSheet";
 import { RulerOverlay } from "../ink/RulerOverlay";
-import type { InsertKind } from "./InsertMenu";
+import { InsertMenu, type InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
 import { TemplatesSheet } from "./TemplatesSheet";
 import { getEffectiveTemplate, hydratePageTemplates, setStemTemplateForPage } from "../store/templates";
 import { AudioBar } from "./AudioBar";
+import { RecognizeSheet } from "./RecognizeSheet";
+import { onRecognizeRequest, useInkSearch, type RecognizeRequest } from "../ai/inkOcr";
+import { indexHandwriting } from "../store/inkIndex";
 import { SpeechNoteModal } from "./SpeechNoteModal";
 import { ZoomWritingWindow } from "./ZoomBox";
 import { generateCardFromSelection, generateCardsFromPageTapes } from "../study/occlusion";
@@ -147,8 +152,35 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   const [busyJob, setBusyJob] = useState<{ label: string; done: number; total: number } | null>(null);
   const [sheet, setSheet] = useState<{ index: number; edit?: HtmlPage; initial?: Partial<LiveDraft> } | null>(null);
   const [layersFor, setLayersFor] = useState<string | null>(null);
+  const [addAt, setAddAt] = useState<number | null>(null);
+  const [recog, setRecog] = useState<RecognizeRequest | null>(null);
+  const clipVersion = useClipboardVersion();
+  const clipSize = clipboardSize();
+  const [pasteHidden, setPasteHidden] = useState(false);
+  useEffect(() => { setPasteHidden(false); }, [clipVersion]);
+  const pasteTo = async (pageId: string) => {
+    await pasteClipboard(pageId);
+    toast("Pasted. Use the lasso to move it.");
+    setTimeout(() => document.getElementById(`page-${pageId}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+  };
+  useEffect(() => onRecognizeRequest(setRecog), []);
+  const inkSearch = useInkSearch();
   const width = BASE_WIDTH * zoom;
-  usePinchZoom(scroller, setZoomRaw, clampZoom);
+  const column = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const pendingAnchor = useRef<ZoomAnchor | null>(null);
+  usePinchZoom({
+    scroller, column, ready: !!notebook && !notebook.trashedAt && pages.length > 0,
+    getZoom: () => zoomRef.current, clamp: clampZoom,
+    commit: (z, anchor) => { pendingAnchor.current = anchor; setZoomRaw(z); },
+  });
+  // keep the pinched point under the fingers once the pages re-laid out at the new zoom
+  useLayoutEffect(() => {
+    const a = pendingAnchor.current;
+    pendingAnchor.current = null;
+    if (a && scroller.current) restoreAnchor(scroller.current, a);
+  }, [zoom]);
 
   useEffect(() => { void hydratePageTemplates(); }, []);
 
@@ -166,6 +198,19 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   }, [pageId, hasPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const curPage = pages[current];
+
+  // "Search handwriting": a few seconds after writing stops, read the page being written on (on-device)
+  const indexing = useRef(false);
+  const staleInk = curPage?.kind === "ink" && !curPage.board && (curPage.inkTextAt ?? 0) < curPage.updatedAt;
+  useEffect(() => {
+    if (!inkSearch || !staleInk || !curPage) return;
+    const t = window.setTimeout(() => {
+      if (indexing.current) return;
+      indexing.current = true;
+      void indexHandwriting(curPage.id).catch(() => undefined).finally(() => { indexing.current = false; });
+    }, 5000);
+    return () => window.clearTimeout(t);
+  }, [inkSearch, staleInk, curPage?.id, curPage?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   useStudioShortcuts({
     onUndo: () => curPage && sendCommand("undo", curPage.id),
     onRedo: () => curPage && sendCommand("redo", curPage.id),
@@ -180,8 +225,13 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     const snapshot = { pages, current };
     void platform.openFiles(["image/*"]).then(async (files) => {
       if (files.length === 0) return;
-      const targetPageId = await resolveImageTarget(id, snapshot.pages, snapshot.current);
+      const here = snapshot.pages[snapshot.current];
+      const targetPageId = here?.kind === "ink" ? here.id
+        : snapshot.pages.length === 0 ? await resolveImageTarget(id, snapshot.pages, snapshot.current)
+        : await askPlace({ title: files.length === 1 ? "Put the picture on…" : `Put ${files.length} pictures on…`, fromPageId: here?.id, allowCurrent: false });
+      if (!targetPageId) return;
       for (const f of files) await addImage(targetPageId, f);
+      if (targetPageId !== here?.id) setTimeout(() => document.getElementById(`page-${targetPageId}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     });
   }, [tool.tool]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -192,13 +242,17 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if (hasClipboard() && (text === CLIP_MARKER || text === "")) {
         e.preventDefault();
-        void resolveImageTarget(id, pages, current).then((targetId) => pasteClipboard(targetId));
+        const here = pages[current];
+        if (here?.kind === "ink") void pasteClipboard(here.id);
+        else void askPlace({ title: "Paste on…", fromPageId: here?.id, allowCurrent: false }).then((to) => { if (to) void pasteClipboard(to); });
         return;
       }
       const files = [...(e.clipboardData?.files ?? [])].filter((x) => x.type.startsWith("image/"));
       if (files.length === 0) return;
       e.preventDefault();
-      void resolveImageTarget(id, pages, current).then((targetId) => pasteImages(files, targetId));
+      const here = pages[current];
+      if (here?.kind === "ink") void pasteImages(files, here.id);
+      else void askPlace({ title: "Put the picture on…", fromPageId: here?.id, allowCurrent: false }).then((to) => { if (to) void pasteImages(files, to); });
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
@@ -206,6 +260,27 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setSheet({ index }); return; }
+    if (kind === "file") {
+      const f = await platform.openFile([".svg", ".html", ".htm", "image/svg+xml", "text/html"]);
+      if (!f) return;
+      try {
+        const source = await f.text();
+        if (source.length > MAX_HTML_BYTES) { toast(`"${f.name}" is too large for a live page (max ${Math.round(MAX_HTML_BYTES / 1024)} KB).`); return; }
+        const artifactType = /\.svg$/i.test(f.name) || f.type === "image/svg+xml" ? "svg" : detectArtifactType(source) === "svg" ? "svg" : "html";
+        const fromFile = f.name.replace(/\.(svg|html?)$/i, "").trim();
+        const found = titleOf(source, artifactType);
+        const p = await insertPage(id, index, {
+          kind: "html", source, artifactType, allowNetwork: false,
+          title: found !== "Live page" ? found : fromFile || "Live page",
+        });
+        blotReact("hop");
+        toast(`Added "${f.name}" as a live page`);
+        setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      } catch (e) {
+        toast(`Couldn't open "${f.name}": ${e instanceof Error ? e.message : String(e)}`);
+      }
+      return;
+    }
     if (kind === "pdf") {
       const f = await platform.openFile([".pdf", "application/pdf"]);
       if (!f) return;
@@ -217,6 +292,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
           onProgress: (done, total) => setBusyJob({ label: `Importing "${f.name}"`, done, total }),
         });
         toast(`Added ${r.pageIds.length} PDF ${r.pageIds.length === 1 ? "page" : "pages"}`);
+        blotReact("bounce");
       } catch (e) {
         toast(e instanceof Error ? e.message : String(e));
       } finally {
@@ -417,7 +493,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
               </div>
             </div>
           ) : (
-            <div className="nb-column" style={{ width }}>
+            <div className="nb-column" ref={column} style={{ width }}>
               <PageList
                 pages={pages}
                 notebook={notebook}
@@ -446,7 +522,15 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
                 onBookmark={(p) => toggleBookmark(id, p.id)}
                 onTemplate={(p, t) => void setStemTemplateForPage(p.id, t, updatePage)}
                 onOpenStemTemplates={(p) => setTemplatesFor(p)}
+                onReadHandwriting={(p) => {
+                  toast("Reading the handwriting on this page...");
+                  void indexHandwriting(p.id).then((t) => toast(t ? "Handwriting on this page is now searchable" : "No handwriting found on this page"))
+                    .catch((e) => toast(e instanceof Error ? e.message : String(e)));
+                }}
               />
+              <button type="button" className="nb-add-page" onClick={() => setAddAt(pages.length)}>
+                <Plus size={16} strokeWidth={1.5} />Add page
+              </button>
             </div>
           )}
         </div>
@@ -488,6 +572,18 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       />
       <PasteSheet open={!!sheet} initial={sheet?.initial} onClose={() => setSheet(null)} onSave={saveLive} />
       <LayersSheet page={(pages.find((p) => p.id === layersFor && p.kind === "ink") as InkPage | undefined) ?? null} onClose={() => setLayersFor(null)} />
+      <InsertMenu open={addAt !== null} position={addAt !== null ? addAt + 1 : undefined}
+        onClose={() => setAddAt(null)} onPick={(k) => { if (addAt !== null) void insert(addAt, k); }} />
+      <RecognizeSheet request={recog} onClose={() => setRecog(null)} />
+      <PlaceHost notebookId={notebook.id} pages={pages} current={current} />
+      {clipVersion > 0 && clipSize > 0 && !pasteHidden && (
+        <div className="paste-bar" role="region" aria-label="Paste">
+          <span className="dim">{clipSize} {clipSize === 1 ? "item" : "items"} copied</span>
+          {cur?.kind === "ink" && <button className="btn primary" onClick={() => void pasteTo(cur.id)}>Paste on page {current + 1}</button>}
+          <button className="btn" onClick={() => void askPlace({ title: "Paste on…", allowCurrent: true }).then((to) => { if (to) void pasteTo(to); })}>Paste on…</button>
+          <button className="btn ghost icon" aria-label="Hide paste bar" onClick={() => setPasteHidden(true)}><X size={14} strokeWidth={1.5} /></button>
+        </div>
+      )}
       <RulerOverlay />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
     </div>

@@ -77,7 +77,7 @@ describe("Landing Page (21st.dev architectural studio, zero auth wall)", () => {
     // 3. Peel Study Tape occlusion strip in Bento primitive 05
     const tapeBtn = screen.getByRole("button", { name: /peel study tape/i });
     fireEvent.click(tapeBtn);
-    expect(screen.getByText(/FSRS-4\.5 interval/i)).toBeInTheDocument();
+    expect(screen.getByText(/FSRS-6 interval/i)).toBeInTheDocument();
   });
 });
 

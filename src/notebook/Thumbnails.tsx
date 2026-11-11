@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bookmark, Plus } from "lucide-react";
-import type { Page, Paper } from "../store/schema";
+import { PAGE_SIZE, type Page, type Paper } from "../store/schema";
 import { InsertMenu, type InsertKind } from "./InsertMenu";
 import { headingsOf } from "../text/outline";
 import { textOf } from "../text/textOf";
+import { PageThumbCanvas } from "./PageThumbCanvas";
 
 const TABS = ["pages", "bookmarks", "outline"] as const;
 type SideTab = (typeof TABS)[number];
@@ -17,15 +18,19 @@ export function Thumbnails({ pages, bookmarks, current, paper = "dark", onJump, 
   const [menuAt, setMenuAt] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // keep the page being written on visible in the sidebar as you scroll the notebook
+  useEffect(() => {
+    if (tab !== "pages") return;
+    const el = listRef.current?.querySelector<HTMLElement>(".thumb.current");
+    el?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [current, tab]);
 
   const gap = (index: number) => (
     <div className="thumb-gap" key={`gap-${index}`}>
       <button className="gap-btn" aria-label={`Insert page at ${index + 1}`} onClick={() => setMenuAt(index)}>
         <Plus size={12} strokeWidth={1.5} />
       </button>
-      {menuAt === index && (
-        <InsertMenu style={{ left: 8, top: 20 }} onClose={() => setMenuAt(null)} onPick={(k) => onInsert(index, k)} />
-      )}
     </div>
   );
 
@@ -54,7 +59,7 @@ export function Thumbnails({ pages, bookmarks, current, paper = "dark", onJump, 
         </div>
       )}
       {tab === "pages" ? (
-        <div className="thumb-list">
+        <div className="thumb-list" ref={listRef}>
           {gap(0)}
           {pages.map((p, i) => {
             const bookmarked = bookmarks.includes(p.id);
@@ -84,6 +89,11 @@ export function Thumbnails({ pages, bookmarks, current, paper = "dark", onJump, 
                   }}
                   aria-label={`Page ${i + 1}`}>
                   <span className={`thumb-paper kind-${p.kind}`} />
+                  {p.kind === "ink" && (
+                    <PageThumbCanvas pageId={p.id} version={p.updatedAt} paper={paper} layers={p.layers}
+                      logicalW={p.size?.w ?? PAGE_SIZE.w} logicalH={p.size?.h ?? PAGE_SIZE.h}
+                      backgroundBlobId={p.background?.blobId} />
+                  )}
                   {bookmarked && (
                     <span className="thumb-bm" aria-hidden>
                       <Bookmark size={11} strokeWidth={1.5} fill="currentColor" />
@@ -97,6 +107,9 @@ export function Thumbnails({ pages, bookmarks, current, paper = "dark", onJump, 
               </div>
             );
           })}
+          <button type="button" className="thumb-add" onClick={() => setMenuAt(pages.length)}>
+            <Plus size={15} strokeWidth={1.5} />Add page
+          </button>
         </div>
       ) : tab === "outline" ? (
         <div className="thumb-list">
@@ -122,6 +135,8 @@ export function Thumbnails({ pages, bookmarks, current, paper = "dark", onJump, 
           })}
         </div>
       )}
+      <InsertMenu open={menuAt !== null} position={menuAt !== null ? menuAt + 1 : undefined}
+        onClose={() => setMenuAt(null)} onPick={(k) => { if (menuAt !== null) onInsert(menuAt, k); }} />
     </aside>
   );
 }

@@ -291,7 +291,7 @@ function Learn({ setId, cards, onEdit }: { setId: string; cards: Card[]; onEdit:
             value={algo}
             onChange={(e) => switchAlgo(e.target.value as "sm2" | "fsrs")}>
             <option value="sm2">SM-2 (Classic)</option>
-            <option value="fsrs">FSRS-4.5 (Adaptive)</option>
+            <option value="fsrs">FSRS-6 (Adaptive)</option>
           </select>
         </span>
       </div>

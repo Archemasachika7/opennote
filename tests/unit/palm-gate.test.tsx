@@ -6,7 +6,7 @@ import { getPages } from "../../src/store/pages";
 import { getStrokes } from "../../src/store/strokes";
 import { InkLayer } from "../../src/ink/InkLayer";
 import { setTool } from "../../src/notebook/tool";
-import { getPenOnly, HOVER_GRACE_MS, isPalmContact, judgeTouch, notePen, PEN_GRACE_MS, resetGate, setPenOnly } from "../../src/ink/palmGate";
+import { fingerCount, getPenOnly, HOVER_GRACE_MS, isPalmContact, isPalmPointer, judgeTouch, notePen, PEN_GRACE_MS, resetGate, setPenOnly, trackTouch, typicalTouchWidth } from "../../src/ink/palmGate";
 import { smoothInput, speedFactor } from "../../src/ink/render";
 
 let pageId = "";
@@ -102,5 +102,43 @@ describe("speed-aware smoothing", () => {
     const out = smoothInput(v);
     const tip = out.reduce((m, p) => (p[1] > m[1] ? p : m));
     expect(tip[1]).toBeCloseTo(40, 0);
+  });
+});
+
+describe("passive stylus / finger-only screens (measured on a Redmi Pad)", () => {
+  const ev = (type: string, pointerId: number, w: number, x = 100, y = 100) =>
+    ({ type, pointerId, pointerType: "touch", width: w, height: w, clientX: x, clientY: y }) as unknown as PointerEvent;
+  const write = (id: number, w: number, t0: number) => {
+    trackTouch(ev("pointerdown", id, w, 0, 0), t0);
+    for (let k = 1; k <= 5; k++) trackTouch(ev("pointermove", id, w, k * 10, 0), t0 + k * 20);
+    trackTouch(ev("pointerup", id, w, 50, 0), t0 + 200);
+  };
+
+  it("learns this screen's writing contact size, then treats clearly bigger contacts as a palm", () => {
+    expect(typicalTouchWidth()).toBeNull();
+    [2.6, 2.9, 2.9, 2.3, 3.4].forEach((w, i) => write(10 + i, w, i * 1000));
+    expect(typicalTouchWidth()).toBeCloseTo(2.9, 1);
+    expect(isPalmContact({ width: 3.4, height: 3.4 })).toBe(false); // the stylus at its widest
+    expect(isPalmContact({ width: 4.0, height: 4.0 })).toBe(true); // the smallest palm blob measured
+  });
+
+  it("a whole hand (three or more contacts at once) is palm, and it never counts as a pinch", () => {
+    trackTouch(ev("pointerdown", 1, 4), 0);
+    trackTouch(ev("pointerdown", 2, 4), 5);
+    expect(fingerCount()).toBe(2);
+    trackTouch(ev("pointerdown", 3, 4), 10);
+    expect([1, 2, 3].every((id) => isPalmPointer(id))).toBe(true);
+    expect(fingerCount()).toBe(0);
+  });
+
+  it("a touch that spreads into a palm while drawing loses its line", async () => {
+    [2.9, 2.9, 2.9].forEach((w, i) => write(20 + i, w, i * 1000));
+    const el = render(<InkLayer pageId={pageId} width={600} height={800} paper="dark" />).getByTestId("ink-surface");
+    fireEvent.pointerDown(el, { pointerId: 7, pointerType: "touch", width: 2.9, height: 2.9, clientX: 50, clientY: 50, buttons: 1 });
+    fireEvent.pointerMove(el, { pointerId: 7, pointerType: "touch", width: 2.9, height: 2.9, clientX: 90, clientY: 60, buttons: 1 });
+    fireEvent.pointerMove(el, { pointerId: 7, pointerType: "touch", width: 9, height: 9, clientX: 95, clientY: 62, buttons: 1 });
+    fireEvent.pointerUp(el, { pointerId: 7, pointerType: "touch", clientX: 95, clientY: 62 });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(await getStrokes(pageId)).toHaveLength(0);
   });
 });

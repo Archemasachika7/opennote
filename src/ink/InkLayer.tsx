@@ -9,7 +9,7 @@ import { shapePoints, snapLineEndpoint, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, onShapeStylePatch, onStampElement, setTool, useTool, type ShapeStylePatch } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
-import { countCancelled, countPen, judgeTouch, type TouchVerdict } from "./palmGate";
+import { countCancelled, countPen, isPalmContact, isPalmPointer, judgeTouch, onPalmDetected, type TouchVerdict } from "./palmGate";
 import { historyFor, type Op } from "./history";
 import { notifyPageChanged, onPageChanged } from "./pageEvents";
 import { copyToClipboard, cutToClipboard, moveSelection } from "./clipboard";
@@ -510,6 +510,8 @@ export function InkLayer({
     const t = getTool();
     if (e.pointerType === "pen" && !t.penSeen) setTool({ penSeen: true });
     const cur = active.current;
+    // a palm landing while a line is being written is just the hand: leave the line alone
+    if (cur && e.pointerType === "touch" && (isPalmPointer(e.pointerId) || isPalmContact(e))) return;
     if (cur && !cur.pen && cur.id !== e.pointerId && (e.pointerType === "touch" || e.pointerType === "pen")) {
       // a second finger (a pinch) or the pen arrived while a finger was "writing": that finger line was a
       // pinch or a resting palm, so it goes without being saved
@@ -665,6 +667,15 @@ export function InkLayer({
     const wctx = wet.current?.getContext("2d");
     if (wctx) clearCanvas(wctx);
   };
+
+  // a touch that is already drawing turns out to be a palm (it spread, or the whole hand landed): drop its line
+  const discardRef = useRef(discardActive);
+  discardRef.current = discardActive;
+  useEffect(() => onPalmDetected((id) => {
+    pans.current.delete(id);
+    const a = active.current;
+    if (a && a.id === id && !a.pen) { discardRef.current(); countCancelled(); }
+  }), []);
 
   /** The browser took the pointer away (it decided on a scroll, or the pen lost contact): never commit a partial line. */
   const cancel = (ev: React.PointerEvent) => {

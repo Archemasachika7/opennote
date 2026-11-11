@@ -74,17 +74,23 @@ function targets(): Target[] {
 }
 
 let frame = 0;
+let lastSent = "";
 function schedule(): void {
   if (!started || frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
     const t = getTool();
     const armed = t.tool === "pen" || t.tool === "highlighter";
-    void NativeInk.configure({
+    const msg = {
       enabled: on, armed, color: hexToArgb(t.color),
-      family: t.tool === "highlighter" ? "highlighter" : t.variant === "marker" ? "marker" : "pen",
-      targets: on && armed ? targets() : [],
-    }).catch(() => undefined);
+      family: (t.tool === "highlighter" ? "highlighter" : t.variant === "marker" ? "marker" : "pen") as "pen" | "marker" | "highlighter",
+      targets: (on && armed ? targets() : []).map((x) => ({ ...x, left: Math.round(x.left), top: Math.round(x.top), width: Math.round(x.width), height: Math.round(x.height) })),
+    };
+    // only cross the bridge when something actually changed (the 400 ms re-measure is usually a no-op)
+    const key = JSON.stringify(msg);
+    if (key === lastSent) return;
+    lastSent = key;
+    void NativeInk.configure(msg).catch(() => { lastSent = ""; });
   });
 }
 

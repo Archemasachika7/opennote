@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import { fingerCount, isPalmContact } from "../ink/palmGate";
 
 /** A point on a page (as a fraction of the page) that must stay under a screen point after a zoom. */
 export type ZoomAnchor = { pageIndex: number; fx: number; fy: number; sx: number; sy: number };
@@ -103,7 +104,9 @@ export function usePinchZoom(opts: {
       return { mx: (a.clientX + b.clientX) / 2, my: (a.clientY + b.clientY) / 2, d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1 };
     };
     const tstart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
+      // two fingers, not a palm: a whole hand (3+ contacts) or a palm-sized contact never zooms
+      if (e.touches.length !== 2 || fingerCount() !== 2) return;
+      if ([...e.touches].some((t) => isPalmContact({ width: t.radiusX * 2, height: t.radiusY * 2 }))) return;
       if (e.cancelable) e.preventDefault();
       const t = two(e);
       if (g) end();

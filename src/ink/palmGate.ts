@@ -30,8 +30,8 @@ type State = { lastPenAt: number; lastHoverAt: number; penDown: boolean; penOnly
 const state: State = { lastPenAt: -Infinity, lastHoverAt: -Infinity, penDown: false, penOnly: readPenOnly() };
 
 /* ---- diagnostics (read by the ?debug=palm overlay) ---- */
-export type GateStats = { pen: number; touchWrite: number; touchNavigate: number; palmBySize: number; palmByPen: number; cancelled: number; last: string };
-const stats: GateStats = { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByPen: 0, cancelled: 0, last: "" };
+export type GateStats = { pen: number; touchWrite: number; touchNavigate: number; palmBySize: number; palmByCluster: number; palmByPen: number; cancelled: number; last: string };
+const stats: GateStats = { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByCluster: 0, palmByPen: 0, cancelled: 0, last: "" };
 const subs = new Set<() => void>();
 let snapshot = { ...stats };
 const changed = () => { snapshot = { ...stats }; subs.forEach((f) => f()); };
@@ -67,16 +67,97 @@ export function penActive(now: number = performance.now()): boolean {
   return state.penDown || now - state.lastPenAt < PEN_GRACE_MS || now - state.lastHoverAt < HOVER_GRACE_MS;
 }
 
-/** Bigger than a fingertip: a palm or the side of a hand. Browsers that don't report size give 0 or 1. */
+/*
+ * ---- touch screens without a real pen (passive stylus, finger) ----
+ * Measured on a Redmi Pad (capacitive only, no stylus input, Android palm rejection off): a passive
+ * stylus or fingertip reports a contact ~3 CSS px wide; a resting palm 4–14 px per blob, splitting into
+ * 5–7 simultaneous contacts; the heel of the hand 6–26 px. Screens report sizes very differently, so the
+ * palm limit is learned from this device's own writing contacts and remembered.
+ */
+const WIDTH_KEY = "opennote.touchWidths";
+const MAX_SAMPLES = 24;
+/** Above this many simultaneous touches it's a hand on the glass, not a gesture. */
+const CLUSTER = 3;
+let widths: number[] = (() => { try { return JSON.parse(localStorage.getItem(WIDTH_KEY) ?? "[]") as number[]; } catch { return []; } })();
+const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
+
+/** Typical width of a writing contact on this screen (CSS px), once a few strokes have been seen. */
+export function typicalTouchWidth(): number | null { return widths.length >= 3 ? median(widths) : null; }
+
+/** A contact wider than this is a palm. Learned per device; generous until learned. */
+export function palmWidthLimit(): number {
+  const t = typicalTouchWidth();
+  return t ? Math.max(t * 1.35, t + 0.8) : PALM_CONTACT_PX;
+}
+
+const contactWidth = (e: Pick<PointerEvent, "width" | "height">) => Math.max(e.width ?? 0, e.height ?? 0);
+
+/** Bigger than a writing contact on this screen: a palm or the side of a hand. Sizes of 0 or 1 mean "not reported". */
 export function isPalmContact(e: Pick<PointerEvent, "width" | "height">): boolean {
-  return (e.width ?? 0) > PALM_CONTACT_PX || (e.height ?? 0) > PALM_CONTACT_PX;
+  const w = contactWidth(e);
+  return w > 1 && w > palmWidthLimit();
+}
+
+/** Learn from a finished touch that clearly wrote (moved, short, alone, not a palm). */
+export function learnWritingContact(maxWidth: number): void {
+  if (!(maxWidth > 1) || maxWidth > PALM_CONTACT_PX) return;
+  widths = [...widths, Math.round(maxWidth * 100) / 100].slice(-MAX_SAMPLES);
+  try { localStorage.setItem(WIDTH_KEY, JSON.stringify(widths)); } catch { /* private mode */ }
+}
+
+type Live = { start: number; maxW: number; path: number; x: number; y: number; alone: boolean; palm: boolean };
+const live = new Map<number, Live>();
+const palmSubs = new Set<(pointerId: number) => void>();
+/** Hear when a touch already in progress turns out to be a palm (it grew, or a whole hand landed). */
+export function onPalmDetected(f: (pointerId: number) => void): () => void { palmSubs.add(f); return () => { palmSubs.delete(f); }; }
+export const isPalmPointer = (pointerId: number): boolean => live.get(pointerId)?.palm === true;
+/** Touches on the glass right now that are not palms (for pinch zoom). */
+export const fingerCount = (): number => [...live.values()].filter((l) => !l.palm).length;
+
+function markPalm(id: number, l: Live, why: "size" | "cluster") {
+  if (l.palm) return;
+  l.palm = true;
+  if (why === "size") stats.palmBySize++; else stats.palmByCluster++;
+  stats.last = `touch ${l.maxW.toFixed(1)}px → palm (${why})`;
+  changed();
+  palmSubs.forEach((f) => f(id));
+}
+
+/** Watch every touch from the document, before the page handles it. */
+export function trackTouch(e: Pick<PointerEvent, "type" | "pointerId" | "pointerType" | "width" | "height" | "clientX" | "clientY">, now = performance.now()): void {
+  if (e.pointerType !== "touch") return;
+  const w = contactWidth(e);
+  if (e.type === "pointerdown") {
+    const l: Live = { start: now, maxW: w, path: 0, x: e.clientX, y: e.clientY, alone: live.size === 0, palm: false };
+    live.set(e.pointerId, l);
+    for (const o of live.values()) if (o !== l) o.alone = false;
+    if (isPalmContact(e)) markPalm(e.pointerId, l, "size");
+    // a whole hand: every contact on the glass is palm
+    if (live.size >= CLUSTER) for (const [id, o] of live) markPalm(id, o, "cluster");
+    return;
+  }
+  const l = live.get(e.pointerId);
+  if (!l) return;
+  if (e.type === "pointermove") {
+    l.path += Math.hypot(e.clientX - l.x, e.clientY - l.y);
+    l.x = e.clientX; l.y = e.clientY;
+    if (w > l.maxW) l.maxW = w;
+    // a palm often lands small and spreads as it settles
+    if (isPalmContact(e)) markPalm(e.pointerId, l, "size");
+    return;
+  }
+  if (e.type === "pointerup" || e.type === "pointercancel") {
+    live.delete(e.pointerId);
+    if (e.type === "pointerup" && !l.palm && l.alone && l.path > 25 && now - l.start < 3000) learnWritingContact(l.maxW);
+  }
 }
 
 /** What a new touch contact should do. `penSeen`: a pen has been used on this device this session. */
-export function judgeTouch(e: Pick<PointerEvent, "width" | "height">, opts: { penSeen: boolean; now?: number }): TouchVerdict {
+export function judgeTouch(e: Pick<PointerEvent, "width" | "height"> & Partial<Pick<PointerEvent, "pointerId">>, opts: { penSeen: boolean; now?: number }): TouchVerdict {
   const now = opts.now ?? performance.now();
   let v: TouchVerdict;
-  if (isPalmContact(e)) { v = "palm"; stats.palmBySize++; }
+  if (e.pointerId !== undefined && isPalmPointer(e.pointerId)) { v = "palm"; }
+  else if (isPalmContact(e)) { v = "palm"; stats.palmBySize++; }
   else if (penActive(now)) { v = "palm"; stats.palmByPen++; }
   else if (state.penOnly || opts.penSeen) { v = "navigate"; stats.touchNavigate++; }
   else { v = "write"; stats.touchWrite++; }
@@ -91,7 +172,9 @@ export function countCancelled(): void { stats.cancelled++; stats.last = "cancel
 /** Tests only. */
 export function resetGate(): void {
   state.lastPenAt = -Infinity; state.lastHoverAt = -Infinity; state.penDown = false;
-  Object.assign(stats, { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByPen: 0, cancelled: 0, last: "" });
+  Object.assign(stats, { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByCluster: 0, palmByPen: 0, cancelled: 0, last: "" });
+  live.clear();
+  widths = [];
   changed();
 }
 
@@ -100,5 +183,9 @@ if (typeof document !== "undefined") {
   const seePen = (e: PointerEvent) => { if (e.pointerType === "pen") notePen(e.type, performance.now(), e.buttons > 0); };
   for (const t of ["pointerover", "pointerenter", "pointermove", "pointerdown", "pointerup", "pointercancel", "pointerleave"]) {
     document.addEventListener(t, seePen as EventListener, { capture: true, passive: true });
+  }
+  const seeTouch = (e: PointerEvent) => trackTouch(e);
+  for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
+    document.addEventListener(t, seeTouch as EventListener, { capture: true, passive: true });
   }
 }

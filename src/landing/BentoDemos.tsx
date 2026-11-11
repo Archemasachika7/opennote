@@ -8,7 +8,6 @@ import { AudioLines, Code2, GraduationCap, Pause, Play, Shapes } from "lucide-re
  */
 export function SpotlightCard({
   className = "",
-  index,
   tag,
   title,
   desc,
@@ -16,7 +15,6 @@ export function SpotlightCard({
   children,
 }: {
   className?: string;
-  index: string;
   tag: string;
   title: string;
   desc: string;
@@ -37,9 +35,7 @@ export function SpotlightCard({
         el.style.setProperty("--my", `${e.clientY - r.top}px`);
       }}>
       <header className="lp-bento-head">
-        <div className="lp-bento-eyebrow mono">
-          <span className="lp-bento-idx">{index}</span>
-          <span className="lp-bento-sep">/</span>
+        <div className="lp-bento-eyebrow">
           <span>{tag}</span>
           <span className="lp-bento-icon">{icon}</span>
         </div>
@@ -452,50 +448,45 @@ export function BentoDemos() {
     <div className="lp-bento-grid">
       <SpotlightCard
         className="lp-span-7"
-        index="01"
-        tag="VECTOR & FREEHAND ENGINE"
-        title="Hold 0.4s to snap geometry. Fill interiors independently."
-        desc="Draw naturally with pressure-sensitive curves, pause at the end of a stroke to snap crisp lines, arrows, triangles, diamonds, and rectangles, or pick paper-adaptive Tint & Solid interior fills."
+        tag="Shapes"
+        title="Hold the pen still and your scribble becomes a clean shape."
+        desc="Pause at the end of a stroke to snap lines, arrows, triangles, diamonds and boxes, then fill them with a tint or solid colour."
         icon={<Shapes size={14} strokeWidth={1.6} />}>
         <ShapeSnapDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-5"
-        index="02"
-        tag="AUDIO <-> INK TIMELINE"
-        title="Every pen point knows the millisecond it was written."
-        desc="Record lectures offline into IndexedDB. Scrubbing or tapping any handwritten word jumps the audio and replays your strokes point-by-point."
+        tag="Lecture replay"
+        title="Tap a word you wrote to hear what was said."
+        desc="Record a class while you write. Later, tap any line of ink and the audio jumps there, while your strokes replay in time."
         icon={<Play size={14} strokeWidth={1.6} />}>
         <AudioInkReplayDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-5"
-        index="03"
-        tag="ISOLATED LIVE PAGES"
-        title="Paste interactive simulations right between your pages."
-        desc="Drop HTML, SVG, or React JSX into a sandboxed iframe page with crash-guard recovery — then switch to Annotate mode to write directly on top of live charts."
+        tag="Live pages"
+        title="Put a working simulation between your pages."
+        desc="Paste HTML, SVG or React and it runs on its own page, safely sandboxed. Switch to Annotate to write on top of it."
         icon={<Code2 size={14} strokeWidth={1.6} />}>
         <LiveOscillatorDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-4"
-        index="04"
-        tag="SARVAM AI · SAARAS:V3"
-        title="Multilingual speech-to-note across 11 Indic scripts + English."
-        desc="Auto-encodes 16kHz mono PCM WAV in <=25s segments for long lectures, with native script, code-mix, or instant English translation."
+        tag="Speech to notes"
+        title="Lectures in 11 Indian languages and English, turned into text."
+        desc="Keep the original script, mix languages the way people speak, or translate to English as you go."
         icon={<AudioLines size={14} strokeWidth={1.6} />}>
         <SarvamSttDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-3"
-        index="05"
-        tag="ACTIVE RECALL"
-        title="Study Tape to FSRS-6 cards."
-        desc="Mask terms right on your ink page, peel to self-test, or convert strips into scheduled image-occlusion decks."
+        tag="Flashcards"
+        title="Cover it with tape. Test yourself."
+        desc="Hide a term on your page, peel to check, or turn the tape into flashcards that come back on schedule."
         icon={<GraduationCap size={14} strokeWidth={1.6} />}>
         <TapeOcclusionDemo />
       </SpotlightCard>

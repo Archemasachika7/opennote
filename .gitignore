@@ -21,3 +21,7 @@ opennote-story/out/
 opennote-story/stills/
 opennote-story/*.mp4
 .playwright-mcp/
+
+# signing keys never go in git (CI writes the release key from GitHub Secrets)
+*.jks
+*.keystore

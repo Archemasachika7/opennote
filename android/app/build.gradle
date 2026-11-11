@@ -21,26 +21,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Every APK (CI and local) is signed with the same key, committed on purpose: without it each CI run
-    // signed with a new throwaway debug key, and Android refused to install an update over an older APK.
-    // It is a public key pair, so it proves nothing about the author; it only keeps updates installable.
+    // Published APKs are signed with a private release key that is never committed. CI writes it from
+    // GitHub Secrets and passes these four environment variables. Without them (a local build, or a pull
+    // request from a fork) Gradle falls back to the machine's own debug key: that APK runs, but Android
+    // won't install it over a published one, which is exactly what keeps updates trustworthy.
+    def releaseStore = System.getenv('OPENNOTE_KEYSTORE_FILE')
+    def hasReleaseKey = releaseStore && file(releaseStore).exists()
     signingConfigs {
-        shared {
-            storeFile file('opennote-shared.keystore')
-            storePassword 'opennote-shared'
-            keyAlias 'opennote'
-            keyPassword 'opennote-shared'
+        if (hasReleaseKey) {
+            release {
+                storeFile file(releaseStore)
+                storePassword System.getenv('OPENNOTE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('OPENNOTE_KEY_ALIAS')
+                keyPassword System.getenv('OPENNOTE_KEY_PASSWORD')
+            }
         }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.shared
+            if (hasReleaseKey) signingConfig signingConfigs.release
             // `./gradlew assembleDebug -PinkLab`: a test build that installs next to the real app
             // (its own data, so trying the native ink layer can never touch real notes)
             if (project.hasProperty('inkLab')) applicationIdSuffix '.inklab'
         }
         release {
-            signingConfig signingConfigs.shared
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

@@ -198,7 +198,6 @@ export function HeroCanvasDemo() {
   const [penWidth, setPenWidth] = useState(3.4);
   const [strokes, setStrokes] = useState<DemoStroke[]>(() => buildSeedStrokes());
   const [replayProgress, setReplayProgress] = useState(1);
-  const [latencyMs, setLatencyMs] = useState("1.8");
   const [hasDrawn, setHasDrawn] = useState(false);
 
   const drawingRef = useRef<{ pts: [number, number, number][]; lastT: number } | null>(null);
@@ -281,7 +280,6 @@ export function HeroCanvasDemo() {
     return [x, y, p];
   };
 
-  const totalSamples = strokes.reduce((sum, s) => sum + s.pts.length, 0);
 
   return (
     <div className="lp-stage-frame">
@@ -290,7 +288,7 @@ export function HeroCanvasDemo() {
           <span />
           <span />
           <span />
-          <code className="mono lp-stage-path">physics-201 / damped-oscillator.ink</code>
+          <span className="lp-stage-path">Physics 201 · Damped oscillator</span>
         </div>
 
         <div className="lp-stage-tools" role="toolbar" aria-label="Interactive hero canvas tools">
@@ -377,11 +375,8 @@ export function HeroCanvasDemo() {
           onPointerMove={(e) => {
             const cur = drawingRef.current;
             if (!cur) return;
-            const t0 = performance.now();
             cur.pts.push(toCanvasPt(e));
-            const dt = Math.max(0.6, Math.min(8.4, t0 - cur.lastT));
-            cur.lastT = t0;
-            setLatencyMs(dt.toFixed(1));
+            cur.lastT = performance.now();
             renderCanvas(1);
           }}
           onPointerUp={() => {
@@ -406,19 +401,15 @@ export function HeroCanvasDemo() {
           }}
         />
         {!hasDrawn && (
-          <div className="lp-canvas-badge mono" aria-hidden>
-            <span className="lp-pulse-dot" />
-            LIVE CANVAS — DRAW WITH PEN, MOUSE OR TOUCH
+          <div className="lp-canvas-badge" aria-hidden>
+            Pen, mouse or finger
           </div>
         )}
       </div>
 
-      <div className="lp-stage-telemetry mono">
-        <span>ENGINE: PERFECT-FREEHAND + PATH2D</span>
-        <span>STROKES: {strokes.length}</span>
-        <span>SAMPLES: {totalSamples}</span>
-        <span>INPUT Δt: {latencyMs}ms</span>
-        <span className="lp-tel-ok">STORAGE: INDEXEDDB · 0B CLOUD</span>
+      <div className="lp-stage-telemetry">
+        <span>{strokes.length} {strokes.length === 1 ? "stroke" : "strokes"} on this page</span>
+        <span className="lp-tel-ok">Saved on this device, not in a cloud</span>
       </div>
     </div>
   );

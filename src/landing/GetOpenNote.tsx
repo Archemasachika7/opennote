@@ -111,7 +111,9 @@ export function GetOpenNote() {
         <p className="dim small">{kind === "windows" ? "Laptops and pen tablets. Windows 10 and 11." : "Phones and tablets, with stylus support."}</p>
         {file ? (
           <>
-            <a className="btn get-btn" href={file.url} aria-label={`Download for ${kind === "windows" ? "Windows" : "Android"}`}>
+            <a className={`btn get-btn${recommended ? " primary" : ""}`} href={file.url}
+              aria-label={`Download for ${kind === "windows" ? "Windows" : "Android"}`}>
+              <Download size={15} strokeWidth={1.8} />
               Download {kind === "windows" ? ".exe" : ".apk"}
             </a>
             <span className="dim small mono">{file.mb > 0 ? `${release!.tag} · ${file.mb} MB` : "Latest release"}</span>
@@ -142,7 +144,7 @@ export function GetOpenNote() {
           <span className="get-icon"><Globe size={22} strokeWidth={1.5} /></span>
           <h3>Web</h3>
           <p className="dim small">Nothing to install. Works offline once opened, in Chrome or Edge.</p>
-          <button type="button" className="btn primary get-btn" onClick={() => navigate("/")}>Continue on the web</button>
+          <button type="button" className={`btn get-btn${platform === "other" ? " primary" : ""}`} onClick={() => navigate("/")}>Continue on the web</button>
           <span className="dim small">Tip: install it from the address bar for an app window.</span>
         </article>
         {native("windows")}

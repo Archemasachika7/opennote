@@ -38,9 +38,30 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
-      - name: Build debug APK
+      # The release key lives only in GitHub Secrets. Pull requests from forks don't get secrets, so they
+      # build with a throwaway debug key; a tagged release must never ship that.
+      - name: Write signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/opennote-release.jks"
+            echo "OPENNOTE_KEYSTORE_FILE=$RUNNER_TEMP/opennote-release.jks" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set; a release APK must be signed with the release key"; exit 1
+          else
+            echo "::warning::No release key; this APK is signed with a throwaway debug key and won't update a published install"
+          fi
+      - name: Build APK
         working-directory: android
+        env:
+          OPENNOTE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OPENNOTE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OPENNOTE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleDebug --no-daemon
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/opennote-release.jks"
       - run: mv android/app/build/outputs/apk/debug/app-debug.apk OpenNote-android.apk
       - uses: actions/upload-artifact@v4
         with: { name: OpenNote-android, path: OpenNote-android.apk }

@@ -16,6 +16,7 @@ import { ChartSheet, onChartEditorRequest, openChartEditor, type ChartRequest } 
 import { renderChartPng } from "../charts/render";
 import type { ChartSpec } from "../charts/spec";
 import { addChart, updateChart } from "../ink/objects";
+import { addVideo } from "../ink/video";
 import { setPageLayout, turnTarget, usePageLayout } from "./pageLayout";
 import { restoreAnchor, usePinchZoom, type ZoomAnchor } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
@@ -281,14 +282,21 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     if (tool.tool !== "image") { lastTool.current = tool.tool; return; }
     setTool({ tool: lastTool.current });
     const snapshot = { pages, current };
-    void platform.openFiles(["image/*"]).then(async (files) => {
+    void platform.openFiles(["image/*", "video/*"]).then(async (files) => {
       if (files.length === 0) return;
       const here = snapshot.pages[snapshot.current];
+      const what = files.every((f) => f.type.startsWith("video/")) ? (files.length === 1 ? "the video" : `${files.length} videos`)
+        : files.length === 1 ? "the picture" : `${files.length} pictures`;
       const targetPageId = here?.kind === "ink" ? here.id
         : snapshot.pages.length === 0 ? await resolveImageTarget(id, snapshot.pages, snapshot.current)
-        : await askPlace({ title: files.length === 1 ? "Put the picture on…" : `Put ${files.length} pictures on…`, fromPageId: here?.id, allowCurrent: false });
+        : await askPlace({ title: `Put ${what} on…`, fromPageId: here?.id, allowCurrent: false });
       if (!targetPageId) return;
-      for (const f of files) await addImage(targetPageId, f);
+      for (const f of files) {
+        if (!f.type.startsWith("video/")) { await addImage(targetPageId, f); continue; }
+        toast(`Adding "${f.name}"...`);
+        try { await addVideo(targetPageId, f); toast("Video added. Tap play to watch it on the page."); }
+        catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      }
       if (targetPageId !== here?.id) reveal(targetPageId);
     });
   }, [tool.tool]); // eslint-disable-line react-hooks/exhaustive-deps

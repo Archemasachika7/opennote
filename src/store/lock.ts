@@ -6,7 +6,7 @@
  * A locked notebook syncs and backs up as that encrypted blob. There is no recovery: a forgotten
  * password means the notebook can't be opened.
  */
-import { db, newId, now, type LockInfo } from "./schema";
+import { db, newId, now, objectBlobIds, type LockInfo } from "./schema";
 import { exportBackup, importBackup } from "../io/backup";
 import { checkPassphrase, decryptBlob, deriveMasterKey, encryptBlob, makeKeyCheck, newSalt, PBKDF2_ITERATIONS, type SealedBlob } from "../sync/crypto";
 
@@ -62,7 +62,7 @@ export async function lockNotebook(id: string, password: string, iterations = PB
     const objs = await db.objects.where("pageId").anyOf(pageIds).toArray();
     const cards = await db.cards.where("notebookId").equals(id).toArray();
     const blobIds = [
-      ...recs.map((r) => r.blobId), ...objs.map((o) => o.blobId), ...cards.flatMap((c) => [c.frontImage, c.backImage]),
+      ...recs.map((r) => r.blobId), ...objs.flatMap(objectBlobIds), ...cards.flatMap((c) => [c.frontImage, c.backImage]),
       ...pages.map((p) => (p && p.kind === "html" ? p.snapshotBlobId : p && p.kind === "ink" ? p.background?.blobId : undefined)),
     ].filter((x): x is string => !!x);
     await db.recordings.where("notebookId").equals(id).delete();

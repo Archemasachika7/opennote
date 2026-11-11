@@ -92,7 +92,7 @@ export function Toolbar({
     { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal) [B]", icon: <RectangleHorizontal {...ICON} /> },
     { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading red trail for presenting, never saved) [K]", icon: <LocateFixed {...ICON} color="#FF1F3D" /> },
     { name: "text", label: "Text box", hint: "Text box (click on the page) [T]", icon: <Type {...ICON} /> },
-    { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
+    { name: "image", label: "Image", hint: "Insert a picture or video", icon: <ImageIcon {...ICON} /> },
     { name: "hand", label: "Hand", hint: "Hand (scroll, or hold Space) [V]", icon: <Hand {...ICON} /> },
   ];
 

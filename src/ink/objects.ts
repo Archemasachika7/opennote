@@ -1,4 +1,4 @@
-import { db, newId, now, PAGE_SIZE, type PageObject } from "../store/schema";
+import { db, newId, now, objectBlobIds, PAGE_SIZE, type PageObject } from "../store/schema";
 import type { ChartSpec } from "../charts/spec";
 
 const MAX_SIDE = 2048;
@@ -160,9 +160,10 @@ export async function deleteObjects(ids: string[]): Promise<void> {
     await db.objects.bulkDelete(ids);
     // keep blobs referenced by other objects (duplicates share blobs)
     for (const o of objs) {
-      if (!o.blobId) continue;
-      const others = await db.objects.filter((x) => x.blobId === o.blobId).count();
-      if (others === 0) await db.blobs.delete(o.blobId);
+      for (const b of objectBlobIds(o)) {
+        const others = await db.objects.filter((x) => objectBlobIds(x).includes(b)).count();
+        if (others === 0) await db.blobs.delete(b);
+      }
     }
   });
 }

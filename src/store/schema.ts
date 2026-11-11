@@ -97,6 +97,16 @@ export interface PageObject {
   revealed?: boolean;
   /** Image drawn from a chart: the data it came from, so it can be edited and redrawn. */
   chart?: ChartSpec;
+  /** Image that is a video's poster frame: the video itself (its own blob), played in place on the page. */
+  video?: { blobId: string; mime: string; duration?: number };
+}
+
+/** Every blob a page object holds (its picture, and a video's file). Use this wherever blobs are collected or cleaned up. */
+export function objectBlobIds(o: Pick<PageObject, "blobId" | "video">): string[] {
+  const ids: string[] = [];
+  if (o.blobId) ids.push(o.blobId);
+  if (o.video?.blobId) ids.push(o.video.blobId);
+  return ids;
 }
 
 /** A flashcard in a study set (notebookId = the set). */
@@ -196,7 +206,7 @@ export async function unreferencedBlobs(candidates: string[]): Promise<string[]>
   const want = new Set(candidates);
   if (want.size === 0) return [];
   const used = new Set<string>();
-  await db.objects.each((o) => { if (o.blobId && want.has(o.blobId)) used.add(o.blobId); });
+  await db.objects.each((o) => { for (const b of objectBlobIds(o)) if (want.has(b)) used.add(b); });
   await db.cards.each((c) => { for (const b of [c.frontImage, c.backImage]) if (b && want.has(b)) used.add(b); });
   await db.pages.each((p) => { if (p.kind === "ink" && p.background && want.has(p.background.blobId)) used.add(p.background.blobId); });
   // a locked notebook's encrypted contents are never garbage

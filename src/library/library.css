@@ -184,3 +184,19 @@
 }
 .lib-continue-meta { display: grid; gap: 3px; min-width: 0; }
 .lib-continue-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+
+/* ---- delete choices ---- */
+.delete-options { display: grid; gap: 8px; margin: 12px 0; }
+.delete-option {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--text);
+}
+.delete-option:hover, .delete-option:focus-visible { border-color: var(--text-dim); outline: none; }
+.delete-option.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.delete-option.danger.on { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.delete-icon { flex: none; width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); }
+.delete-option.danger .delete-icon { color: var(--danger); }
+.delete-text { display: grid; gap: 3px; }
+.delete-title { font-weight: 600; font-size: 14px; }
+.delete-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.4; }
+.delete-copy { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 4px 0 14px; cursor: pointer; }

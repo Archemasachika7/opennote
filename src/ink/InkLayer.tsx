@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
+import { db, PAGE_SIZE, type PageObject, type Paper } from "../store/schema";
+import { insertPage } from "../store/pages";
+import { dropTargetAt, markDropTarget, type DropTarget } from "./dropTarget";
 import { addTape, putObjects, removeObjectRows, updateObject } from "./objects";
-import { IDENTITY, selectWithLasso, selectionBox, xfObject, xfStroke, type Selection, type Xf } from "./selection";
+import { IDENTITY, selectAt, selectWithLasso, selectionBox, xfObject, xfStroke, type Selection, type Xf } from "./selection";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { shapePoints, snapLineEndpoint, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
@@ -9,9 +11,10 @@ import { getTool, onCommand, onShapeStylePatch, onStampElement, setTool, useTool
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
 import { historyFor, type Op } from "./history";
 import { notifyPageChanged, onPageChanged } from "./pageEvents";
-import { copyToClipboard, cutToClipboard } from "./clipboard";
+import { copyToClipboard, cutToClipboard, moveSelection } from "./clipboard";
+import { askPlace } from "../notebook/PlacePicker";
 import { bbox, hitTest, hitsEraserPath, snapShape, splitByEraser, type Box } from "./geometry";
-import { inkPalette, paintStroke, resolveColor, resolveFillColor, strokePath } from "./render";
+import { inkPalette, paintStroke, resolveColor, resolveFillColor, strokeOptions, strokePath } from "./render";
 import { sliceStrokeByTime } from "./replay";
 import { getRuler, rulerEdges, snapToRuler, RULER_SNAP_PX, type RulerLine } from "./ruler";
 import { liveLaserPoints, paintLaser, type LaserPoint } from "./laser";
@@ -21,6 +24,8 @@ import { toast } from "../ui/Toast";
 import { isScribbleGesture, pointsToXYPath } from "./gestures";
 import { instantiateElement, saveStrokesAsElement } from "./elements";
 import { currentRecordingStamp, requestAudioSeek, useAudioLiveState } from "../store/audio";
+import { requestRecognize } from "../ai/inkOcr";
+import { tidyStrokes } from "./tidy";
 import type { GeometricShapeKind, ShapeMeta, Stroke, StrokeAudioSync } from "./model";
 import "./ink.css";
 
@@ -151,6 +156,8 @@ export function InkLayer({
   };
 
   const override = useRef<{ ids: Set<string>; m: Xf } | null>(null);
+  /** Tidy preview: strokes drawn in place of the originals while the slider moves. */
+  const tidyPreview = useRef<Map<string, Stroke> | null>(null);
   const redrawDry = useCallback(() => {
     const ctx = setup(dry.current);
     if (!ctx) return;
@@ -162,11 +169,12 @@ export function InkLayer({
     const byLayer: Stroke[][] = Array.from({ length: layerInfo.count }, () => []);
     for (const s0 of strokes.current.values()) {
       if (layerInfo.hidden.has(layerOf(s0))) continue;
-      const s = ov && ov.ids.has(s0.id) ? xfStroke(s0, ov.m) : s0;
+      const tp = tidyPreview.current?.get(s0.id);
+      const s = tp ?? (ov && ov.ids.has(s0.id) ? xfStroke(s0, ov.m) : s0);
       if (visible && !(ov && ov.ids.has(s0.id)) && !intersects(boxOf(s0), visible)) continue;
       byLayer[Math.min(layerInfo.count - 1, layerInfo.order.get(layerOf(s0)) ?? 0)].push(s);
     }
-    const pathFor = (s: Stroke) => (s.shape ? undefined : ov && ov.ids.has(s.id) ? strokePath(s) : pathOf(s));
+    const pathFor = (s: Stroke) => (s.shape ? undefined : (ov && ov.ids.has(s.id)) || tidyPreview.current?.has(s.id) ? strokePath(s) : pathOf(s));
     const replayActive = Boolean(
       pb?.inkReplay && (pb.playing || (pb.currentMs > 0 && (!pb.durationMs || pb.currentMs < pb.durationMs - 60))),
     );
@@ -403,6 +411,39 @@ export function InkLayer({
   };
   const schedule = () => { if (!frame.current) frame.current = requestAnimationFrame(paintWet); };
 
+  // Pen hover: a stylus held just above the screen shows a ring the size of the nib (S Note style)
+  const hover = useRef<{ x: number; y: number } | null>(null);
+  const hoverFrame = useRef(0);
+  const paintHover = () => {
+    hoverFrame.current = 0;
+    if (active.current || laserPts.current.length) return;
+    const ctx = setup(wet.current);
+    if (!ctx) return;
+    clearCanvas(ctx);
+    const h = hover.current;
+    if (!h) return;
+    const t = getTool();
+    const eraser = t.tool === "eraser";
+    const r = eraser ? ERASER_RADIUS : Math.max(1, (strokeOptions({ tool: t.tool === "highlighter" ? "highlighter" : "pen", variant: t.variant, width: t.width }, true).size ?? 2) / 2);
+    const col = eraser ? "#9A9DAB" : resolveColor({ color: t.color, paletteIndex: t.paletteIndex ?? undefined }, paper);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
+    ctx.globalAlpha = t.tool === "highlighter" ? 0.25 : 0.18;
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 1 / scale;
+    ctx.strokeStyle = col;
+    ctx.stroke();
+    ctx.restore();
+  };
+  const setHover = (p: { x: number; y: number } | null) => {
+    if (!p && !hover.current) return;
+    hover.current = p;
+    if (!hoverFrame.current) hoverFrame.current = requestAnimationFrame(paintHover);
+  };
+
   const armHoldSnapTimer = () => {
     clearHoldTimer();
     const a = active.current;
@@ -441,6 +482,7 @@ export function InkLayer({
   useEffect(() => () => {
     if (laserFrame.current) cancelAnimationFrame(laserFrame.current);
     if (frame.current) cancelAnimationFrame(frame.current);
+    if (hoverFrame.current) cancelAnimationFrame(hoverFrame.current);
     clearHoldTimer();
   }, []);
 
@@ -461,8 +503,20 @@ export function InkLayer({
       }
     }
 
+    hover.current = null;
     const t = getTool();
     if (e.pointerType === "pen" && !t.penSeen) setTool({ penSeen: true });
+    const cur = active.current;
+    if (e.pointerType === "touch" && cur && !cur.pen && cur.id !== e.pointerId) {
+      // a second finger landed while one was writing: it's a pinch, so the half-drawn finger stroke goes
+      clearHoldTimer();
+      active.current = null;
+      lastEvent.current = null;
+      if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
+      const wctx = wet.current?.getContext("2d");
+      if (wctx) clearCanvas(wctx);
+      return;
+    }
     const action = classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
     if (action === "navigate") {
       if (e.pointerType === "touch" || onPan) {
@@ -517,6 +571,12 @@ export function InkLayer({
         else (surface.current?.closest(".nb-scroll") as HTMLElement | null)?.scrollBy({ left: -dx, top: -dy });
       }
       pans.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      return;
+    }
+    if (!a && e.pointerType === "pen" && e.buttons === 0) {
+      const t = getTool();
+      if (t.tool === "pen" || t.tool === "highlighter" || t.tool === "eraser") { const [x, y] = toLogical(e); setHover({ x, y }); }
+      else setHover(null);
       return;
     }
     if (!a || a.id !== e.pointerId) return;
@@ -602,8 +662,13 @@ export function InkLayer({
     if (wctx) clearCanvas(wctx);
     if (a.kind === "erase") { await eraseWith(a); return; }
     if (a.kind === "lasso") {
-      const sel = selectWithLasso(a.pts, [...strokes.current.values()].filter(editable), objects.filter(editable));
-      setSelection(sel.strokeIds.length || sel.objectIds.length ? sel : null);
+      const list = [...strokes.current.values()].filter(editable);
+      const objs = objects.filter(editable);
+      const xs = a.pts.filter((_, i) => i % 2 === 0), ys = a.pts.filter((_, i) => i % 2 === 1);
+      const tiny = Math.max(...xs) - Math.min(...xs) < 8 / scale && Math.max(...ys) - Math.min(...ys) < 8 / scale;
+      // a tap (no loop drawn) picks what is under the pen
+      const sel = tiny ? selectAt(a.pts[0], a.pts[1], list, objs, 6 / scale) : selectWithLasso(a.pts, list, objs);
+      setSelection(sel && (sel.strokeIds.length || sel.objectIds.length) ? sel : null);
       return;
     }
     if (a.kind === "tape") {
@@ -672,7 +737,18 @@ export function InkLayer({
   const selObjects = selection ? objects.filter((o) => selection.objectIds.includes(o.id)) : [];
   const selBox = selection ? selectionBox(selStrokes, selObjects) : null;
 
+  /** On notebook pages, a plain drag whose middle ends up over another page (or below the last one). */
+  const dropAt = (m: Xf): DropTarget | null => {
+    if (view || !selBox || m.k !== 1 || m.r !== 0 || !surface.current) return null;
+    const r = surface.current.getBoundingClientRect();
+    const k = r.width / logicalWidth;
+    return dropTargetAt(r.left + (selBox.x + selBox.w / 2 + m.dx) * k, r.top + (selBox.y + selBox.h / 2 + m.dy) * k, pageId);
+  };
+
   const preview = (m: Xf) => {
+    if (tidyPreview.current) endTidy();
+    const t = dropAt(m);
+    markDropTarget(t?.kind === "page" ? t.wrap : null);
     setPreviewXf(m);
     override.current = { ids: new Set(selStrokes.map((s) => s.id)), m };
     redrawDry();
@@ -680,8 +756,32 @@ export function InkLayer({
   };
 
   const commit = async (m: Xf) => {
+    const t = dropAt(m);
+    markDropTarget(null);
     override.current = null;
     setPreviewXf(IDENTITY);
+    if (t && selBox) {
+      onPreviewObjects?.(null);
+      if (t.kind === "not-ink") { redrawDry(); toast("That page can't hold ink. Drop it on a writing page."); return; }
+      // land with the selection's middle where it was dropped (on a new page: near the top)
+      const half = selBox.h / 2;
+      const ty = t.kind === "new" ? Math.max(half + 24, Math.min(PAGE_SIZE.h - half, t.y)) : t.y;
+      const shift = { ...IDENTITY, dx: t.x - (selBox.x + selBox.w / 2), dy: ty - (selBox.y + selBox.h / 2) };
+      const st = selStrokes.map((s) => xfStroke(s, shift));
+      const ob = selObjects.map((o) => xfObject(o, shift));
+      let to = t.kind === "page" ? t.pageId : null;
+      if (t.kind === "new") {
+        const nb = await db.pages.get(t.afterPageId).then((p) => (p ? db.notebooks.get(p.notebookId) : undefined));
+        if (!nb) { redrawDry(); return; }
+        to = (await insertPage(nb.id, nb.pageIds.indexOf(t.afterPageId) + 1, { kind: "ink", template: "blank" })).id;
+      }
+      setSelection(null);
+      await moveSelection(pageId, to!, st, ob);
+      redrawDry();
+      toast(t.kind === "new" ? "Moved to a new page" : "Moved to that page");
+      if (t.kind === "new") setTimeout(() => document.getElementById(`page-${to}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+      return;
+    }
     const nextStrokes = selStrokes.map((s) => xfStroke(s, m));
     const nextObjects = selObjects.map((o) => xfObject(o, m));
     historyFor(pageId).push({ remove: selStrokes, add: nextStrokes, objects: { before: selObjects, after: nextObjects } });
@@ -760,11 +860,41 @@ export function InkLayer({
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
   const copySel = () => copyToClipboard(pageId, selStrokes, selObjects);
   const cutSel = async () => { setSelection(null); await cutToClipboard(pageId, selStrokes, selObjects); };
+  const moveSel = async () => {
+    const st = selStrokes, ob = selObjects;
+    const to = await askPlace({ title: "Move selection to…", fromPageId: pageId, allowCurrent: false });
+    if (!to || to === pageId) return;
+    setSelection(null);
+    await moveSelection(pageId, to, st, ob);
+    toast("Moved");
+    setTimeout(() => document.getElementById(`page-${to}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  };
+
+  const [tidyStrength, setTidyStrength] = useState<number | null>(null);
+  const showTidy = (k: number, list: Stroke[]) => {
+    setTidyStrength(k);
+    tidyPreview.current = new Map(tidyStrokes(list, k).map((s) => [s.id, s]));
+    redrawDry();
+  };
+  const endTidy = () => { tidyPreview.current = null; setTidyStrength(null); redrawDry(); };
+  const applyTidy = async () => {
+    const next = [...(tidyPreview.current?.values() ?? [])];
+    const before = selStrokes.filter((s) => tidyPreview.current?.has(s.id));
+    tidyPreview.current = null;
+    setTidyStrength(null);
+    if (next.length === 0) { redrawDry(); return; }
+    historyFor(pageId).push({ remove: before, add: next });
+    await apply(before, next);
+    toast("Handwriting tidied", { label: "Undo", run: () => sendUndoFor(pageId) });
+  };
+  // leaving the selection (or the page) drops an unapplied preview
+  useEffect(() => { if (!selection && tidyPreview.current) endTidy(); }, [selection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selection) return;
     const key = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest?.("input, textarea, [contenteditable=true]")) return;
+      if (tidyStrength !== null) { if (e.key === "Escape") endTidy(); else if (e.key === "Enter") void applyTidy(); return; }
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); copySel(); }
       else if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); void cutSel(); }
@@ -789,7 +919,8 @@ export function InkLayer({
   return (
     <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined}
       style={{ width, height, touchAction, cursor, pointerEvents: disabled ? "none" : undefined }}
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}
+      onPointerLeave={(e) => { if (e.pointerType === "pen") setHover(null); }}>
       <canvas ref={dry} className="ink-canvas" style={{ width, height }} />
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />
 
@@ -860,6 +991,14 @@ export function InkLayer({
             if (saved) toast("Saved to Elements & Stamps");
           } : undefined}
           onMakeCard={onMakeCardFromBox ? () => onMakeCardFromBox(selBox, selStrokes) : undefined}
+          onToText={selStrokes.some((s) => !s.shape) ? () => requestRecognize({ kind: "text", pageId, strokes: selStrokes, box: selBox }) : undefined}
+          onToMath={selStrokes.some((s) => !s.shape) ? () => requestRecognize({ kind: "math", pageId, strokes: selStrokes, box: selBox }) : undefined}
+          onMoveToPage={view ? undefined : () => void moveSel()}
+          onTidy={selStrokes.some((s) => !s.shape && s.tool !== "highlighter") ? () => showTidy(0.7, selStrokes) : undefined}
+          tidy={tidyStrength === null ? null : {
+            strength: tidyStrength, onStrength: (k) => showTidy(k, selStrokes),
+            onApply: () => void applyTidy(), onCancel: endTidy,
+          }}
           onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined} />
       )}
     </div>

@@ -364,7 +364,7 @@ export function LandingPage({
                   <div className="lp-mode-icon cyan"><GraduationCap size={16} strokeWidth={1.6} /></div>
                   <div>
                     <strong>Smart Learn Study Sets</strong>
-                    <p>SM-2 &amp; FSRS-4.5 spaced repetition decks fed directly from Study Tape strips and lassoed diagram occlusions.</p>
+                    <p>SM-2 &amp; FSRS-6 spaced repetition decks fed directly from Study Tape strips and lassoed diagram occlusions.</p>
                   </div>
                   <ArrowRight size={14} className="lp-mode-arrow" />
                 </button>

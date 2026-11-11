@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { motionTokens } from "../ui/motion";
-import { ClipboardCopy, Copy, Crop, Droplet, GraduationCap, Minus, PaintBucket, Palette, RotateCw, Scissors, Stamp, Trash2 } from "lucide-react";
+import { ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, Minus, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
 import { tryCapture } from "./input";
@@ -10,13 +10,16 @@ import type { ShapeStylePatch } from "../notebook/tool";
 
 const I = { size: 14, strokeWidth: 1.5 } as const;
 
+/** Live "Tidy handwriting" controls, shown in place of the selection toolbar while tidying. */
+export type TidyPanel = { strength: number; onStrength: (v: number) => void; onApply: () => void; onCancel: () => void };
+
 /** Selection box with move (drag body), uniform scale (corner) and rotate (top handle). */
 export function SelectionOverlay({
   box, scale, origin = { x: 0, y: 0 }, xf,
   hasShape, shapeFilled, shapeDashed,
   shapeFillColor, shapeFillOpacity = 0.42, fillPalette = [],
   onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut,
-  onToggleFill, onToggleDashed, onUpdateShapeStyle, onSaveElement, onMakeCard,
+  onToggleFill, onToggleDashed, onUpdateShapeStyle, onSaveElement, onMakeCard, onToText, onToMath, onMoveToPage, onTidy, tidy,
 }: {
   box: Box;
   scale: number;
@@ -42,6 +45,15 @@ export function SelectionOverlay({
   onUpdateShapeStyle?: (patch: ShapeStylePatch) => void;
   onSaveElement?: () => void;
   onMakeCard?: () => void;
+  /** Read the selected handwriting as text / as a formula (on-device). */
+  onToText?: () => void;
+  onToMath?: () => void;
+  /** Move the selection to another page (asks which). */
+  onMoveToPage?: () => void;
+  /** Start tidying the selected handwriting. */
+  onTidy?: () => void;
+  /** Present while tidying: replaces the toolbar with a strength slider. */
+  tidy?: TidyPanel | null;
 }) {
   const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number; sx: number; sy: number } | null>(null);
   const el = useRef<HTMLDivElement>(null);
@@ -94,6 +106,19 @@ export function SelectionOverlay({
       style={{ left: (box.x - origin.x) * scale, top: (box.y - origin.y) * scale, width: box.w * scale, height: box.h * scale, transform: t }}>
       <span className="sel-rot" data-testid="sel-rotate" onPointerDown={start("rotate")}><RotateCw {...I} /></span>
       <span className="sel-scale" data-testid="sel-scale" onPointerDown={start("scale")} />
+      {tidy ? (
+        <div className="sel-bar sel-tidy" role="group" aria-label="Tidy handwriting" onPointerDown={(e) => e.stopPropagation()}>
+          <Sparkles {...I} aria-hidden />
+          <label className="sel-tidy-label">
+            <span>Light</span>
+            <input type="range" min={0} max={100} step={5} value={Math.round(tidy.strength * 100)} aria-label="Tidy strength"
+              onChange={(e) => tidy.onStrength(Number(e.target.value) / 100)} />
+            <span>Strong</span>
+          </label>
+          <button className="btn small" onClick={tidy.onApply}>Apply</button>
+          <button className="btn ghost small" onClick={tidy.onCancel}>Cancel</button>
+        </div>
+      ) : (
       <div className="sel-bar" onPointerDown={(e) => e.stopPropagation()}>
         <button className="btn ghost icon" aria-label="Recolour selection" title="Set border colour from active swatch" onClick={onRecolor}><Palette {...I} /></button>
         {hasShape && onToggleFill && (
@@ -130,17 +155,34 @@ export function SelectionOverlay({
             <Stamp {...I} />
           </button>
         )}
+        {onTidy && (
+          <button className="btn ghost icon" aria-label="Tidy handwriting" title="Tidy handwriting: straighten lines, even out size, slant and spacing" onClick={onTidy}>
+            <Sparkles {...I} />
+          </button>
+        )}
+        {onToText && (
+          <button className="btn ghost icon" aria-label="Convert handwriting to text" title="Convert handwriting to text (on this device)" onClick={onToText}>
+            <Type {...I} />
+          </button>
+        )}
+        {onToMath && (
+          <button className="btn ghost icon" aria-label="Convert handwriting to equation" title="Convert handwritten maths to LaTeX (on this device)" onClick={onToMath}>
+            <Sigma {...I} />
+          </button>
+        )}
         {onMakeCard && (
           <button className="btn ghost icon" aria-label="Create flashcard from selection" title="Create occlusion flashcard" onClick={onMakeCard}>
             <GraduationCap {...I} />
           </button>
         )}
         {onCopy && <button className="btn ghost icon" aria-label="Copy selection" title="Copy (Ctrl+C), then paste on any page with Ctrl+V" onClick={onCopy}><ClipboardCopy {...I} /></button>}
+        {onMoveToPage && <button className="btn ghost icon" aria-label="Move selection to another page" title="Move to another page" onClick={onMoveToPage}><FileOutput {...I} /></button>}
         {onCut && <button className="btn ghost icon" aria-label="Cut selection" title="Cut (Ctrl+X) to move it to another page" onClick={onCut}><Scissors {...I} /></button>}
         <button className="btn ghost icon" aria-label="Duplicate selection" title="Duplicate" onClick={onDuplicate}><Copy {...I} /></button>
         {onCrop && <button className="btn ghost icon" aria-label="Crop image" onClick={onCrop}><Crop {...I} /></button>}
         <button className="btn ghost icon" aria-label="Delete selection" onClick={onDelete}><Trash2 {...I} /></button>
       </div>
+      )}
       {hasShape && fillPickerOpen && onUpdateShapeStyle && (
         <div className="sel-fill-popover" onPointerDown={(e) => e.stopPropagation()} role="group" aria-label="Selection fill colours">
           {fillPalette.map((c, i) => (

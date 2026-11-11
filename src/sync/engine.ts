@@ -5,6 +5,9 @@
  * push: notebook changed since last sync → encrypt → store → index row with compare-and-swap on `version`
  * pull: index rows newer than our version → fetch → decrypt → replace locally (same ids)
  * conflict (both sides changed): the remote copy arrives as "<title> (conflict copy)", then ours wins the index.
+ * delete: Trash travels as deleted_at (restorable). "Delete everywhere" turns the row into a purge marker
+ * (deleted_at set, manifest_object null) and its stored copy is removed; devices delete on pull.
+ * A deletion never makes a conflict copy: it wins, and local edits stay recoverable in Trash.
  */
 import { db, newId } from "../store/schema";
 import { deleteNotebook, renameNotebook, trashNotebook } from "../store/notebooks";
@@ -12,6 +15,7 @@ import { exportBackup, importBackup } from "../io/backup";
 import { decryptBlob, encryptBlob, sha256Hex } from "./crypto";
 import { putTiered } from "./stores/router";
 import type { BlobStore, ChunkRef } from "./stores/types";
+import { clearTombstone, doneRefetch, getTombstone, listTombstones, takeRefetchIds } from "./deletion";
 
 export interface IndexRow {
   id: string; title: string; kind: string; version: number;
@@ -39,6 +43,9 @@ type NbMeta = { version: number; stamp: number };
 const nbKey = (id: string) => `nb:${id}`;
 const getMeta = async (id: string) => ((await db.syncMeta.get(nbKey(id)))?.value as NbMeta | undefined) ?? null;
 const setMeta = (id: string, m: NbMeta) => db.syncMeta.put({ key: nbKey(id), value: m });
+
+/** Index row of a notebook deleted everywhere: nothing left to download. */
+export const isPurged = (row: Pick<IndexRow, "deleted_at" | "manifest_object">): boolean => !!row.deleted_at && !row.manifest_object;
 
 /** Changes to a notebook, its cards, recordings or Trash state all move this number. */
 export async function localStamp(id: string): Promise<number> {
@@ -72,11 +79,13 @@ export type PushResult = "pushed" | "clean" | "conflict" | "missing";
 export async function pushNotebook(env: SyncEnv, id: string): Promise<PushResult> {
   const nb = await db.notebooks.get(id);
   if (!nb) return "missing";
+  if (await getTombstone(id)) return "clean";
   const stamp = await localStamp(id);
   const meta = await getMeta(id);
   if (meta && meta.stamp >= stamp) return "clean";
   const row = await env.index.getRow(id);
   if (row && row.version !== meta?.version) return "conflict";
+  if (row && isPurged(row)) return "clean"; // deleted everywhere; the next pull removes it here
 
   const zip = new Uint8Array(await (await exportBackup(id)).arrayBuffer());
   const sealed = await encryptBlob(zip, env.master);
@@ -97,26 +106,73 @@ export async function pushNotebook(env: SyncEnv, id: string): Promise<PushResult
   return "pushed";
 }
 
-export async function pullAll(env: SyncEnv): Promise<{ pulled: number; conflicts: number; trashed: number; errors: string[] }> {
+/** Send this device's "delete everywhere" requests to the index (and drop the stored copies). */
+export async function pushTombstones(env: SyncEnv): Promise<number> {
+  let done = 0;
+  for (const t of await listTombstones("everywhere")) {
+    const row = await env.index.getRow(t.id);
+    if (!row || isPurged(row)) { await clearTombstone(t.id); await db.syncMeta.delete(nbKey(t.id)); continue; }
+    const ok = await env.index.casUpdate(t.id, row.version, {
+      version: row.version + 1, manifest_object: null, deleted_at: new Date(t.at).toISOString(),
+    });
+    if (!ok) continue; // someone pushed meanwhile: try again next run, the deletion still wins
+    if (row.manifest_object) await dropObject(env, await env.index.getObject(row.manifest_object));
+    await clearTombstone(t.id);
+    await db.syncMeta.delete(nbKey(t.id));
+    done++;
+  }
+  return done;
+}
+
+export async function pullAll(env: SyncEnv): Promise<{ pulled: number; conflicts: number; trashed: number; removed: number; errors: string[] }> {
   const since = ((await db.syncMeta.get("lastPulledAt"))?.value as string | undefined) ?? null;
   const rows = (await env.index.listChanged(since)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
-  const out = { pulled: 0, conflicts: 0, trashed: 0, errors: [] as string[] };
+  // notebooks asked back onto this device: fetch their rows even if unchanged since the last pull
+  const refetch = await takeRefetchIds();
+  for (const id of refetch) {
+    if (rows.some((r) => r.id === id)) continue;
+    const r = await env.index.getRow(id).catch(() => null);
+    if (r) rows.push(r); else await doneRefetch(id);
+  }
+  const out = { pulled: 0, conflicts: 0, trashed: 0, removed: 0, errors: [] as string[] };
   let newest = since;
   for (const row of rows) {
-    if (!newest || row.updated_at > newest) newest = row.updated_at;
+    if (!refetch.includes(row.id) && (!newest || row.updated_at > newest)) newest = row.updated_at;
     try {
+      const tomb = await getTombstone(row.id);
+      if (isPurged(row)) {
+        // deleted everywhere (on another device, or this one): no copy anywhere, no conflict copy
+        if (await db.notebooks.get(row.id)) { await deleteNotebook(row.id); out.removed++; }
+        await db.syncMeta.delete(nbKey(row.id));
+        if (tomb) await clearTombstone(row.id);
+        continue;
+      }
+      if (tomb) continue; // removed from this device on purpose, or deletion still to be sent
       const meta = await getMeta(row.id);
-      if (meta && row.version <= meta.version) continue;
+      if (meta && row.version <= meta.version) { await doneRefetch(row.id); continue; }
       const local = await db.notebooks.get(row.id);
       const dirty = !!local && (!meta || (await localStamp(row.id)) > meta.stamp);
 
-      if (row.deleted_at && !dirty) {
+      if (row.deleted_at) {
+        // moved to Trash on another device. If this device changed it too, the deletion still wins
+        // (no conflict copy): it goes to Trash here with its edits, and those edits are pushed so a
+        // restore on any device brings them back.
         if (local && !local.trashedAt) await trashNotebook(row.id, Date.parse(row.deleted_at));
-        await setMeta(row.id, { version: row.version, stamp: await localStamp(row.id) });
+        await setMeta(row.id, { version: row.version, stamp: dirty ? meta?.stamp ?? 0 : await localStamp(row.id) });
         if (local) out.trashed++;
         continue;
       }
       const snapshot = await fetchSnapshot(env, row);
+      if (dirty && local?.trashedAt) {
+        // trashed here while another device edited it: keep their edits, keep it in Trash, push that
+        const at = local.trashedAt;
+        await deleteNotebook(row.id);
+        await importBackup(snapshot, { keepIds: true });
+        await trashNotebook(row.id, at);
+        await setMeta(row.id, { version: row.version, stamp: 0 });
+        out.trashed++;
+        continue;
+      }
       if (dirty) {
         // both sides changed: keep theirs as a copy, keep ours as the notebook (pushed next)
         const copy = await importBackup(snapshot);
@@ -128,6 +184,7 @@ export async function pullAll(env: SyncEnv): Promise<{ pulled: number; conflicts
       if (local) await deleteNotebook(row.id);
       await importBackup(snapshot, { keepIds: true });
       await setMeta(row.id, { version: row.version, stamp: await localStamp(row.id) });
+      await doneRefetch(row.id);
       out.pulled++;
     } catch (err) {
       out.errors.push(err instanceof Error ? err.message : String(err));
@@ -142,6 +199,7 @@ export async function syncAll(env: SyncEnv): Promise<{ pulled: number; pushed: n
   let pushed = 0;
   let conflicts = pulled.conflicts;
   const errors = [...pulled.errors];
+  try { await pushTombstones(env); } catch (err) { errors.push(err instanceof Error ? err.message : String(err)); }
   for (const id of (await db.notebooks.toCollection().primaryKeys()) as string[]) {
     try {
       const r = await pushNotebook(env, id);

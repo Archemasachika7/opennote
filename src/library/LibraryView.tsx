@@ -12,7 +12,7 @@ import { navigate } from "../App";
 import { db, type DocKind, type Folder, type Notebook } from "../store/schema";
 import { Menu } from "../ui/Menu";
 import {
-  createNotebook, deleteNotebook, listNotebooks, moveNotebooks, purgeTrash, renameNotebook, restoreNotebook,
+  createNotebook, listNotebooks, moveNotebooks, purgeTrash, renameNotebook, restoreNotebook,
   setFavorite, toggleFavorite, trashNotebook, updateNotebook, type LibrarySort,
 } from "../store/notebooks";
 import { createFolder, deleteFolder, listFolders, renameFolder } from "../store/folders";
@@ -22,6 +22,7 @@ import { platform } from "../platform/port";
 import { Sheet } from "../ui/Sheet";
 import { motionTokens } from "../ui/motion";
 import { NotebookCard } from "./NotebookCard";
+import { DeleteSheet } from "./DeleteSheet";
 import { createStarterNotebook } from "./demoNotebook";
 import { importFile } from "../io/importFile";
 import { toast } from "../ui/Toast";
@@ -346,6 +347,8 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
                       <Star {...I} />Favourite</button>
                     <button className="btn" disabled={!ids.length} aria-label="Move selected to Trash"
                       onClick={async () => { for (const id of ids) await trashNotebook(id); endSelect(); }}><Trash2 {...I} />Trash</button>
+                    <button className="btn" disabled={!ids.length} aria-label="Delete options for selected"
+                      onClick={() => setDoomed(notebooks.filter((n) => selected.has(n.id)))}>Delete…</button>
                   </>
                 )}
               </motion.div>
@@ -426,16 +429,7 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
         </div>
       )}
 
-      <Sheet open={!!doomed} onClose={() => setDoomed(null)} title="Delete forever" width={440}>
-        <p>Permanently delete {doomed?.length === 1 ? <strong>{doomed[0].title}</strong> : `${doomed?.length ?? 0} notebooks`} and all pages? This cannot be undone.</p>
-        <div className="row-end">
-          <button className="btn" onClick={() => setDoomed(null)}>Cancel</button>
-          <button className="btn danger" onClick={async () => {
-            for (const n of doomed ?? []) await deleteNotebook(n.id);
-            setDoomed(null); endSelect();
-          }}>Delete forever</button>
-        </div>
-      </Sheet>
+      <DeleteSheet notebooks={doomed} inTrash={inTrash} onClose={() => setDoomed(null)} onDone={endSelect} />
 
       <Sheet open={naming} onClose={() => setNaming(false)} title="New folder" width={420}>
         <form onSubmit={async (e) => {

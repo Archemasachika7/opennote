@@ -106,7 +106,7 @@ export function CommandPalette({ open, onClose, onNavigate, onOpenSettings, inNo
     id: `hit-${i}-${h.notebookId}-${h.pageId ?? ""}`,
     label: h.title,
     sub: h.snippet,
-    badge: h.kind === "live" ? "LIVE" : h.kind === "pdf" ? "PDF" : h.kind === "text" ? "TEXT" : h.kind === "card" ? "STUDY" : "NOTEBOOK",
+    badge: h.kind === "live" ? "LIVE" : h.kind === "ink" ? "HANDWRITING" : h.kind === "pdf" ? "PDF" : h.kind === "text" ? "TEXT" : h.kind === "card" ? "STUDY" : "NOTEBOOK",
     live: h.kind === "live",
     icon: h.kind === "live" ? <Sparkles {...I} color="var(--live)" /> : h.kind === "card" ? <GraduationCap {...I} /> : <FileText {...I} />,
     run: () => onNavigate(`/nb/${h.notebookId}${h.pageId ? `?p=${h.pageId}` : ""}`),

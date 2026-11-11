@@ -436,7 +436,7 @@ function TapeOcclusionDemo() {
               </button>
             ))}
           </div>
-          <span className="mono lp-dim-tag">FSRS-4.5 interval: {intervals[grade]}</span>
+          <span className="mono lp-dim-tag">FSRS-6 interval: {intervals[grade]}</span>
         </div>
       ) : (
         <p className="mono lp-dim-tag" style={{ margin: "8px 0 0" }}>
@@ -494,7 +494,7 @@ export function BentoDemos() {
         className="lp-span-3"
         index="05"
         tag="ACTIVE RECALL"
-        title="Study Tape to FSRS-4.5 cards."
+        title="Study Tape to FSRS-6 cards."
         desc="Mask terms right on your ink page, peel to self-test, or convert strips into scheduled image-occlusion decks."
         icon={<GraduationCap size={14} strokeWidth={1.6} />}>
         <TapeOcclusionDemo />

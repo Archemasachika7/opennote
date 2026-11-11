@@ -151,3 +151,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) { .tape { transition: none; } }
+
+/* ---- Tidy handwriting panel (replaces the selection toolbar while tidying) ---- */
+.sel-tidy { align-items: center; gap: 8px; padding: 4px 8px; white-space: nowrap; }
+.sel-tidy-label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+.sel-tidy-label input[type="range"] { width: 120px; accent-color: var(--accent); }

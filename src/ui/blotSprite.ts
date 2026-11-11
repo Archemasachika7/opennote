@@ -1,7 +1,7 @@
 // Blot, the ink-drop companion from the OpenNote launch film: a 14×14 pixel drop, drawn as small voxel
 // cubes (front, lit top, shaded side) in plain SVG. No 3D library, no canvas loop: it redraws only on change.
 
-export type BlotPose = { eyes: "open" | "shut" | "happy"; arms: "down" | "up" | "wave" };
+export type BlotPose = { eyes: "open" | "shut" | "happy"; arms: "down" | "up" | "wave" | "wings" | "wings-down" };
 export type BlotKind = "body" | "shade" | "shine" | "white" | "pupil";
 export type BlotPixel = { c: number; r: number; kind: BlotKind };
 
@@ -31,6 +31,12 @@ export function blotGrid(pose: BlotPose): BlotPixel[] {
   put(4, 3, "shine"); put(3, 4, "shine"); put(3, 5, "shine");
   if (pose.arms === "up") for (const r of [4, 5, 6]) { put(0, r, "body"); put(13, r, "body"); }
   else if (pose.arms === "wave") { put(0, 8, "body"); put(0, 9, "body"); for (const r of [4, 5, 6]) put(13, r, "body"); }
+  else if (pose.arms === "wings") {
+    // little white wings, raised (flap up)
+    for (const [c, r] of [[-1, 3], [-1, 4], [0, 4], [0, 5], [14, 3], [14, 4], [13, 4], [13, 5]]) put(c, r, "white");
+  } else if (pose.arms === "wings-down") {
+    for (const [c, r] of [[-1, 7], [-1, 8], [0, 6], [0, 7], [14, 7], [14, 8], [13, 6], [13, 7]]) put(c, r, "white");
+  }
   else { put(0, 8, "body"); put(0, 9, "body"); put(13, 8, "body"); put(13, 9, "body"); }
   for (const [c, h] of [[4, 2], [5, 2], [8, 2], [9, 2]]) for (let r = 12; r < 12 + h; r++) put(c, r, "shade");
   if (pose.eyes === "shut") for (const c of [4, 5, 8, 9]) put(c, 7, "pupil");

@@ -2,7 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import 'vitest-canvas-mock';
 import 'fake-indexeddb/auto';
 import { configure } from "@testing-library/react";
-configure({ asyncUtilTimeout: 3000 });
+// lazily loaded screens (whiteboard, study set, demo) can take several seconds to load cold under a full test run
+configure({ asyncUtilTimeout: 8000 });
 
 // jsdom has no IntersectionObserver (every browser does); motion's whileInView needs it.
 // Report every observed element as visible, so scroll reveals render their content in tests.

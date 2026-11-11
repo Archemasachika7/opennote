@@ -58,6 +58,7 @@ export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function 
       { label: "Rename", icon: <Pencil {...I} />, onSelect: () => { setDraft(nb.title); setEditing(true); } },
       { label: nb.favorite ? "Remove from Favourites" : "Add to Favourites", icon: <Star {...I} />, onSelect: onFavorite },
       { label: "Move to Trash", icon: <Trash2 {...I} />, danger: true, onSelect: onTrash },
+      { label: "Delete…", icon: <Trash2 {...I} />, danger: true, onSelect: onDeleteForever },
     ];
 
   const coverPicker = !inTrash && onCoverColor ? (

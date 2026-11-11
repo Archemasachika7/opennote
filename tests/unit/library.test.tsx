@@ -54,7 +54,7 @@ describe("LibraryView", () => {
     await user.click(screen.getByRole("button", { name: "Trash" }));
     await user.click(await screen.findByRole("button", { name: /more for doomed/i }));
     await user.click(screen.getByRole("menuitem", { name: "Delete forever" }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete forever" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete everywhere" }));
     await waitFor(async () => expect(await listNotebooks({ view: "trash" })).toHaveLength(0));
     expect(confirmSpy).not.toHaveBeenCalled();
   });

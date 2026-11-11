@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import Underline from "@tiptap/extension-underline";
-import TextStyle from "@tiptap/extension-text-style";
-import Color from "@tiptap/extension-color";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
-import Table from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableHeader from "@tiptap/extension-table-header";
-import TableCell from "@tiptap/extension-table-cell";
+import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import {
   AudioLines, Bold, Code, Columns3, Heading1, Heading2, Heading3, Highlighter, Italic, List, ListChecks, ListOrdered,
   Minus, Palette, Quote, Rows3, Sigma, Strikethrough, Table as TableIcon, Trash2, Underline as UnderlineIcon,
@@ -77,8 +71,11 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TaskList, TaskItem.configure({ nested: true }),
-      Underline, TextStyle, Color, Highlight.configure({ multicolor: true }),
+      // tiptap 3's StarterKit brings Underline itself; Link and the trailing empty paragraph stay off so
+      // pages behave and save exactly as before the upgrade
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, trailingNode: false }),
+      TaskList, TaskItem.configure({ nested: true }),
+      TextStyle, Color, Highlight.configure({ multicolor: true }),
       Table.configure({ resizable: false }), TableRow, TableHeader, TableCell,
     ],
     content: (page.doc as object | null) ?? "",
@@ -149,6 +146,8 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
       h1: !!ed?.isActive("heading", { level: 1 }), h2: !!ed?.isActive("heading", { level: 2 }), h3: !!ed?.isActive("heading", { level: 3 }),
       bullet: !!ed?.isActive("bulletList"), ordered: !!ed?.isActive("orderedList"), task: !!ed?.isActive("taskList"),
       quote: !!ed?.isActive("blockquote"), code: !!ed?.isActive("codeBlock"),
+      // tiptap 3 no longer re-renders on every keystroke, so the table tools read this here too
+      table: !!ed?.isActive("table"),
     }),
   }) ?? {} as Record<string, boolean>;
   /** toolbar button props for a format that can be on or off */
@@ -230,7 +229,7 @@ export function TextPage({ page, width }: { page: TP; width: number }) {
           <button className="btn ghost icon" aria-label="Insert math" title="Insert LaTeX math equation (/math)" onClick={() => setMathOpen((v) => !v)}><Sigma {...I} /></button>
           <button className="btn ghost icon" aria-label="Voice dictation" title="Speech-to-Text Note (Sarvam AI / /voice)" onClick={() => setVoiceOpen(true)}><AudioLines {...I} /></button>
           <button className="btn ghost icon" aria-label="Insert table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon {...I} /></button>
-          {editor.isActive("table") && (
+          {on.table && (
             <>
               <button className="btn ghost icon" aria-label="Add row" onClick={() => editor.chain().focus().addRowAfter().run()}><Rows3 {...I} /></button>
               <button className="btn ghost icon" aria-label="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}><Columns3 {...I} /></button>

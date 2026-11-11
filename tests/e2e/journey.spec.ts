@@ -41,7 +41,7 @@ test("draw, add text, smart-paste a React artifact, reload: everything is still 
     document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
   }, fixture("counter.jsx"));
   await page.getByRole("button", { name: "Create" }).click();
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.frameLocator("iframe[title=Counter]").locator("#inc")).toHaveText("Clicked 0 times", { timeout: 15000 });
 
   await page.reload();

@@ -39,14 +39,27 @@ const VARIANTS: Record<Stroke["variant"], StrokeOptions> = {
   calligraphy: { thinning: 0, smoothing: 0.7, streamline: 0.55 },
   // pressure comes from beautifyInput (nib direction + real pressure), so thinning is strong but not simulated
   beautify: { thinning: 0.72, smoothing: 0.85, streamline: 0.5, easing: easeSine },
+  // soft Chinese-style brush: very pressure- and speed-sensitive, long tapered ends (see strokeOptions)
+  inkbrush: { thinning: 0.95, smoothing: 0.78, streamline: 0.45, easing: (t: number) => t * t * (3 - 2 * t) },
+  // pressure comes from obliqueInput (copperplate: thick going down, hairline going up)
+  oblique: { thinning: 0.85, smoothing: 0.8, streamline: 0.5, easing: easeSine },
+  // even line; the colour does the work (paintRainbow)
+  rainbow: { thinning: 0.15, smoothing: 0.72, streamline: 0.58, easing: easeSine },
 };
-const SIZE: Partial<Record<Stroke["variant"], number>> = { pencil: 1.5, marker: 3, beautify: 2.3 };
+const SIZE: Partial<Record<Stroke["variant"], number>> = { pencil: 1.5, marker: 3, beautify: 2.3, inkbrush: 3.4, oblique: 2.4, rainbow: 2.4 };
 
 export function strokeOptions(s: Pick<Stroke, "tool" | "variant" | "width">, realPressure: boolean): StrokeOptions {
   if (s.tool === "highlighter") return { size: s.width * 4, thinning: 0, smoothing: 0.7, streamline: 0.62, simulatePressure: false };
   const size = s.width * (SIZE[s.variant] ?? 2);
   if (s.variant === "beautify") {
     return { size, ...VARIANTS.beautify, simulatePressure: false, start: { taper: size * 2.5 }, end: { taper: size * 4 } };
+  }
+  if (s.variant === "inkbrush") {
+    // without a pen, perfect-freehand thins the line as the hand speeds up: exactly how a brush behaves
+    return { size, ...VARIANTS.inkbrush, simulatePressure: !realPressure, start: { taper: size * 3 }, end: { taper: size * 6 } };
+  }
+  if (s.variant === "oblique") {
+    return { size, ...VARIANTS.oblique, simulatePressure: false, start: { taper: size * 1.5 }, end: { taper: size * 2.5 } };
   }
   return { size, ...(VARIANTS[s.variant] ?? VARIANTS.ball), simulatePressure: !realPressure };
 }
@@ -217,9 +230,65 @@ export function strokePath(s: Stroke): Path2D {
   if (s.variant === "beautify" && s.tool !== "highlighter") {
     return outlinePath(getStroke(beautifyInput(raw), { ...strokeOptions(s, true), last: true }));
   }
+  if (s.variant === "oblique" && s.tool !== "highlighter") {
+    return outlinePath(getStroke(obliqueInput(raw), { ...strokeOptions(s, true), last: true }));
+  }
   const realPressure = raw.some((p) => p[2] !== 0.5);
   const outline = getStroke(smoothInput(raw), { ...strokeOptions(s, realPressure), last: true });
   return outlinePath(outline);
+}
+
+/**
+ * Oblique (copperplate) nib: a pointed flexible nib that spreads on the downstroke. Width comes from the
+ * direction of travel (moving down = thick, up or sideways = hairline), mixed with real pen pressure.
+ */
+export function obliqueInput(pairs: number[][]): number[][] {
+  const pts = smoothInput(pairs);
+  if (pts.length < 2) return pts;
+  const real = pairs.some((p) => p[2] !== 0.5);
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = c[0] - a[0], dy = c[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    const down = Math.max(0, dy / len); // 1 straight down, 0 sideways or up
+    const shade = 0.12 + 0.88 * down;
+    return [p[0], p[1], real ? 0.55 * shade + 0.45 * p[2] : shade];
+  });
+}
+
+/** Rainbow pen colour at a distance along the stroke (hue turns ~1 degree per logical px). */
+export function rainbowColor(distance: number, paper: Paper, startHue = 0): string {
+  return `hsl(${Math.round((startHue + distance) % 360)} 85% ${paper === "light" ? 44 : 62}%)`;
+}
+
+/** Hue (0..359) of a #rrggbb colour, so the rainbow begins at the colour the person picked. */
+export function hueOf(hex: string): number {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return 0;
+  const n = parseInt(m[1], 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return Math.round((h * 60 + 360) % 360);
+}
+
+/** Rainbow pen: the outline is the clip, the colour flows along the centre line from the chosen colour's hue. */
+function paintRainbow(ctx: CanvasRenderingContext2D, s: Stroke, paper: Paper, outline: Path2D, alphaMul: number): void {
+  const pts = smoothInput(toPairs(s.points));
+  const h0 = hueOf(resolveColor(s, paper));
+  ctx.save();
+  ctx.globalAlpha = alphaMul;
+  if (pts.length < 2) { ctx.fillStyle = rainbowColor(0, paper, h0); ctx.fill(outline); ctx.restore(); return; }
+  ctx.clip(outline);
+  ctx.lineCap = "round";
+  ctx.lineWidth = s.width * 7;
+  let dist = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    ctx.strokeStyle = rainbowColor(dist, paper, h0);
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    dist += Math.hypot(bx - ax, by - ay);
+  }
+  ctx.restore();
 }
 
 /** Chisel nib held at 45 degrees: thick on one diagonal, hairline on the other, like a broad-edge pen. */
@@ -351,6 +420,7 @@ export function paintStroke(ctx: CanvasRenderingContext2D, s: Stroke, paper: Pap
     return;
   }
   const p = path ?? strokePath(s);
+  if (s.variant === "rainbow" && s.tool !== "highlighter") { paintRainbow(ctx, s, paper, p, alphaMul); return; }
   ctx.save();
   const col = resolveColor(s, paper);
   const pencil = s.variant === "pencil" && s.tool !== "highlighter";

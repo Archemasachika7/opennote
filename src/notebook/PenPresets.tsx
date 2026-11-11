@@ -41,6 +41,7 @@ export function applyPreset(p: PenPreset): void {
 
 const NAMES: Record<PenVariant, string> = {
   ball: "Ballpoint", fountain: "Fountain", brush: "Brush", pencil: "Pencil", calligraphy: "Calligraphy", marker: "Marker", beautify: "Beautify",
+  inkbrush: "Ink brush", oblique: "Oblique nib", rainbow: "Rainbow",
 };
 
 /** Toolbar chips: tap to use, right-click or long-press to remove, + to save the pen in hand. */

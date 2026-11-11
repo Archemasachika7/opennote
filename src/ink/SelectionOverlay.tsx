@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { motionTokens } from "../ui/motion";
-import { ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, Minus, MoreHorizontal, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
+import { ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, ImageDown, Minus, MoreHorizontal, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
 import { Menu } from "../ui/Menu";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
@@ -21,7 +21,10 @@ export function SelectionOverlay({
   shapeFillColor, shapeFillOpacity = 0.42, fillPalette = [],
   onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut,
   onToggleFill, onToggleDashed, onUpdateShapeStyle, onSaveElement, onMakeCard, onToText, onToMath, onMoveToPage, onTidy, tidy,
+  onSaveImage,
 }: {
+  /** Crop by drawing around it: the selection as a PNG, saved as a file or copied as a picture. */
+  onSaveImage?: (how: "file" | "clipboard") => void;
   box: Box;
   scale: number;
   /** logical point at the surface's top-left (boards) */
@@ -182,6 +185,10 @@ export function SelectionOverlay({
               { label: "Recolour with current colour", icon: <Palette {...I} />, onSelect: onRecolor },
               ...(onMakeCard ? [{ label: "Make a flashcard", icon: <GraduationCap {...I} />, onSelect: onMakeCard }] : []),
               ...(onSaveElement ? [{ label: "Save as a reusable stamp", icon: <Stamp {...I} />, onSelect: onSaveElement }] : []),
+              ...(onSaveImage ? [
+                { label: "Save as picture (PNG)", icon: <ImageDown {...I} />, onSelect: () => onSaveImage("file") },
+                { label: "Copy as picture", icon: <ClipboardCopy {...I} />, onSelect: () => onSaveImage("clipboard") },
+              ] : []),
             ]} />
           )}
         </div>

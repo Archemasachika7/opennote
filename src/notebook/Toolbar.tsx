@@ -163,7 +163,8 @@ export function Toolbar({
         <select className="input" aria-label="Pen type" value={t.variant} onChange={(e) => set({ variant: e.target.value as PenVariant })}>
           <option value="ball">Ballpoint</option><option value="fountain">Fountain</option><option value="brush">Brush</option>
           <option value="pencil">Pencil</option><option value="calligraphy">Calligraphy</option><option value="marker">Marker</option>
-          <option value="beautify">Beautify</option>
+          <option value="beautify">Beautify</option><option value="inkbrush">Ink brush</option>
+          <option value="oblique">Oblique nib</option><option value="rainbow">Rainbow</option>
         </select>
       )}
       <PenPresets paper={notebook.paper} />

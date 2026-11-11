@@ -22,6 +22,8 @@ import { liveLaserPoints, paintLaser, type LaserPoint } from "./laser";
 import { BASE_LAYER, getActiveLayer, layerOf, layerOrder, lockedLayers, hiddenLayers, type Layer } from "./layers";
 import { intersects, type View } from "../board/viewport";
 import { toast } from "../ui/Toast";
+import { selectionToPng } from "./selectionImage";
+import { platform } from "../platform/port";
 import { isScribbleGesture, pointsToXYPath } from "./gestures";
 import { instantiateElement, saveStrokesAsElement } from "./elements";
 import { currentRecordingStamp, requestAudioSeek, useAudioLiveState } from "../store/audio";
@@ -885,6 +887,24 @@ export function InkLayer({
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
   const copySel = () => copyToClipboard(pageId, selStrokes, selObjects);
   const cutSel = async () => { setSelection(null); await cutToClipboard(pageId, selStrokes, selObjects); };
+  /** Crop by drawing around it: the lasso selection as a PNG file, or as a picture on the clipboard. */
+  const saveSelectionPicture = async (how: "file" | "clipboard") => {
+    if (!selBox) return;
+    try {
+      const png = await selectionToPng(selStrokes, selObjects, selBox, paper);
+      if (how === "file") {
+        await platform.saveFile(`OpenNote clip ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.png`, png);
+        toast("Picture saved");
+      } else if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        toast("Copied as a picture. Paste it into any app.");
+      } else {
+        toast("This browser can't copy pictures. Use Save as picture instead.");
+      }
+    } catch (e) {
+      toast(`Couldn't make the picture: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   const moveSel = async () => {
     const st = selStrokes, ob = selObjects;
     const to = await askPlace({ title: "Move selection to…", fromPageId: pageId, allowCurrent: false });
@@ -1019,6 +1039,7 @@ export function InkLayer({
           onToText={selStrokes.some((s) => !s.shape) ? () => requestRecognize({ kind: "text", pageId, strokes: selStrokes, box: selBox }) : undefined}
           onToMath={selStrokes.some((s) => !s.shape) ? () => requestRecognize({ kind: "math", pageId, strokes: selStrokes, box: selBox }) : undefined}
           onMoveToPage={view ? undefined : () => void moveSel()}
+          onSaveImage={(how) => void saveSelectionPicture(how)}
           onTidy={selStrokes.some((s) => !s.shape && s.tool !== "highlighter") ? () => showTidy(0.7, selStrokes) : undefined}
           tidy={tidyStrength === null ? null : {
             strength: tidyStrength, onStrength: (k) => showTidy(k, selStrokes),

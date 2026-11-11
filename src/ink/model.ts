@@ -1,5 +1,5 @@
 export type StrokeTool = "pen" | "highlighter";
-export type PenVariant = "ball" | "fountain" | "brush" | "pencil" | "calligraphy" | "marker" | "beautify";
+export type PenVariant = "ball" | "fountain" | "brush" | "pencil" | "calligraphy" | "marker" | "beautify" | "inkbrush" | "oblique" | "rainbow";
 export type GeometricShapeKind = "line" | "arrow" | "rect" | "roundrect" | "ellipse" | "triangle" | "diamond" | "star";
 
 export interface ShapeMeta {

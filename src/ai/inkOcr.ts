@@ -5,7 +5,9 @@
  */
 import { useSyncExternalStore } from "react";
 import type { Stroke } from "../ink/model";
-import { mathImage, textImages, type Raster } from "../ink/rasterize";
+import { STRIDE } from "../ink/model";
+import { textImages, writingStrokes, type Raster } from "../ink/rasterize";
+import type { InkOnStroke } from "./inkOcr.worker";
 
 export type InkKind = "text" | "math";
 
@@ -16,7 +18,9 @@ let worker: Worker | null = null;
 let seq = 0;
 const pending = new Map<number, { resolve: (t: string[]) => void; reject: (e: Error) => void; onStatus?: (s: string) => void }>();
 
-function run(kind: InkKind, images: Raster[], onStatus?: (s: string) => void): Promise<string[]> {
+type Payload = { kind: "text"; images: Raster[] } | { kind: "math"; formulas: InkOnStroke[][] };
+
+function run(payload: Payload, onStatus?: (s: string) => void): Promise<string[]> {
   if (!worker) {
     worker = new Worker(new URL("./inkOcr.worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (e: MessageEvent<Msg>) => {
@@ -31,7 +35,8 @@ function run(kind: InkKind, images: Raster[], onStatus?: (s: string) => void): P
   const id = ++seq;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject, onStatus });
-    worker!.postMessage({ id, kind, images }, images.map((i) => i.data.buffer));
+    const transfer = payload.kind === "text" ? payload.images.map((i) => i.data.buffer) : [];
+    worker!.postMessage({ id, ...payload }, transfer);
   });
 }
 
@@ -65,14 +70,23 @@ export function joinPieces(texts: string[], lineOf: number[]): string {
 export async function recognizeText(strokes: Stroke[], onStatus?: (s: string) => void): Promise<string> {
   const { images, lineOf } = textImages(strokes);
   if (images.length === 0) return "";
-  return joinPieces(await run("text", images, onStatus), lineOf);
+  return joinPieces(await run({ kind: "text", images }, onStatus), lineOf);
+}
+
+/** Pen points for the maths model (it reads strokes, not pictures; it draws its own fixed-width lines). */
+export function toInkOn(strokes: Stroke[]): InkOnStroke[] {
+  return writingStrokes(strokes).map((st) => {
+    const points: { x: number; y: number }[] = [];
+    for (let i = 0; i < st.points.length; i += STRIDE) points.push({ x: st.points[i], y: st.points[i + 1] });
+    return { points, lineWidth: 3 };
+  });
 }
 
 /** Read a handwritten formula. Returns LaTeX. */
 export async function recognizeMath(strokes: Stroke[], onStatus?: (s: string) => void): Promise<string> {
-  const img = mathImage(strokes);
-  if (!img) return "";
-  const [latex] = await run("math", [img], onStatus);
+  const formula = toInkOn(strokes);
+  if (formula.length === 0) return "";
+  const [latex] = await run({ kind: "math", formulas: [formula] }, onStatus);
   return normalizeLatex(latex ?? "");
 }
 

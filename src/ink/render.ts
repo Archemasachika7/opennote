@@ -51,10 +51,36 @@ export function strokeOptions(s: Pick<Stroke, "tool" | "variant" | "width">, rea
   return { size, ...(VARIANTS[s.variant] ?? VARIANTS.ball), simulatePressure: !realPressure };
 }
 
+/** [x, y, pressure, t] per sample: smoothing needs the time to know how fast the pen moved. */
 function toPairs(points: Float32Array): number[][] {
   const out: number[][] = [];
-  for (let i = 0; i < points.length; i += STRIDE) out.push([points[i], points[i + 1], points[i + 2]]);
+  for (let i = 0; i < points.length; i += STRIDE) out.push([points[i], points[i + 1], points[i + 2], points[i + 3]]);
   return out;
+}
+
+/** Pen speed (logical px per ms) below which movement is slow and jitter shows, and above which it's fast. */
+const SLOW_SPEED = 0.15;
+const FAST_SPEED = 0.9;
+
+/** 0 = slow (smooth harder), 1 = fast (barely touch it). Without timestamps, the middle. */
+export function speedFactor(pts: number[][], i: number): number {
+  const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)];
+  const dt = (c[3] ?? 0) - (a[3] ?? 0);
+  if (!(dt > 0)) return 0.5;
+  const v = Math.hypot(c[0] - a[0], c[1] - a[1]) / dt;
+  return Math.min(1, Math.max(0, (v - SLOW_SPEED) / (FAST_SPEED - SLOW_SPEED)));
+}
+
+/**
+ * A real corner (the tip of a "v", a "4", an arrowhead), judged over a few points so digitizer zig-zag
+ * doesn't count: smoothing must leave it sharp.
+ */
+function isCorner(pts: number[][], i: number): boolean {
+  const a = pts[Math.max(0, i - 2)], b = pts[i], c = pts[Math.min(pts.length - 1, i + 2)];
+  const ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1];
+  const lu = Math.hypot(ux, uy), lv = Math.hypot(vx, vy);
+  if (lu < 3 || lv < 3) return false;
+  return (ux * vx + uy * vy) / (lu * lv) < 0.35; // turned by more than ~70 degrees
 }
 
 /** Input points closer than this (logical px) are digitizer jitter, not movement. */
@@ -80,10 +106,18 @@ export function smoothInput(pairs: number[][]): number[][] {
   const A = 0.35;
   for (let i = 1; i < pr.length; i++) pr[i] = pr[i - 1] + A * (pr[i] - pr[i - 1]);
   for (let i = pr.length - 2; i >= 0; i--) pr[i] = pr[i + 1] + A * (pr[i] - pr[i + 1]);
+  // positions: speed-aware. Slow pen → a wider [1 4 6 4 1] filter (jitter is visible when you write
+  // slowly); fast pen → only half of a light [1 2 1] pass (less lag, letters keep their shape). Corners stay.
   const out: number[][] = [[kept[0][0], kept[0][1], pr[0]]];
+  const at = (i: number) => kept[Math.min(kept.length - 1, Math.max(0, i))];
   for (let i = 1; i < kept.length - 1; i++) {
-    const a = kept[i - 1], b = kept[i], c = kept[i + 1];
-    out.push([(a[0] + 2 * b[0] + c[0]) / 4, (a[1] + 2 * b[1] + c[1]) / 4, pr[i]]);
+    const b = kept[i];
+    if (isCorner(kept, i)) { out.push([b[0], b[1], pr[i]]); continue; }
+    const a = at(i - 1), c = at(i + 1), a2 = at(i - 2), c2 = at(i + 2);
+    const strong = [0, 1].map((k) => (a2[k] + 4 * a[k] + 6 * b[k] + 4 * c[k] + c2[k]) / 16);
+    const light = [0, 1].map((k) => (b[k] + (a[k] + 2 * b[k] + c[k]) / 4) / 2);
+    const f = speedFactor(kept, i);
+    out.push([strong[0] + (light[0] - strong[0]) * f, strong[1] + (light[1] - strong[1]) * f, pr[i]]);
   }
   const z = kept[kept.length - 1];
   out.push([z[0], z[1], pr[pr.length - 1]]);

@@ -9,6 +9,7 @@ import { shapePoints, snapLineEndpoint, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, onShapeStylePatch, onStampElement, setTool, useTool, type ShapeStylePatch } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
+import { countCancelled, countPen, judgeTouch, type TouchVerdict } from "./palmGate";
 import { historyFor, type Op } from "./history";
 import { notifyPageChanged, onPageChanged } from "./pageEvents";
 import { copyToClipboard, cutToClipboard, moveSelection } from "./clipboard";
@@ -507,17 +508,21 @@ export function InkLayer({
     const t = getTool();
     if (e.pointerType === "pen" && !t.penSeen) setTool({ penSeen: true });
     const cur = active.current;
-    if (e.pointerType === "touch" && cur && !cur.pen && cur.id !== e.pointerId) {
-      // a second finger landed while one was writing: it's a pinch, so the half-drawn finger stroke goes
-      clearHoldTimer();
-      active.current = null;
-      lastEvent.current = null;
-      if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
-      const wctx = wet.current?.getContext("2d");
-      if (wctx) clearCanvas(wctx);
-      return;
+    if (cur && !cur.pen && cur.id !== e.pointerId && (e.pointerType === "touch" || e.pointerType === "pen")) {
+      // a second finger (a pinch) or the pen arrived while a finger was "writing": that finger line was a
+      // pinch or a resting palm, so it goes without being saved
+      discardActive();
+      if (e.pointerType === "touch") return;
     }
-    const action = classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
+    // palm gate: decide what a touch is before anything is drawn (pen and mouse are never a palm)
+    let touchVerdict: TouchVerdict | null = null;
+    if (e.pointerType === "touch") {
+      touchVerdict = judgeTouch(e, { penSeen: t.penSeen });
+      if (touchVerdict === "palm") return; // a resting hand: no ink, no scrolling
+    } else if (e.pointerType === "pen") countPen();
+    const action = touchVerdict === "write" && t.tool !== "hand" ? "draw"
+      : touchVerdict === "navigate" ? "navigate"
+      : classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
     if (action === "navigate") {
       if (e.pointerType === "touch" || onPan) {
         pans.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -647,6 +652,26 @@ export function InkLayer({
     if (remove.length === 0) return;
     historyFor(pageId).push({ remove, add });
     await apply(remove, add);
+  };
+
+  /** Drop the line being drawn without saving it (palm, pinch or a cancelled pointer). */
+  const discardActive = () => {
+    clearHoldTimer();
+    active.current = null;
+    lastEvent.current = null;
+    if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
+    const wctx = wet.current?.getContext("2d");
+    if (wctx) clearCanvas(wctx);
+  };
+
+  /** The browser took the pointer away (it decided on a scroll, or the pen lost contact): never commit a partial line. */
+  const cancel = (ev: React.PointerEvent) => {
+    pans.current.delete(ev.nativeEvent.pointerId);
+    const a = active.current;
+    if (!a || a.id !== ev.nativeEvent.pointerId) return;
+    if (a.kind === "laser") { active.current = null; return; }
+    discardActive();
+    countCancelled();
   };
 
   const finish = async (ev: React.PointerEvent) => {
@@ -919,7 +944,7 @@ export function InkLayer({
   return (
     <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined}
       style={{ width, height, touchAction, cursor, pointerEvents: disabled ? "none" : undefined }}
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={cancel}
       onPointerLeave={(e) => { if (e.pointerType === "pen") setHover(null); }}>
       <canvas ref={dry} className="ink-canvas" style={{ width, height }} />
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />

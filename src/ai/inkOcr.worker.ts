@@ -1,44 +1,38 @@
 /// <reference lib="webworker" />
 /*
- * On-device ink recognition in a Web Worker (see ./inkOcr.ts). Two open models, downloaded once from
- * Hugging Face and cached by the browser, then offline:
- *   text: TrOCR small, fine-tuned on handwritten lines (IAM), 8-bit: ~64 MB
- *   math: pix2text MFR (TrOCR-style formula recogniser that outputs LaTeX): ~118 MB
- * Where the browser has WebGPU, the image encoder (most of the work) runs on the graphics chip: the
- * text model then fetches its fp16 encoder once (~44 MB more), maths reuses the same file. The decoders
- * stay on WebAssembly (8-bit weights run poorly on WebGPU), and any GPU failure falls back to WebAssembly.
- * pix2text ships its ONNX files at the repo root and only a cache-less decoder, so the worker maps the
- * file names transformers.js asks for, and runs the decoder in its own greedy loop (full prefix per step).
+ * On-device ink recognition in a Web Worker (see ./inkOcr.ts):
+ *   text: TrOCR small, fine-tuned on handwritten lines (IAM), 8-bit: ~64 MB, downloaded once from Hugging
+ *         Face and cached by the browser. Reads images of lines (../ink/rasterize.ts).
+ *   math: CoMER (ECCV 2022, trained on CROHME handwritten maths) through ink-on (Apache-2.0), 8-bit,
+ *         7.2 MB, shipped inside the app (public/models/comer), so it works offline from the first use.
+ *         Reads the pen strokes themselves.
+ * Where the browser has a working WebGPU adapter, TrOCR's image encoder runs on the graphics chip (its fp16
+ * encoder is ~44 MB more); the decoder stays on WebAssembly, and any GPU failure falls back to WebAssembly.
+ *
+ * Tested 2026-11-11 on ten handwritten-style formulas: CoMER 10/10 at 0.3–2.8 s each, the previous
+ * pix2text model ~6/10 at 1.9–6.7 s and a 118 MB download. pix2text was removed.
  */
-import { AutoProcessor, AutoTokenizer, env, pipeline, RawImage, Tensor, VisionEncoderDecoderModel } from "@huggingface/transformers";
-import { MATH_MODEL, TEXT_MODEL } from "./inkOcrModels";
+import { env, pipeline, RawImage } from "@huggingface/transformers";
+import { InferenceEngine, isStrokeMeaningful, loadVocab, preprocessStrokes, repairLatex, type Vocab } from "ink-on/core";
+import { TEXT_MODEL } from "./inkOcrModels";
 
 declare const self: DedicatedWorkerGlobalScope;
 
-const MAX_MATH_TOKENS = 160;
-
 env.allowLocalModels = false;
 
-const realFetch = self.fetch.bind(self);
-self.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  if (url.includes(`/${MATH_MODEL}/`)) {
-    const mapped = url
-      .replace(/\/onnx\/encoder_model[^/]*\.onnx/, "/encoder_model.onnx")
-      .replace(/\/onnx\/decoder_model_merged[^/]*\.onnx/, "/decoder_model.onnx");
-    return realFetch(mapped, init);
-  }
-  return realFetch(input, init);
-}) as typeof fetch;
-
 type Img = { width: number; height: number; data: Uint8ClampedArray };
-type Job = { id: number; kind: "text" | "math"; images: Img[] };
+export type InkOnStroke = { points: { x: number; y: number }[]; lineWidth: number };
+type Job =
+  | { id: number; kind: "text"; images: Img[] }
+  | { id: number; kind: "math"; formulas: InkOnStroke[][] };
 
 const progress = (id: number, what: string) => (p: { status?: string; file?: string; progress?: number }) => {
   if (p.status === "progress" && p.file?.endsWith(".onnx") && typeof p.progress === "number") {
     self.postMessage({ id, type: "status", status: `Downloading ${what} model ${Math.round(p.progress)}% (one time only)` });
   }
 };
+
+/* ---- handwriting → text (TrOCR) ---- */
 
 /** "fp16"/"fp32": WebGPU works (and which float size the encoder can use); null: WebAssembly only. */
 type Gpu = "fp16" | "fp32" | null;
@@ -73,82 +67,81 @@ function loadText(id: number): Promise<TextPipe> {
   return textPipe;
 }
 
-type OrtSession = { run: (feeds: Record<string, unknown>) => Promise<Record<string, { data: Float32Array; dims: number[] }>> };
-type MathKit = { proc: (img: RawImage) => Promise<{ pixel_values: unknown }>; tok: { decode: (ids: number[], o: object) => string }; enc: OrtSession; dec: OrtSession; start: number; eos: number };
-let mathKit: Promise<MathKit> | null = null;
-function loadMath(id: number): Promise<MathKit> {
-  mathKit ??= (async () => {
-    const opts = { progress_callback: progress(id, "maths") };
-    const g = await gpu();
-    const loadModel = (onGpu: boolean) => VisionEncoderDecoderModel.from_pretrained(MATH_MODEL,
-      { ...opts, dtype: "fp32", device: onGpu ? split("webgpu", "wasm") : "wasm" } as Parameters<typeof VisionEncoderDecoderModel.from_pretrained>[1]);
-    const [proc, tok, model] = await Promise.all([
-      AutoProcessor.from_pretrained(MATH_MODEL, opts),
-      AutoTokenizer.from_pretrained(MATH_MODEL, opts),
-      g ? loadModel(true).catch(() => { gpuBroken = true; return loadModel(false); }) : loadModel(false),
-    ]);
-    const m = model as unknown as { sessions: Record<string, OrtSession>; config: { decoder_start_token_id?: number; eos_token_id?: number }; generation_config?: { decoder_start_token_id?: number; eos_token_id?: number } };
-    return {
-      proc: proc as unknown as MathKit["proc"], tok: tok as unknown as MathKit["tok"],
-      enc: m.sessions.model, dec: m.sessions.decoder_model_merged,
-      start: m.generation_config?.decoder_start_token_id ?? m.config.decoder_start_token_id ?? 2,
-      eos: m.generation_config?.eos_token_id ?? m.config.eos_token_id ?? 2,
-    };
-  })().catch((e) => { mathKit = null; throw e; });
-  return mathKit;
-}
-
 const toImage = (i: Img) => new RawImage(i.data, i.width, i.height, 4).rgb();
-const ort = (t: unknown) => (t as { ort_tensor?: unknown }).ort_tensor ?? t;
 
-async function readMath(kit: MathKit, img: Img): Promise<string> {
-  const { pixel_values } = await kit.proc(toImage(img));
-  const { last_hidden_state } = await kit.enc.run({ pixel_values: ort(pixel_values) });
-  const ids = [kit.start];
-  for (let step = 0; step < MAX_MATH_TOKENS; step++) {
-    const input_ids = new Tensor("int64", BigInt64Array.from(ids.map(BigInt)), [1, ids.length]);
-    const { logits } = await kit.dec.run({ input_ids: ort(input_ids), encoder_hidden_states: last_hidden_state });
-    const V = logits.dims[2], off = (ids.length - 1) * V, d = logits.data;
-    let best = 0, bv = -Infinity;
-    for (let v = 0; v < V; v++) if (d[off + v] > bv) { bv = d[off + v]; best = v; }
-    if (best === kit.eos) break;
-    ids.push(best);
-  }
-  return kit.tok.decode(ids.slice(1), { skip_special_tokens: true });
+/* ---- handwritten maths → LaTeX (CoMER via ink-on) ---- */
+
+/** The bundled model, next to the app's index.html (works on the web, in the Windows and Android apps). */
+const COMER_BASE = new URL("/models/comer/", self.location.href).href;
+
+let comer: Promise<{ engine: InferenceEngine; vocab: Vocab }> | null = null;
+function loadMath(): Promise<{ engine: InferenceEngine; vocab: Vocab }> {
+  comer ??= (async () => {
+    const vocab = await loadVocab(`${COMER_BASE}vocab.json`);
+    const engine = new InferenceEngine({
+      encoderUrl: `${COMER_BASE}encoder_int8.onnx`, decoderUrl: `${COMER_BASE}decoder_int8.onnx`, executionProvider: "wasm",
+    });
+    await engine.init();
+    return { engine, vocab };
+  })().catch((e) => { comer = null; throw e; });
+  return comer;
 }
 
-async function recognize(id: number, kind: Job["kind"], images: Img[]): Promise<string[]> {
+/**
+ * ink-on draws strokes on `document.createElement("canvas")`, which workers don't have. Lend it an
+ * OffscreenCanvas just while the (synchronous) preprocessing runs, then take it away again, so nothing
+ * else in the worker ever mistakes it for a page with a DOM.
+ */
+function withWorkerCanvas<T>(fn: () => T): T {
+  const g = self as unknown as { document?: unknown };
+  if (g.document !== undefined) return fn();
+  g.document = { createElement: (tag: string) => {
+    if (tag !== "canvas") throw new Error(`No ${tag} in a worker`);
+    return new OffscreenCanvas(1, 1);
+  } };
+  try { return fn(); } finally { delete g.document; }
+}
+
+/** CoMER speaks space-separated tokens ("x ^ { 2 }"); fix unbalanced braces and extra arguments. */
+async function readMath(strokes: InkOnStroke[]): Promise<string> {
+  if (!isStrokeMeaningful(strokes)) return "";
+  const { engine, vocab } = await loadMath();
+  const r = await engine.recognize(withWorkerCanvas(() => preprocessStrokes(strokes)), vocab, "auto");
+  return repairLatex(r.latex.trim().split(/\s+/)).join(" ");
+}
+
+/* ---- jobs ---- */
+
+async function recognize(job: Job): Promise<string[]> {
   const texts: string[] = [];
-  if (kind === "text") {
-    const run = await loadText(id);
-    for (let i = 0; i < images.length; i++) {
-      self.postMessage({ id, type: "status", status: `Reading handwriting ${i + 1} / ${images.length}...` });
-      texts.push((await run(toImage(images[i])))[0]?.generated_text ?? "");
+  if (job.kind === "text") {
+    const run = await loadText(job.id);
+    for (let i = 0; i < job.images.length; i++) {
+      self.postMessage({ id: job.id, type: "status", status: `Reading handwriting ${i + 1} / ${job.images.length}...` });
+      texts.push((await run(toImage(job.images[i])))[0]?.generated_text ?? "");
     }
   } else {
-    const kit = await loadMath(id);
-    self.postMessage({ id, type: "status", status: "Reading the formula..." });
-    for (const img of images) texts.push(await readMath(kit, img));
+    self.postMessage({ id: job.id, type: "status", status: "Reading the formula..." });
+    for (const f of job.formulas) texts.push(await readMath(f));
   }
   return texts;
 }
 
 self.onmessage = async (e: MessageEvent<Job>) => {
-  const { id, kind, images } = e.data;
+  const job = e.data;
   try {
     let texts: string[];
     try {
-      texts = await recognize(id, kind, images);
+      texts = await recognize(job);
     } catch (err) {
       // a GPU that loaded but fails to run (driver bug, lost device): rebuild on WebAssembly and retry once
-      if (gpuBroken || !(await gpu())) throw err;
+      if (job.kind !== "text" || gpuBroken || !(await gpu())) throw err;
       gpuBroken = true;
       textPipe = null;
-      mathKit = null;
-      texts = await recognize(id, kind, images);
+      texts = await recognize(job);
     }
-    self.postMessage({ id, type: "result", texts });
+    self.postMessage({ id: job.id, type: "result", texts });
   } catch (err) {
-    self.postMessage({ id, type: "error", message: `Recognition failed: ${err instanceof Error ? err.message : String(err)}` });
+    self.postMessage({ id: job.id, type: "error", message: `Recognition failed: ${err instanceof Error ? err.message : String(err)}` });
   }
 };

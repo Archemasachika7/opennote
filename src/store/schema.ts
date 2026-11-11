@@ -1,3 +1,4 @@
+import { uuidV4 } from "../platform/uuid";
 import Dexie, { type Table } from "dexie";
 import type { Stroke } from "../ink/model";
 import type { Layer } from "../ink/layers";
@@ -179,7 +180,7 @@ class OpenNoteDB extends Dexie {
 }
 
 export const db = new OpenNoteDB();
-export const newId = (): string => crypto.randomUUID();
+export const newId = (): string => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : uuidV4());
 export const now = (): number => Date.now();
 
 /** Of the given blob ids, those no object or page background references any more (safe to delete). */

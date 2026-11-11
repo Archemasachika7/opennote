@@ -35,6 +35,7 @@ import { RulerOverlay } from "../ink/RulerOverlay";
 import { InsertMenu, type InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
+import { PalmOverlay } from "../dev/PalmOverlay";
 import { TemplatesSheet } from "./TemplatesSheet";
 import { getEffectiveTemplate, hydratePageTemplates, setStemTemplateForPage } from "../store/templates";
 import { AudioBar } from "./AudioBar";
@@ -586,6 +587,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       )}
       <RulerOverlay />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
+      {new URLSearchParams(window.location.search).get("debug") === "palm" && <PalmOverlay />}
     </div>
   );
 }

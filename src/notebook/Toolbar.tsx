@@ -151,6 +151,8 @@ export function Toolbar({
           {notebook.title}
         </span>
       )}
+      {/* on phones this strip becomes its own sideways-scrolling row under the fixed top row */}
+      <div className="nb-tb-strip">
       <div className="tool-group" role="toolbar" aria-label="Tools">
         {tools.map((x) => (
           <button key={x.name} className={`btn ghost icon ${t.tool === x.name ? "active" : ""}`} aria-label={x.label} title={x.hint}
@@ -329,7 +331,8 @@ export function Toolbar({
           </button>
         )}
       </div>
-      <div className="tool-group">
+      </div>
+      <div className="tool-group nb-tb-undo">
         <button className="btn ghost icon" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={onUndo}><Undo2 {...ICON} /></button>
         <button className="btn ghost icon" aria-label="Redo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" onClick={onRedo}><Redo2 {...ICON} /></button>
       </div>
@@ -354,7 +357,7 @@ export function Toolbar({
         </button>
         <button className="btn ghost icon" aria-label="Zoom in" onClick={() => setZoom(zoom * 1.2)}><ZoomIn {...ICON} /></button>
       </div>
-      <div style={{ position: "relative" }}>
+      <div className="nb-tb-options" style={{ position: "relative" }}>
         <button className="btn ghost icon" aria-label="Notebook options" onClick={() => setMenu(true)}><MoreHorizontal {...ICON} /></button>
         {menu && (
           <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} footer={coverFooter} items={[

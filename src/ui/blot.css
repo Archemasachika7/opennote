@@ -70,3 +70,8 @@
 .blot[data-still="true"], .blot[data-still="true"] * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .blot, .blot * { animation: none !important; transition: none !important; } }
 @media print { .blot { display: none; } }
+
+/* while you write on a page, Blot ducks below the edge so it never sits under your hand */
+.blot { transition-property: left, opacity, transform; }
+.blot[data-shy="true"] { opacity: 0; transform: translateY(40px); pointer-events: none; transition: opacity 0.2s ease-out, transform 0.25s ease-out; }
+.blot[data-shy="true"] .blot-hit { pointer-events: none; }

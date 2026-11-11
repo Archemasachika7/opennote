@@ -1,3 +1,5 @@
+// first: gives crypto.randomUUID to plain-http network addresses, before anything makes an id
+import "./platform/uuid";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./ui/global.css";

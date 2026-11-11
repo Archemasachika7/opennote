@@ -156,3 +156,7 @@
 .sel-tidy { align-items: center; gap: 8px; padding: 4px 8px; white-space: nowrap; }
 .sel-tidy-label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
 .sel-tidy-label input[type="range"] { width: 120px; accent-color: var(--accent); }
+
+/* lasso toolbar: the ink tools carry words, the rest are icons plus a "More" menu */
+.sel-bar .sel-word { gap: 5px; padding: 0 9px; height: 32px; font-size: 12.5px; white-space: nowrap; }
+.sel-bar .sel-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--line); }

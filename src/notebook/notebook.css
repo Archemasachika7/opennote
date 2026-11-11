@@ -436,3 +436,23 @@
 }
 /* a page a dragged selection will land on */
 .page-wrap.drop-target [data-testid="ink-surface"] { outline: 2px dashed var(--accent); outline-offset: 2px; }
+
+/* ---- phone toolbar: a fixed top row (back, sidebar, name, undo/redo, options) + a scrolling tools row ---- */
+.nb-tb-strip { display: contents; }
+@media (max-width: 760px) {
+  .nb-toolbar { flex-wrap: wrap; overflow: visible; row-gap: 4px; }
+  .nb-toolbar > * { order: 1; }
+  .nb-toolbar .nb-name, .nb-toolbar .nb-name-input { flex: 1 1 auto; min-width: 60px; max-width: none; }
+  .nb-tb-undo { order: 2; display: flex; }
+  .nb-tb-options { order: 3; }
+  .nb-tb-strip {
+    order: 10; display: flex; align-items: center; gap: 4px; flex: 1 1 100%; min-width: 0;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    padding-top: 4px; border-top: 1px solid var(--line);
+  }
+  .nb-tb-strip::-webkit-scrollbar { display: none; }
+  .nb-tb-strip > * { flex: none; }
+  /* pinch zooms on phones; the zoom buttons would only crowd the top row */
+  .nb-toolbar-right { display: none; }
+  .nb-toolbar .mode-switch { order: 11; }
+}

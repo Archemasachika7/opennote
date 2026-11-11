@@ -200,3 +200,9 @@
 .delete-title { font-weight: 600; font-size: 14px; }
 .delete-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.4; }
 .delete-copy { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 4px 0 14px; cursor: pointer; }
+
+/* ---- password lock ---- */
+.lock-form { display: grid; gap: 8px; }
+.nb-lock { color: var(--text-dim); vertical-align: -2px; margin-right: 4px; }
+.nb-locked { max-width: 420px; margin: 16vh auto 0; padding: 0 24px; display: grid; gap: 12px; justify-items: center; text-align: center; }
+.nb-locked .lock-form { width: 100%; text-align: left; }

@@ -38,6 +38,9 @@ export async function deleteNotebook(id: string): Promise<void> {
     // recordings belong to the notebook alone: their audio goes with them
     const recs = await db.recordings.where("notebookId").equals(id).toArray();
     await db.blobs.bulkDelete(recs.map((r) => r.blobId));
+    // so do a locked notebook's encrypted contents
+    const lockedBlob = (await db.notebooks.get(id))?.locked?.blobId;
+    if (lockedBlob) await db.blobs.delete(lockedBlob);
     await db.recordings.where("notebookId").equals(id).delete();
     const pageIds = (await db.pages.where("notebookId").equals(id).primaryKeys()) as string[];
     const objs = await db.objects.where("pageId").anyOf(pageIds).toArray();

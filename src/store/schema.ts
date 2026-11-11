@@ -28,7 +28,12 @@ export interface Notebook {
   trashedAt?: number | null;
   /** Document type (absent = notebook). Whiteboard pages are boards; a study set has cards, no pages. */
   kind?: DocKind;
+  /** Password-locked: the whole notebook is encrypted in one blob and its pages are not on the device (store/lock.ts). */
+  locked?: LockInfo;
 }
+
+/** Where a locked notebook's encrypted contents are and how to check the password (salt and check are base64). */
+export interface LockInfo { blobId: string; salt: string; check: string; iterations: number; lockedAt: number }
 export type DocKind = "notebook" | "whiteboard" | "studyset";
 
 interface PageBase {
@@ -191,5 +196,7 @@ export async function unreferencedBlobs(candidates: string[]): Promise<string[]>
   await db.objects.each((o) => { if (o.blobId && want.has(o.blobId)) used.add(o.blobId); });
   await db.cards.each((c) => { for (const b of [c.frontImage, c.backImage]) if (b && want.has(b)) used.add(b); });
   await db.pages.each((p) => { if (p.kind === "ink" && p.background && want.has(p.background.blobId)) used.add(p.background.blobId); });
+  // a locked notebook's encrypted contents are never garbage
+  await db.notebooks.each((n) => { if (n.locked && want.has(n.locked.blobId)) used.add(n.locked.blobId); });
   return [...want].filter((b) => !used.has(b));
 }

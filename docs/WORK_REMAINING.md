@@ -173,4 +173,5 @@ so the app ships **one** ONNX runtime (build 92 MB → 64 MB).
 | Lasso toolbar: 12 unlabeled icons | Fixed: **Text**, **Maths**, **Tidy** have words; Move/Copy/Cut/Delete icons; the rest in a labeled **More** menu |
 | Blot sitting where the hand writes on phones | Fixed: ducks out of sight while you write, back 4 s later |
 | Empty text page looks like a blank box | Fixed: "Tap here and start typing…" hint |
-| Still open | Jetpack Ink Android spike; real-tablet palm tuning; crop by drawing; password-locked notes; more pens (Chinese brush, rainbow, oblique) |
+| Still open | Jetpack Ink Android spike; real-tablet palm tuning |
+| Done after that | Ink brush, oblique nib and rainbow pens; crop by drawing (lasso → More → Save/Copy as picture); password-locked notebooks (really encrypted with PBKDF2 + AES-GCM, sync and backup carry the encrypted copy) |

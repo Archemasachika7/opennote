@@ -1,5 +1,5 @@
 import { strToU8, strFromU8, unzipSync, zipSync } from "fflate";
-import { db, newId, now, MAX_HTML_BYTES, type Card, type Notebook, type Page, type PageObject, type Recording } from "../store/schema";
+import { db, newId, now, MAX_HTML_BYTES, type Card, type LockInfo, type Notebook, type Page, type PageObject, type Recording } from "../store/schema";
 import { newSrs } from "../study/srs";
 import type { Stroke } from "../ink/model";
 
@@ -36,7 +36,9 @@ export async function exportBackup(notebookId: string): Promise<Blob> {
   const cards = await db.cards.where("notebookId").equals(notebookId).toArray();
   const recordings = await db.recordings.where("notebookId").equals(notebookId).toArray();
   const blobIds = [...new Set([...objects.map((o) => o.blobId), ...pages.map((p) => (p.kind === "ink" ? p.background?.blobId : undefined)),
-    ...cards.flatMap((c) => [c.frontImage, c.backImage]), ...recordings.map((r) => r.blobId)]
+    ...cards.flatMap((c) => [c.frontImage, c.backImage]), ...recordings.map((r) => r.blobId),
+    // a password-locked notebook is one encrypted blob: it must travel with the notebook (backup and sync)
+    notebook.locked?.blobId]
     .filter((x): x is string => !!x))];
   const files: Record<string, Uint8Array> = {};
   const blobs: Manifest["blobs"] = [];
@@ -93,6 +95,12 @@ export async function importBackup(file: Blob, opts: { keepIds?: boolean } = {})
     pageIds: m.notebook.pageIds.map((id) => pageMap.get(id)).filter((x): x is string => !!x),
     bookmarks: m.notebook.bookmarks.map((id) => pageMap.get(id)).filter((x): x is string => !!x),
   };
+  // untrusted file: keep a lock only if its encrypted blob is in the file and the fields are what they should be
+  const lk = m.notebook.locked as Partial<LockInfo> | undefined;
+  const lockBlob = lk && typeof lk.blobId === "string" ? blobMap.get(lk.blobId) : undefined;
+  if (lk && lockBlob && typeof lk.salt === "string" && typeof lk.check === "string" && Number.isInteger(lk.iterations) && lk.iterations! > 0) {
+    nb.locked = { blobId: lockBlob, salt: lk.salt, check: lk.check, iterations: lk.iterations!, lockedAt: Number(lk.lockedAt) || t };
+  } else delete nb.locked;
   const pages = m.pages.map((p) => {
     const copy = { ...p, id: pageMap.get(p.id)!, notebookId: nb.id } as Page;
     if (copy.kind === "ink" && copy.background) {

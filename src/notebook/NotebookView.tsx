@@ -40,6 +40,7 @@ import { TemplatesSheet } from "./TemplatesSheet";
 import { getEffectiveTemplate, hydratePageTemplates, setStemTemplateForPage } from "../store/templates";
 import { AudioBar } from "./AudioBar";
 import { RecognizeSheet } from "./RecognizeSheet";
+import { UnlockScreen } from "../library/LockSheet";
 import { onRecognizeRequest, useInkSearch, type RecognizeRequest } from "../ai/inkOcr";
 import { indexHandwriting } from "../store/inkIndex";
 import { SpeechNoteModal } from "./SpeechNoteModal";
@@ -411,6 +412,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       </main>
     );
   }
+  if (notebook.locked) return <UnlockScreen notebook={notebook} />;
   if (notebook.trashedAt) {
     return (
       <main className="nb-trashed">

@@ -1,5 +1,7 @@
 "use client";
-import { forwardRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
+import { openFromCover } from "../ui/CoverLaunch";
+import { CoverPreview } from "./CoverPreview";
 import { motion } from "motion/react";
 import { Folder, Lock, MoreHorizontal, Pencil, RotateCcw, Star, Trash2 } from "lucide-react";
 import type { Notebook } from "../store/schema";
@@ -82,7 +84,9 @@ export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function 
     </div>
   ) : undefined;
 
-  const open = () => (selecting ? onToggleSelect() : inTrash ? undefined : onOpen());
+  const coverRef = useRef<HTMLButtonElement | null>(null);
+  // the cover grows into the notebook (CoverLaunch), unless the user prefers reduced motion
+  const open = () => (selecting ? onToggleSelect() : inTrash ? undefined : openFromCover(coverRef.current, onOpen));
   const daysLeft = nb.trashedAt ? Math.max(0, 30 - Math.floor((Date.now() - nb.trashedAt) / 864e5)) : 0;
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const pages = nb.kind === "studyset" ? count(cardCount, "card", "cards")
@@ -93,23 +97,26 @@ export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function 
 
   return (
     <motion.article ref={ref} className={`nb-card ${view} ${selected ? "selected" : ""}`}
+      // sorting or filtering moves cards to new places: let them glide there instead of jumping
+      layout={safe.reduce ? false : "position"}
       variants={{ hidden: safe.initial, visible: safe.animate }} exit={safe.exit}
       transition={safe.reduce ? safe.transition : springs.gentle}>
       {selecting && (
         <input type="checkbox" className="nb-check" aria-label={`Select ${nb.title}`} checked={selected} onChange={onToggleSelect} />
       )}
-      <motion.button className={`nb-cover kind-surface-${nb.kind ?? "notebook"}`} onClick={open} aria-label={`Open ${nb.title}`}
+      <motion.button ref={coverRef} className={`nb-cover kind-surface-${nb.kind ?? "notebook"}`} onClick={open} aria-label={`Open ${nb.title}`}
         whileHover={safe.reduce || view === "list" ? undefined : { y: -motionTokens.distance.xs }}
         whileTap={safe.reduce ? undefined : { scale: motionTokens.scale.subtle }} transition={springs.snappy}>
-        <span className="nb-spine" style={{ background: nb.coverColor }} />
+        <span className="nb-spine" style={{ ["--cover" as string]: nb.coverColor }} />
         <span className="nb-texture" aria-hidden />
+        {view === "grid" && <CoverPreview nb={nb} />}
         {view === "grid" && (
           <span className="nb-cover-foot">
             <span className="nb-pages mono">{pages}</span>
             {!inTrash && <span className="nb-updated mono">{updatedText}</span>}
           </span>
         )}
-        {liveCount > 0 && <span className="live-tag mono">LIVE {liveCount}</span>}
+        {liveCount > 0 && <span className="live-tag nb-live-count mono">LIVE {liveCount}</span>}
         {kindTag && <span className="kind-tag mono" data-kind={nb.kind}>{kindTag}</span>}
       </motion.button>
       <footer className="nb-meta">

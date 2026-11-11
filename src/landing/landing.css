@@ -1076,8 +1076,12 @@
   .lp-compare-head span:first-child { display: none; }
 }
 
-/* calmer kickers: plain words, not code */
-.lp-sec-kicker { font-family: Inter, system-ui, sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+/* kickers are margin notes, written by hand */
+.lp-sec-kicker {
+  display: inline-block; width: fit-content; transform: rotate(-1.5deg); transform-origin: left center;
+  font-family: var(--font-hand); font-size: 20px; line-height: 1.2; letter-spacing: 0; text-transform: none;
+  color: var(--accent);
+}
 
 /* ---- Get OpenNote: web, Windows, Android ---- */
 .get-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -1123,3 +1127,167 @@
 
 /* the one-click download is a link styled as a button */
 .lp-hero-actions a.btn { text-decoration: none; }
+
+/* ==========================================================================
+   Refresh (2026-11-12): clearer hero, stacked section heads, real footer.
+   Still flat: no gradients, glows or status lights.
+   ========================================================================== */
+
+/* any link that looks like a button: .btn sets no colour, so links fell back to browser blue */
+.lp-root a.btn, .lp-root a.lp-icon-btn { color: var(--text); text-decoration: none; }
+.lp-root a.btn.primary { color: var(--accent-ink); }
+
+/* hero */
+.lp-hero { padding-top: 72px; gap: 44px; }
+.lp-hero-copy { gap: 20px; }
+a.lp-eyebrow {
+  gap: 7px; padding: 5px 12px; font-size: 12px; letter-spacing: 0.01em;
+  color: var(--text); text-decoration: none;
+  transition: border-color 140ms ease;
+}
+a.lp-eyebrow:hover { border-color: color-mix(in srgb, var(--text) 30%, var(--line)); }
+.lp-eyebrow-arrow { color: var(--text-dim); transition: transform 160ms ease; }
+a.lp-eyebrow:hover .lp-eyebrow-arrow { transform: translateX(2px); }
+.lp-title { font-size: clamp(2.6rem, 6vw, 4.75rem); }
+.lp-title-word { will-change: auto; }
+.lp-subtitle { font-size: clamp(1rem, 1.4vw, 1.15rem); }
+.lp-hero-actions { gap: 12px; }
+.lp-btn-lg { height: 42px; padding: 0 18px; font-size: 14px; }
+.lp-text-link {
+  border: 0; background: none; padding: 4px 2px; cursor: pointer;
+  font-size: 14px; color: var(--text-dim);
+  text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px;
+  transition: color 140ms ease, text-decoration-color 140ms ease;
+}
+.lp-text-link:hover:not([disabled]) { color: var(--text); text-decoration-color: var(--text-dim); }
+.lp-text-link[disabled] { opacity: 0.5; cursor: progress; }
+.lp-proof {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 0; padding: 0; list-style: none;
+  font-size: 13px; color: var(--text-dim);
+}
+.lp-proof li + li::before { content: "·"; margin-right: 18px; color: var(--line); }
+
+/* section heads: kicker, title, then the line under it, all on the left */
+.lp-section { padding-top: 72px; padding-bottom: 72px; gap: 32px; border-top: 1px solid var(--line); }
+.lp-film { border-top: 0; padding-top: 24px; }
+.lp-sec-title-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+.lp-sec-title-row h2 { max-width: 720px; }
+.lp-sec-title-row p { max-width: 620px; font-size: 15px; }
+.lp-head-center { justify-items: center; text-align: center; }
+.lp-section-head h2 { max-width: 720px; font-size: clamp(1.55rem, 2.8vw, 2.2rem); letter-spacing: -0.025em; }
+
+/* document cards */
+.lp-mode-icon { color: var(--accent); }
+.lp-mode-card[disabled] { opacity: 0.6; cursor: progress; }
+.lp-mode-card:hover .lp-mode-arrow { color: var(--accent); }
+
+/* bottom call to action */
+.lp-bottom-cta { padding: 56px 32px; border-top: 1px solid var(--line); }
+.lp-bottom-copy { display: grid; gap: 8px; max-width: 560px; }
+.lp-bottom-copy p { margin: 0; color: var(--text-dim); line-height: 1.55; }
+
+/* footer */
+.lp-footer-inner { padding: 28px 24px; align-items: center; font-size: 13px; letter-spacing: 0; }
+.lp-footer-brand { display: grid; gap: 4px; }
+.lp-footer-brand strong { font-family: var(--font-title); font-size: 15px; color: var(--text); }
+.lp-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; }
+.lp-footer-links a, .lp-footer-links button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none;
+  font: inherit; color: var(--text-dim); text-decoration: none; cursor: pointer;
+  transition: color 140ms ease;
+}
+.lp-footer-links a:hover, .lp-footer-links button:hover { color: var(--text); }
+
+@media (max-width: 720px) {
+  .lp-header-inner { padding: 0 16px; }
+  .lp-header-actions { gap: 6px; }
+  .lp-header-actions .lp-icon-btn.mono { display: none; }
+  .lp-proof { gap: 6px 14px; }
+  .lp-proof li + li::before { content: none; }
+  .lp-hero { padding-top: 44px; }
+  .lp-section { padding-top: 52px; padding-bottom: 52px; }
+  .lp-bottom-cta { padding-left: 18px; padding-right: 18px; }
+  .lp-bottom-btns, .lp-bottom-btns .btn { width: 100%; }
+  .lp-bottom-btns .btn { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-mode-card:hover, a.lp-eyebrow:hover .lp-eyebrow-arrow { transform: none; }
+}
+
+/* ==========================================================================
+   Paper & ink (2026-11-12): ruled paper with a margin line, handwritten
+   margin notes, and pen marks drawn with perfect-freehand (InkMark.tsx).
+   Ruling is an SVG tile, not a CSS gradient (flat rule + no-gradients test).
+   ========================================================================== */
+.lp-root { --font-hand: "Kalam", "Segoe Print", cursive; }
+
+.lp-paper {
+  position: relative;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='32'%3E%3Crect y='31' width='8' height='1' fill='%23ffffff' fill-opacity='0.075'/%3E%3C/svg%3E");
+  /* --rule-y is set by useRuledTo so the lines fall under the paragraph's text */
+  background-position: 0 var(--rule-y, 20px);
+}
+/* text that sits on the ruling: one line of text per ruled line (32px, same as the tile) */
+.lp-on-rule { line-height: 32px; }
+:root[data-theme="light"] .lp-paper {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='32'%3E%3Crect y='31' width='8' height='1' fill='%23000000' fill-opacity='0.07'/%3E%3C/svg%3E");
+}
+/* the notebook's margin line */
+.lp-paper::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 44px; width: 1px;
+  background: color-mix(in srgb, var(--accent) 30%, transparent); pointer-events: none;
+}
+.lp-paper > * { position: relative; }
+.lp-hero.lp-paper, .lp-start.lp-paper { padding-left: 76px; }
+
+/* hand-drawn underline under a word */
+.lp-title-accent, .lp-underlined { position: relative; display: inline-block; }
+.lp-title-underline {
+  position: absolute; left: -3%; bottom: -0.16em; width: 106%; height: 0.3em;
+  color: var(--accent); overflow: visible; pointer-events: none;
+}
+.lp-underlined { color: var(--accent); }
+
+/* margin note pointing at the hero canvas */
+.lp-hero-stage { display: grid; }
+.lp-margin-note {
+  justify-self: end; z-index: 2; display: flex; align-items: flex-start; gap: 6px; margin: 0 40px 10px 0;
+  font-family: var(--font-hand); font-size: 21px; line-height: 1; color: var(--accent);
+  transform: rotate(-2deg);
+}
+.lp-margin-arrow { width: 40px; height: 26px; color: var(--accent); transform: translateY(8px); overflow: visible; }
+.lp-stage-dots { min-width: 0; }
+.lp-stage-path { white-space: nowrap; }
+
+/* section heads use plain sentences under the title */
+.lp-sec-lede { margin: 0; max-width: 620px; font-size: 15px; line-height: 1.55; color: var(--text-dim); }
+.lp-head-center .lp-sec-kicker { transform-origin: center; }
+.lp-head-center .lp-sec-lede { margin: 0 auto; }
+
+/* the demos speak plain words, not engine readouts */
+.lp-bento-eyebrow { font-size: 12.5px; font-weight: 500; letter-spacing: 0; }
+.lp-stage-path { font-size: 12.5px; }
+.lp-canvas-badge { font-size: 12px; letter-spacing: 0; border-color: var(--line); color: var(--text-dim); }
+.lp-stage-telemetry { font-size: 12px; letter-spacing: 0; }
+
+/* start: the last page of the notebook */
+.lp-start { gap: 28px; }
+.lp-start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lp-start .lp-mode-card { height: 100%; }
+.lp-start-hint { font-size: 13px; color: var(--text-dim); margin-left: 6px; }
+
+/* comparison: a hand-drawn tick, written row by row, instead of a dot */
+.lp-yes { display: inline-flex; align-items: center; gap: 8px; }
+.lp-yes::before { content: none; }
+.lp-tick { flex: none; width: 18px; height: 15px; color: var(--accent); overflow: visible; }
+
+@media (max-width: 860px) {
+  .lp-start-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .lp-paper::before { left: 10px; }
+  .lp-hero.lp-paper, .lp-start.lp-paper { padding-left: 26px; }
+  .lp-margin-note { font-size: 18px; margin-right: 12px; }
+  .lp-start-hint { display: none; }
+}

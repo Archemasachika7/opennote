@@ -69,13 +69,16 @@ describe("Sprint 1 Free Features: STEM Templates, Slash Math & Split-Screen", ()
     render(<NotebookView id={nb.id} />);
     await screen.findAllByTestId("thumb");
 
-    // Split Screen
-    await user.click(screen.getByRole("button", { name: "Split screen" }));
+    // Split Screen (in the "More tools" menu)
+    await user.click(screen.getByRole("button", { name: "More tools" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Split screen" }));
     expect(screen.getByTestId("split-pane")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Split pane document" })).toBeInTheDocument();
 
-    // Zoom Writing Window
-    await user.click(screen.getByRole("button", { name: "Zoom writing window" }));
+    // Zoom Writing Window; the menu now shows Split screen as on
+    await user.click(screen.getByRole("button", { name: "More tools" }));
+    expect(screen.getByRole("menuitemcheckbox", { name: "Split screen" })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Zoom writing window" }));
     expect(screen.getByTestId("zoom-writing-window")).toBeInTheDocument();
 
     // Lecture Audio Bar

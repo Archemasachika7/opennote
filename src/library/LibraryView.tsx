@@ -1,7 +1,7 @@
 "use client";
 import { blotReact } from "../ui/blotBus";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   CheckSquare, ChevronDown, Command, FolderPlus, GraduationCap, LayoutDashboard, LayoutGrid, List,
   Pencil, Plus, Search, Settings, Sparkles, Star, Trash2, Upload, User, X,
@@ -20,7 +20,7 @@ import { searchAll, type SearchHit } from "../store/search";
 import { useLive } from "../store/useLive";
 import { platform } from "../platform/port";
 import { Sheet } from "../ui/Sheet";
-import { motionTokens } from "../ui/motion";
+import { motionTokens, springs } from "../ui/motion";
 import { NotebookCard } from "./NotebookCard";
 import { DeleteSheet } from "./DeleteSheet";
 import { LockSheet } from "./LockSheet";
@@ -85,6 +85,7 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
   const setView = (v: "grid" | "list") => { setViewRaw(v); try { localStorage.setItem("opennote:libraryView", v); } catch { /* private mode */ } };
 
   const inTrash = filter.kind === "trash";
+  const reduceMotion = useReducedMotion() ?? false;
   const notebooks = useLive(() => listNotebooks({
     sort,
     view: filter.kind === "favorites" ? "favorites" : inTrash ? "trash" : "all",
@@ -146,7 +147,12 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
   const endSelect = () => { setSelecting(false); setSelected(new Set()); };
   const pick = (f: Filter) => { setFilter(f); endSelect(); };
   const chip = (label: string, f: Filter, on: boolean, icon?: JSX.Element) => (
-    <button className={`chip ${on ? "on" : ""}`} onClick={() => pick(f)}>{icon}{label}</button>
+    <button className={`chip ${on ? "on" : ""}`} onClick={() => pick(f)}>
+      {/* one highlight that slides to the chosen section (shown in the sidebar layout only) */}
+      {on && <motion.span className="lib-pill" layoutId="lib-section-pill" aria-hidden
+        transition={reduceMotion ? { duration: 0 } : springs.snappy} />}
+      {icon}{label}
+    </button>
   );
   const ids = [...selected];
 
@@ -357,7 +363,8 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
             )}
           </AnimatePresence>
 
-          {filter.kind === "all" && !selecting && recent.length >= 2 && (
+          {/* with a handful of notebooks the grid below already shows them all; the row would only repeat it */}
+          {filter.kind === "all" && !selecting && notebooks.length >= 6 && (
             <section className="lib-continue" aria-label="Continue where you left off">
               <h2 className="lib-continue-title">Continue</h2>
               <div className="lib-continue-row">

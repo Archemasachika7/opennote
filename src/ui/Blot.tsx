@@ -30,6 +30,30 @@ const clampX = (x: number) => Math.min(0.97, Math.max(0.03, x));
 const viewW = () => (typeof window === "undefined" ? 1000 : window.innerWidth || 1000);
 
 /**
+ * Blot lives on the bottom edge, which is also where page controls sit (the book view's page turner,
+ * the page pill). Anything marked `data-blot-avoid` near the bottom is a keep-out zone: a spot that
+ * would cover one moves to the nearer free side.
+ */
+function avoidX(x: number): number {
+  if (typeof document === "undefined") return x;
+  const w = viewW();
+  const h = window.innerHeight;
+  const half = 32; // Blot is 52px wide, plus some air
+  let px = x * w;
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>("[data-blot-avoid]"))) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.bottom < h - 96) continue; // only controls on Blot's strip
+    if (px + half <= r.left || px - half >= r.right) continue;
+    const left = r.left - half;
+    const right = r.right + half;
+    const leftFits = left >= half;
+    const rightFits = right <= w - half;
+    px = leftFits && (!rightFits || px - left <= right - px) ? left : right;
+  }
+  return clampX(px / w);
+}
+
+/**
  * Blot, the ink-drop companion: lives on the bottom edge, breathes and blinks, wanders about, hops,
  * spins, sprouts wings and flies across, dozes off when you're away, and reacts to real moments.
  * Tap to wave, double-tap to fly, drag to move. Reduced motion: expressions only, no movement.
@@ -62,7 +86,7 @@ export function Blot() {
 
   /** Travel to `to` (fraction of the width), walking or flying. */
   const travel = (to: number, how: "walk" | "fly") => {
-    const target = clampX(to);
+    const target = avoidX(clampX(to));
     const dx = (target - xRef.current) * viewW();
     if (Math.abs(dx) < 8 || still) { setGlide(null); setMood(how === "fly" ? "fly" : "hop"); settle(HOLD[how === "fly" ? "fly" : "hop"]); return; }
     setFacing(dx < 0 ? -1 : 1);
@@ -130,6 +154,19 @@ export function Blot() {
       document.removeEventListener("keydown", seen, { capture: true });
     };
   }, [enabled]);
+
+  // page controls come and go (book view, the page pill): if one appears under Blot, step aside
+  useEffect(() => {
+    if (!enabled) return;
+    const t = window.setInterval(() => {
+      if (drag.current || moodRef.current === "walk" || moodRef.current === "fly") return;
+      const free = avoidX(xRef.current);
+      if (Math.abs(free - xRef.current) * viewW() < 4) return;
+      if (still) setX(free); // no walking under reduced motion: just be somewhere else
+      else travelRef.current(free, "walk");
+    }, 1200);
+    return () => window.clearInterval(t);
+  }, [enabled, still]);
 
   // ambient life: every so often, when nobody is writing, do something small
   useEffect(() => {

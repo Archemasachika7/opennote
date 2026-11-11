@@ -161,8 +161,44 @@
     justify-content: flex-start; height: 32px; border-radius: var(--radius); border-color: transparent;
     padding: 0 10px; overflow: hidden; text-overflow: ellipsis;
   }
-  .lib-side .chip.on { border-color: transparent; background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+  /* the highlight is its own element (.lib-pill) that slides between sections */
+  .lib-side .chip { position: relative; z-index: 0; }
+  .lib-side .chip.on { border-color: transparent; background: none; box-shadow: none; }
+  .lib-side .lib-pill {
+    display: block; position: absolute; inset: 0; z-index: -1; border-radius: var(--radius);
+    background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent);
+  }
 }
+.lib-pill { display: none; }
+
+/* ---- Covers: the first page on a sheet, a calm spine ---- */
+/* the spine keeps the chosen colour but softened, so covers don't outshout the gold accent */
+.nb-spine { width: 6px; background: color-mix(in srgb, var(--cover, var(--line)) 42%, var(--surface)); }
+.nb-texture { inset: 0 0 0 6px; }
+.nb-sheet {
+  position: absolute; left: 18px; right: 12px; top: 12px; bottom: 34px; z-index: 1; overflow: hidden;
+  border-radius: 3px; border: 1px solid var(--line); pointer-events: none;
+}
+.nb-sheet-dark { background: var(--page-dark); }
+.nb-sheet-light { background: var(--page-light); border-color: color-mix(in srgb, var(--page-light) 70%, var(--line)); }
+.nb-sheet .thumb-ink, .nb-sheet .thumb-bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.nb-sheet .thumb-bg, .nb-sheet-img { object-fit: cover; object-position: top; }
+.nb-sheet-img { display: block; width: 100%; height: 100%; }
+.nb-sheet-text {
+  display: grid; gap: 4px; align-content: start; padding: 10px; font-size: 9.5px; line-height: 1.35;
+  color: var(--text-dim); overflow: hidden; height: 100%;
+}
+.nb-sheet-light .nb-sheet-text { color: #5d6070; }
+.nb-sheet-title { font-family: var(--font-title); font-size: 11.5px; font-weight: 600; color: var(--text); line-height: 1.25; }
+.nb-sheet-light .nb-sheet-title { color: #16171c; }
+/* the LIVE count on a cover is a plain label, not a green light */
+.nb-cover .nb-live-count {
+  color: var(--text-dim); border-color: var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent);
+}
+.nb-cover .kind-tag[data-kind="studyset"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* opening a notebook: the cover grows to fill the screen (ui/CoverLaunch.tsx) */
+.cover-launch { position: fixed; inset: 0; z-index: 58; background: var(--bg); pointer-events: none; will-change: clip-path; }
 
 /* ---- Continue row ---- */
 .lib-continue { padding: 4px 0 18px; }

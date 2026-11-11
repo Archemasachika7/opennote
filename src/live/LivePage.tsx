@@ -92,12 +92,13 @@ export function LivePage({ page, mounted, width, priority, onEdit }: {
         <span className="live-title">{page.title}</span>
         <span className="live-type mono">{page.artifactType}</span>
         <button className={`btn ghost icon ${page.allowNetwork ? "active" : ""}`} aria-label={page.allowNetwork ? "Disable internet" : "Allow internet"}
+          title={page.allowNetwork ? "Internet on for this page (click to turn off)" : "Internet off for this page (click to allow)"}
           aria-pressed={page.allowNetwork} onClick={() => updatePage(page.id, { allowNetwork: !page.allowNetwork })}><Globe {...I} /></button>
         {active
-          ? <button className="btn ghost icon" aria-label="Stop" onClick={() => setStopped(true)}><Square {...I} /></button>
-          : <button className="btn ghost icon" aria-label="Run" onClick={run}><Play {...I} /></button>}
-        <button className="btn ghost icon" aria-label="Reload" onClick={() => { setReloadKey((k) => k + 1); if (!active) run(); }}><RotateCw {...I} /></button>
-        <button className="btn ghost icon" aria-label="Edit source" onClick={onEdit}><Code2 {...I} /></button>
+          ? <button className="btn ghost icon" aria-label="Stop" title="Stop this page" onClick={() => setStopped(true)}><Square {...I} /></button>
+          : <button className="btn ghost icon" aria-label="Run" title="Run this page" onClick={run}><Play {...I} /></button>}
+        <button className="btn ghost icon" aria-label="Reload" title="Reload" onClick={() => { setReloadKey((k) => k + 1); if (!active) run(); }}><RotateCw {...I} /></button>
+        <button className="btn ghost icon" aria-label="Edit source" title="Edit source" onClick={onEdit}><Code2 {...I} /></button>
       </div>
       {active && doc ? (
         <iframe key={reloadKey} ref={frame} title={page.title} sandbox="allow-scripts" srcDoc={doc} />

@@ -8,7 +8,6 @@ import { AudioLines, Code2, GraduationCap, Pause, Play, Shapes } from "lucide-re
  */
 export function SpotlightCard({
   className = "",
-  index,
   tag,
   title,
   desc,
@@ -16,7 +15,6 @@ export function SpotlightCard({
   children,
 }: {
   className?: string;
-  index: string;
   tag: string;
   title: string;
   desc: string;
@@ -37,9 +35,7 @@ export function SpotlightCard({
         el.style.setProperty("--my", `${e.clientY - r.top}px`);
       }}>
       <header className="lp-bento-head">
-        <div className="lp-bento-eyebrow mono">
-          <span className="lp-bento-idx">{index}</span>
-          <span className="lp-bento-sep">/</span>
+        <div className="lp-bento-eyebrow">
           <span>{tag}</span>
           <span className="lp-bento-icon">{icon}</span>
         </div>
@@ -71,10 +67,10 @@ function ShapeSnapDemo() {
       <div className="lp-demo-toolbar">
         <div className="lp-seg">
           <button type="button" className={!snapped ? "on" : ""} onClick={() => setSnapped(false)}>
-            Raw Sketch
+            As drawn
           </button>
           <button type="button" className={snapped ? "on" : ""} onClick={() => setSnapped(true)}>
-            0.4s Snap
+            Snapped
           </button>
         </div>
 
@@ -97,7 +93,7 @@ function ShapeSnapDemo() {
           aria-label="Bento solid fill"
           aria-pressed={solidFill}
           onClick={() => setSolidFill((v) => !v)}>
-          {solidFill ? "Solid 90%" : "Tint 42%"}
+          {solidFill ? "Solid fill" : "Tint fill"}
         </button>
 
         <button
@@ -274,7 +270,7 @@ function AudioInkReplayDemo() {
           </>
         )}
         <text x="28" y="118" fill="#8A8F9E" fontFamily="JetBrains Mono, monospace" fontSize="10.5">
-          pointerDown offsetMs + per-point Float32 Δt · Tap any stroke to seek audio
+          Tap any stroke and the recording jumps to that moment
         </text>
       </svg>
     </div>
@@ -310,7 +306,7 @@ function LiveOscillatorDemo() {
       </svg>
       <div className="lp-dual-sliders mono">
         <label>
-          <span>FREQ {freq.toFixed(1)} Hz</span>
+          <span>Frequency {freq.toFixed(1)} Hz</span>
           <input
             type="range"
             aria-label="Oscillator frequency"
@@ -323,7 +319,7 @@ function LiveOscillatorDemo() {
           />
         </label>
         <label>
-          <span>DAMP ζ={damp.toFixed(2)}</span>
+          <span>Damping {damp.toFixed(2)}</span>
           <input
             type="range"
             aria-label="Oscillator damping"
@@ -363,7 +359,7 @@ const SARVAM_SAMPLES: Record<
     text: "बाह्य बल-आघूर्ण शून्य होने पर कोणीय संवेग सदैव संरक्षित रहता है।",
   },
   tr: {
-    tab: "Translate -> EN",
+    tab: "Translate to English",
     code: "bn-IN -> en",
     mode: "translate",
     text: "[Spoken in Bengali] -> External torque zero implies angular momentum L = Iω remains constant.",
@@ -390,9 +386,9 @@ function SarvamSttDemo() {
         ))}
       </div>
       <div className="lp-stt-card">
-        <div className="lp-stt-meta mono">
-          <span>saaras:v3 · {cur.code}</span>
-          <span>16kHz PCM WAV · &le;25s chunks</span>
+        <div className="lp-stt-meta">
+          <span>{cur.mode === "translate" ? "Spoken in Bengali, written in English" : `Written in ${cur.tab}`}</span>
+          <span>Long lectures split automatically</span>
         </div>
         <p className="lp-stt-out">{cur.text}</p>
       </div>
@@ -405,10 +401,10 @@ function TapeOcclusionDemo() {
   const [grade, setGrade] = useState<"again" | "hard" | "good" | "easy">("good");
 
   const intervals = {
-    again: "10 min · Lapsed",
-    hard: "2 days · S = 2.4",
-    good: "7 days · S = 6.8",
-    easy: "19 days · S = 18.5",
+    again: "10 minutes",
+    hard: "2 days",
+    good: "7 days",
+    easy: "19 days",
   };
 
   return (
@@ -422,7 +418,7 @@ function TapeOcclusionDemo() {
             aria-label="Peel study tape"
             className={`lp-tape-strip ${peeled ? "peeled" : ""}`}
             onClick={() => setPeeled((v) => !v)}>
-            <span className="mono">{peeled ? "COVER" : "TAP TO PEEL TAPE"}</span>
+            <span>{peeled ? "Cover again" : "Tap to peel"}</span>
           </button>
         </div>
       </div>
@@ -436,11 +432,11 @@ function TapeOcclusionDemo() {
               </button>
             ))}
           </div>
-          <span className="mono lp-dim-tag">FSRS-6 interval: {intervals[grade]}</span>
+          <span className="lp-dim-tag">Next review in {intervals[grade]}</span>
         </div>
       ) : (
-        <p className="mono lp-dim-tag" style={{ margin: "8px 0 0" }}>
-          Drag Study Tape [B] over any formula -&gt; 1-click occlusion flashcard
+        <p className="lp-dim-tag" style={{ margin: "8px 0 0" }}>
+          Press B and drag tape over anything to make it a flashcard
         </p>
       )}
     </div>
@@ -452,50 +448,45 @@ export function BentoDemos() {
     <div className="lp-bento-grid">
       <SpotlightCard
         className="lp-span-7"
-        index="01"
-        tag="VECTOR & FREEHAND ENGINE"
-        title="Hold 0.4s to snap geometry. Fill interiors independently."
-        desc="Draw naturally with pressure-sensitive curves, pause at the end of a stroke to snap crisp lines, arrows, triangles, diamonds, and rectangles, or pick paper-adaptive Tint & Solid interior fills."
+        tag="Shapes"
+        title="Hold the pen still and your scribble becomes a clean shape."
+        desc="Pause at the end of a stroke to snap lines, arrows, triangles, diamonds and boxes, then fill them with a tint or solid colour."
         icon={<Shapes size={14} strokeWidth={1.6} />}>
         <ShapeSnapDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-5"
-        index="02"
-        tag="AUDIO <-> INK TIMELINE"
-        title="Every pen point knows the millisecond it was written."
-        desc="Record lectures offline into IndexedDB. Scrubbing or tapping any handwritten word jumps the audio and replays your strokes point-by-point."
+        tag="Lecture replay"
+        title="Tap a word you wrote to hear what was said."
+        desc="Record a class while you write. Later, tap any line of ink and the audio jumps there, while your strokes replay in time."
         icon={<Play size={14} strokeWidth={1.6} />}>
         <AudioInkReplayDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-5"
-        index="03"
-        tag="ISOLATED LIVE PAGES"
-        title="Paste interactive simulations right between your pages."
-        desc="Drop HTML, SVG, or React JSX into a sandboxed iframe page with crash-guard recovery — then switch to Annotate mode to write directly on top of live charts."
+        tag="Live pages"
+        title="Put a working simulation between your pages."
+        desc="Paste HTML, SVG or React and it runs on its own page, safely sandboxed. Switch to Annotate to write on top of it."
         icon={<Code2 size={14} strokeWidth={1.6} />}>
         <LiveOscillatorDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-4"
-        index="04"
-        tag="SARVAM AI · SAARAS:V3"
-        title="Multilingual speech-to-note across 11 Indic scripts + English."
-        desc="Auto-encodes 16kHz mono PCM WAV in <=25s segments for long lectures, with native script, code-mix, or instant English translation."
+        tag="Speech to notes"
+        title="Lectures in 11 Indian languages and English, turned into text."
+        desc="Keep the original script, mix languages the way people speak, or translate to English as you go."
         icon={<AudioLines size={14} strokeWidth={1.6} />}>
         <SarvamSttDemo />
       </SpotlightCard>
 
       <SpotlightCard
         className="lp-span-3"
-        index="05"
-        tag="ACTIVE RECALL"
-        title="Study Tape to FSRS-6 cards."
-        desc="Mask terms right on your ink page, peel to self-test, or convert strips into scheduled image-occlusion decks."
+        tag="Flashcards"
+        title="Cover it with tape. Test yourself."
+        desc="Hide a term on your page, peel to check, or turn the tape into flashcards that come back on schedule."
         icon={<GraduationCap size={14} strokeWidth={1.6} />}>
         <TapeOcclusionDemo />
       </SpotlightCard>

@@ -1,25 +1,19 @@
 "use client";
-import { useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { MotionConfig, motion, type Variants } from "motion/react";
 import {
   ArrowRight,
   BookOpen,
   Command,
-  Cpu,
-  Download,
-  FilePlus2,
-  Globe,
   GraduationCap,
-  HardDrive,
   Layers,
   LayoutDashboard,
-  Monitor,
   Moon,
-  Shield,
-  Smartphone,
   Sparkles,
   Sun,
 } from "lucide-react";
+import "@fontsource/kalam/400.css";
+import "@fontsource/kalam/700.css";
 import { navigate } from "../App";
 import { db, type DocKind } from "../store/schema";
 import { createNotebook, listNotebooks } from "../store/notebooks";
@@ -31,34 +25,32 @@ import { HeroCanvasDemo } from "./HeroCanvasDemo";
 import { BentoDemos } from "./BentoDemos";
 import { LiveArtifactDemo } from "./LiveArtifactDemo";
 import { detectPlatform, GetOpenNote, SmartDownload } from "./GetOpenNote";
+import { InkMark } from "./InkMark";
 import { motionTokens } from "../ui/motion";
 import "./landing.css";
 
-const KEYCAPS: { key: string; name: string; detail: string }[] = [
-  { key: "P", name: "Pressure Pen", detail: "Ballpoint, fountain & brush strokes; hold 0.4s to snap geometry or scribble back-and-forth to erase." },
-  { key: "H", name: "Chisel Highlighter", detail: "Layered translucent ink painted underneath pen strokes so handwriting stays crisp." },
-  { key: "S", name: "Vector Shapes", detail: "Lines, arrows, rectangles, ellipses, triangles, diamonds & stars with Tint/Solid interior fills." },
-  { key: "L", name: "Smart Lasso", detail: "Move, uniform-scale, rotate, recolour, save reusable STEM stamps, or turn ink into flashcards." },
-  { key: "B", name: "Study Tape", detail: "Mask formulas or labels right on the page; tap to peel during review or batch-export to FSRS cards." },
-  { key: "K", name: "Laser Trail", detail: "Fading phosphor pointer for live teaching and screen-shares — never persisted to disk." },
-  { key: "R", name: "Drafting Ruler", detail: "Draggable protractor straight-edge; strokes started near an edge snap to exact angles." },
-  { key: "Ctrl K", name: "Command Jump", detail: "Instant full-text search across notebooks, rich text pages, flashcards, and studio actions." },
-];
+const EASE = motionTokens.easing.smooth;
 
-
-/** Fades a block up as it scrolls into view (once). Reduced motion: opacity only. */
+/** Fades a block up as it scrolls into view (once). MotionConfig reducedMotion="user" drops the movement. */
 function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
-  const reduce = useReducedMotion() ?? false;
   return (
-    <motion.div initial={{ opacity: 0, y: reduce ? 0 : motionTokens.distance.lg }} whileInView={{ opacity: 1, y: 0 }}
+    <motion.div initial={{ opacity: 0, y: motionTokens.distance.lg }} whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: motionTokens.duration.slow, delay: delay * motionTokens.stagger * 2, ease: [0.22, 1, 0.36, 1] }}>
+      transition={{ duration: motionTokens.duration.slow, delay: delay * motionTokens.stagger * 2, ease: EASE }}>
       {children}
     </motion.div>
   );
 }
 
+/** Parent/child variants: rows of a list come in one after another as the list scrolls into view. */
+const listIn: Variants = { hidden: {}, shown: { transition: { staggerChildren: motionTokens.stagger } } };
+const itemIn: Variants = {
+  hidden: { opacity: 0, y: motionTokens.distance.sm },
+  shown: { opacity: 1, y: 0, transition: { duration: motionTokens.duration.normal, ease: EASE } },
+};
+
 const HEADLINE = ["Notes", "that", "run."];
+const GITHUB = "https://github.com/Archemasachika7/opennote";
 
 const COMPARE: [string, string, string][] = [
   ["Price", "Free, no ads", "Subscription or paid app"],
@@ -70,11 +62,56 @@ const COMPARE: [string, string, string][] = [
   ["Works offline", "Yes, fully", "Partly"],
 ];
 
-function CrosshairDivider() {
+const START: { kind: DocKind; title: string; text: string; icon: ReactNode }[] = [
+  { kind: "notebook", title: "New notebook", text: "Pages of handwriting, typed text with maths, PDFs and live pages.", icon: <BookOpen size={16} strokeWidth={1.6} /> },
+  { kind: "whiteboard", title: "New whiteboard", text: "A canvas with no edges. Pan, zoom and reuse your diagrams.", icon: <LayoutDashboard size={16} strokeWidth={1.6} /> },
+  { kind: "studyset", title: "New study set", text: "Flashcards from your Study Tape, on a spaced-repetition schedule.", icon: <GraduationCap size={16} strokeWidth={1.6} /> },
+];
+
+function GitHubMark({ size = 14 }: { size?: number }) {
   return (
-    <div className="lp-divider" aria-hidden>
-      <span className="lp-cross left" />
-      <span className="lp-cross right" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
+
+const RULE = 32; // ruled-paper line spacing in px; must match the SVG tile in landing.css
+
+/**
+ * Lines the ruled paper up with a paragraph, so its text sits on the lines like writing does.
+ * The paragraph's line-height is one RULE; we shift the ruling to wherever that paragraph lands,
+ * and re-measure whenever the layout changes size.
+ */
+function useRuledTo<S extends HTMLElement, T extends HTMLElement>() {
+  const sheet = useRef<S | null>(null);
+  const text = useRef<T | null>(null);
+  useLayoutEffect(() => {
+    const s = sheet.current, t = text.current;
+    if (!s || !t || typeof ResizeObserver === "undefined") return;
+    const align = () => {
+      // offsetTop, not getBoundingClientRect: the hero copy slides in with a transform we must ignore
+      let top = 0;
+      for (let el: HTMLElement | null = t; el && el !== s; el = el.offsetParent as HTMLElement | null) top += el.offsetTop;
+      // the tile draws its line at the bottom; lift it a few px so it sits just under the baseline
+      s.style.setProperty("--rule-y", `${(((top - 6) % RULE) + RULE) % RULE}px`);
+    };
+    align();
+    const ro = new ResizeObserver(align);
+    ro.observe(s);
+    ro.observe(t);
+    return () => ro.disconnect();
+  }, []);
+  return { sheet, text };
+}
+
+/** Section heading: a handwritten margin note, the title, then one plain sentence. */
+function SectionHead({ note, title, children, center }: { note: string; title: string; children?: ReactNode; center?: boolean }) {
+  return (
+    <div className={`lp-section-head${center ? " lp-head-center" : ""}`}>
+      <span className="lp-sec-kicker">{note}</span>
+      <h2>{title}</h2>
+      {children && <p className="lp-sec-lede">{children}</p>}
     </div>
   );
 }
@@ -87,7 +124,6 @@ export function LandingPage({
   onOpenSettings?: () => void;
 }) {
   const [, setTheme, resolvedTheme] = useTheme();
-  const [activeKeyIdx, setActiveKeyIdx] = useState(0);
   const [launching, setLaunching] = useState<string | null>(null);
 
   const notebookCount = useLive(
@@ -131,11 +167,13 @@ export function LandingPage({
     }
   };
 
-  return (
-    <div className="lp-root" data-testid="landing-page">
-      <div className="lp-bg-grid" aria-hidden />
+  const onDesktopOrWeb = detectPlatform() === "other";
+  const heroRule = useRuledTo<HTMLElement, HTMLParagraphElement>();
+  const startRule = useRuledTo<HTMLElement, HTMLParagraphElement>();
 
-      {/* Sticky Architectural Top Bar */}
+  return (
+    <MotionConfig reducedMotion="user">
+    <div className="lp-root" data-testid="landing-page">
       <header className="lp-header">
         <div className="lp-header-inner">
           <div className="lp-brand">
@@ -146,17 +184,20 @@ export function LandingPage({
               <circle cx="24.5" cy="8.5" r="2" fill="var(--accent)" />
             </svg>
             <span className="lp-brand-name">OpenNote</span>
-            <span className="lp-version mono">LOCAL-FIRST STUDIO</span>
           </div>
 
           <nav className="lp-nav" aria-label="Landing sections">
-            <button type="button" onClick={() => scrollToSection("lp-workbench")}>Workbench</button>
-            <button type="button" onClick={() => scrollToSection("lp-primitives")}>Primitives</button>
+            <button type="button" onClick={() => scrollToSection("lp-primitives")}>Features</button>
             <button type="button" onClick={() => scrollToSection("lp-live")}>Live pages</button>
-            <button type="button" onClick={() => scrollToSection("lp-shortcuts")}>Shortcuts</button>
+            <button type="button" onClick={() => scrollToSection("lp-compare")}>Compare</button>
+            <button type="button" onClick={() => scrollToSection("lp-download")}>Download</button>
           </nav>
 
           <div className="lp-header-actions">
+            <a className="lp-icon-btn" href={GITHUB} target="_blank" rel="noreferrer"
+              aria-label="OpenNote on GitHub" title="Source on GitHub">
+              <GitHubMark size={14} />
+            </a>
             {onOpenPalette && (
               <button
                 type="button"
@@ -172,7 +213,7 @@ export function LandingPage({
               type="button"
               className="lp-icon-btn"
               aria-label="Toggle studio theme"
-              title={resolvedTheme === "dark" ? "Switch to Light drafting paper" : "Switch to Midnight Studio dark"}
+              title={resolvedTheme === "dark" ? "Switch to light paper" : "Switch to dark"}
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
               {resolvedTheme === "dark" ? <Sun size={14} strokeWidth={1.6} /> : <Moon size={14} strokeWidth={1.6} />}
             </button>
@@ -187,35 +228,32 @@ export function LandingPage({
         </div>
       </header>
 
-      {/* Main Architectural Rail Shell */}
       <main className="lp-shell">
-        {/* HERO SECTION */}
-        <section className="lp-hero">
+        {/* HERO: a ruled page with a margin line; the headline gets underlined by hand */}
+        <section className="lp-hero lp-paper" ref={heroRule.sheet}>
           <motion.div
             className="lp-hero-copy"
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: motionTokens.distance.sm }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}>
-            <div className="lp-eyebrow">
-              <span className="lp-status-dot" />
-              <span>FREE</span>
-              <span className="lp-dot-sep">·</span>
-              <span>OFFLINE</span>
-              <span className="lp-dot-sep">·</span>
-              <span>NO ACCOUNT</span>
-            </div>
+            transition={{ duration: motionTokens.duration.normal, ease: EASE }}>
+            <a className="lp-eyebrow" href={GITHUB} target="_blank" rel="noreferrer">
+              <GitHubMark size={12} />
+              <span>Free and open source</span>
+              <ArrowRight size={12} strokeWidth={1.8} className="lp-eyebrow-arrow" />
+            </a>
 
             <h1 className="lp-title" aria-label="Notes that run.">
               {HEADLINE.map((w, i) => (
                 <motion.span key={w} className={`lp-title-word${i === 2 ? " lp-title-accent" : ""}`} aria-hidden
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.08 + i * 0.09, ease: [0.22, 1, 0.36, 1] }}>
+                  initial={{ opacity: 0, y: motionTokens.distance.sm }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: motionTokens.duration.slow * 0.8, delay: 0.08 + i * 0.09, ease: EASE }}>
                   {w}
+                  {i === 2 && <InkMark variant="underline" className="lp-title-underline" delay={0.7} duration={0.55} />}
                 </motion.span>
               ))}
             </h1>
 
-            <p className="lp-subtitle">
+            <p className="lp-subtitle lp-on-rule" ref={heroRule.text}>
               A pen-first notebook for lectures and problem sets. Write with your stylus, record a class and
               replay your ink in sync, and paste AI-made HTML, SVG or React onto a page, where it runs.
             </p>
@@ -225,215 +263,166 @@ export function LandingPage({
               <SmartDownload />
               <button
                 type="button"
-                className={detectPlatform() === "other" ? "btn primary lp-btn-lg" : "btn lp-btn-lg"}
+                className={onDesktopOrWeb ? "btn primary lp-btn-lg" : "btn lp-btn-lg"}
                 onClick={() => navigate("/")}>
-                Enter Studio
+                {onDesktopOrWeb ? "Start writing" : "Open in browser"}
                 {notebookCount > 0 && (
                   <span className="lp-count-pill mono">{notebookCount}</span>
                 )}
                 <ArrowRight size={15} strokeWidth={1.8} />
               </button>
-
               <button
                 type="button"
-                className="btn lp-btn-lg"
-                disabled={launching !== null}
-                onClick={() => void handleCreateDoc("notebook")}>
-                <FilePlus2 size={15} strokeWidth={1.6} />
-                New Blank Page
-              </button>
-
-              <button
-                type="button"
-                className="btn ghost lp-btn-lg lp-demo-btn"
+                className="lp-text-link"
                 disabled={launching !== null}
                 onClick={() => void handleLaunchDemo()}>
-                <Sparkles size={15} strokeWidth={1.6} />
-                Open 3-Page Demo
+                or open the 3-page demo
               </button>
             </div>
+
+            <ul className="lp-proof" aria-label="At a glance">
+              <li>No account</li>
+              <li>Works offline</li>
+              <li>Encrypted sync</li>
+              <li>Web, Windows, Android</li>
+            </ul>
           </motion.div>
 
           <motion.div
             id="lp-workbench"
             className="lp-hero-stage"
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: motionTokens.distance.md }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}>
+            transition={{ duration: motionTokens.duration.slow * 0.7, delay: 0.12, ease: EASE }}>
+            <motion.p className="lp-margin-note" aria-hidden
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ delay: 1.2, duration: motionTokens.duration.normal }}>
+              <InkMark variant="arrow" className="lp-margin-arrow" delay={1.3} duration={0.5} />
+              go on, write on it
+            </motion.p>
             <HeroCanvasDemo />
           </motion.div>
         </section>
 
         {/* LAUNCH FILM */}
         <section id="lp-film" className="lp-section lp-film" aria-label="Launch film">
+          <SectionHead center note="one-minute tour" title="Pen, live pages, lecture replay and flashcards, in one minute." />
           <Reveal>
             <video className="lp-film-video" controls preload="none" playsInline
-              poster="/media/opennote-launch-poster.jpg" aria-label="OpenNote launch film, 30 seconds">
+              poster="/media/opennote-launch-poster-ink.jpg" aria-label="OpenNote launch film, about one minute, with subtitles">
               <source src="/media/opennote-launch.mp4" type="video/mp4" />
+              {/* Hosts with a small upload limit ship without the 22 MB film; the browser then tries this copy. */}
+              <source src="https://opennote-neon-nine.vercel.app/media/opennote-launch.mp4" type="video/mp4" />
               <track kind="subtitles" src="/media/opennote-launch.srt" srcLang="en" label="English" />
             </video>
           </Reveal>
         </section>
 
-        {/* INTERACTIVE BENTO PRIMITIVES */}
+        {/* TRY IT: every card is a working demo */}
         <section id="lp-primitives" className="lp-section">
-          <div className="lp-section-head">
-            <span className="lp-sec-kicker">Try it right here</span>
-            <div className="lp-sec-title-row">
-              <h2>Every card below works. Go ahead, draw on it.</h2>
-              <p>
-                Test shape snapping, scrub lecture ink replay, tune a harmonic wave, switch Indic scripts,
-                or peel back Study Tape before opening a single menu.
-              </p>
-            </div>
-          </div>
-
+          <SectionHead note="try it right here" title="Every card below works. Go ahead, draw on it.">
+            Snap a shape, scrub a lecture replay, tune a wave, switch Indian languages, or peel back Study Tape.
+          </SectionHead>
           <BentoDemos />
         </section>
 
         {/* SIGNATURE: PASTE -> RUN */}
         <section id="lp-live" className="lp-section">
-          <div className="lp-section-head">
-            <span className="lp-sec-kicker">Only in OpenNote</span>
-            <div className="lp-sec-title-row">
-              <h2>Copy an AI artifact. Paste. It runs.</h2>
-              <p>
-                HTML, SVG or React from Claude, ChatGPT or Gemini becomes a real page between your notes:
-                interactive, offline, sandboxed, and you can write on it with your pen.
-              </p>
-            </div>
-          </div>
+          <SectionHead note="only in OpenNote" title="Copy an AI artifact. Paste. It runs.">
+            HTML, SVG or React from Claude, ChatGPT or Gemini becomes a real page between your notes:
+            interactive, offline, sandboxed, and you can write on it with your pen.
+          </SectionHead>
           <Reveal><LiveArtifactDemo /></Reveal>
         </section>
 
         {/* COMPARISON */}
         <section id="lp-compare" className="lp-section">
-          <div className="lp-section-head">
-            <span className="lp-sec-kicker">Why OpenNote</span>
-            <div className="lp-sec-title-row">
-              <h2>What you get, next to a typical note app.</h2>
-              <p>Typical means the usual paid handwriting apps. Check any app's own page before you buy.</p>
+          <SectionHead note="why OpenNote" title="What you get, next to a typical note app.">
+            Typical means the usual paid handwriting apps. Check any app's own page before you buy.
+          </SectionHead>
+          <motion.div className="lp-compare" role="table" aria-label="OpenNote compared with a typical note app"
+            variants={listIn} initial="hidden" whileInView="shown" viewport={{ once: true, margin: "-60px" }}>
+            <div role="row" className="lp-compare-row lp-compare-head">
+              <span role="columnheader" />
+              <span role="columnheader">OpenNote</span>
+              <span role="columnheader">Typical note app</span>
             </div>
-          </div>
-          <Reveal>
-            <div className="lp-compare" role="table" aria-label="OpenNote compared with a typical note app">
-              <div role="row" className="lp-compare-row lp-compare-head">
-                <span role="columnheader" />
-                <span role="columnheader">OpenNote</span>
-                <span role="columnheader">Typical note app</span>
-              </div>
-              {COMPARE.map(([what, ours, theirs]) => (
-                <div role="row" className="lp-compare-row" key={what}>
-                  <span role="rowheader">{what}</span>
-                  <span role="cell" className="lp-yes">{ours}</span>
-                  <span role="cell" className="dim">{theirs}</span>
-                </div>
-              ))}
-            </div>
-          </Reveal>
+            {COMPARE.map(([what, ours, theirs], i) => (
+              <motion.div role="row" className="lp-compare-row" key={what} variants={itemIn}>
+                <span role="rowheader">{what}</span>
+                <span role="cell" className="lp-yes">
+                  <InkMark variant="tick" className="lp-tick" delay={0.2 + i * 0.09} duration={0.32}
+                    tilt={[-6, 3, -2, 7, -4, 1, -7][i % 7]} />
+                  {ours}
+                </span>
+                <span role="cell" className="dim">{theirs}</span>
+              </motion.div>
+            ))}
+          </motion.div>
         </section>
 
         <GetOpenNote />
 
-        {/* THREE WORKSPACES + TACTILE KEYBOARD MATRIX */}
-        <section id="lp-shortcuts" className="lp-section">
-          <div className="lp-dual-band">
-            <div className="lp-modes-col">
-              <span className="lp-sec-kicker">Three kinds of document</span>
-              <h2>Notebooks, whiteboards and flashcards, in one library.</h2>
-              <div className="lp-mode-list">
-                <button type="button" className="lp-mode-card" onClick={() => void handleCreateDoc("notebook")}>
-                  <div className="lp-mode-icon amber"><BookOpen size={16} strokeWidth={1.6} /></div>
-                  <div>
-                    <strong>Paginated Notebooks</strong>
-                    <p>Mix handwritten Ink pages, TipTap Rich Text + LaTeX math, imported PDFs, and Live HTML artifacts in a single binder.</p>
-                  </div>
-                  <ArrowRight size={14} className="lp-mode-arrow" />
-                </button>
+        {/* START: the last page of the notebook */}
+        <section id="lp-start" className="lp-section lp-start lp-paper" ref={startRule.sheet}>
+          <div className="lp-section-head">
+            <span className="lp-sec-kicker">free, no sign-up</span>
+            <h2>
+              Pick a page and start{" "}
+              <span className="lp-underlined">writing.<InkMark variant="underline" className="lp-title-underline" delay={0.2} /></span>
+            </h2>
+            <p className="lp-sec-lede lp-on-rule" ref={startRule.text}>It opens in this tab. Your notes stay on this device until you choose to sync.</p>
+          </div>
 
-                <button type="button" className="lp-mode-card" onClick={() => void handleCreateDoc("whiteboard")}>
-                  <div className="lp-mode-icon mint"><LayoutDashboard size={16} strokeWidth={1.6} /></div>
-                  <div>
-                    <strong>Infinite Whiteboards</strong>
-                    <p>Unbounded pan-and-zoom spatial canvas with live minimap, multi-layer locking, and reusable STEM diagram stamps.</p>
-                  </div>
-                  <ArrowRight size={14} className="lp-mode-arrow" />
-                </button>
-
-                <button type="button" className="lp-mode-card" onClick={() => void handleCreateDoc("studyset")}>
-                  <div className="lp-mode-icon cyan"><GraduationCap size={16} strokeWidth={1.6} /></div>
-                  <div>
-                    <strong>Smart Learn Study Sets</strong>
-                    <p>SM-2 &amp; FSRS-6 spaced repetition decks fed directly from Study Tape strips and lassoed diagram occlusions.</p>
-                  </div>
-                  <ArrowRight size={14} className="lp-mode-arrow" />
-                </button>
-              </div>
-            </div>
-
-            <div className="lp-keys-col">
-              <span className="lp-sec-kicker">Shortcuts</span>
-              <h2>One key for every tool.</h2>
-              <p className="lp-keys-sub">
-                Select any keycap to inspect its tool behaviour. Inside the studio, press <kbd className="kbd mono">?</kbd> anytime.
-              </p>
-
-              <div className="lp-keycap-rack" role="list" aria-label="Studio keyboard shortcuts">
-                {KEYCAPS.map((item, idx) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`lp-keycap mono ${activeKeyIdx === idx ? "on" : ""}`}
-                    onMouseEnter={() => setActiveKeyIdx(idx)}
-                    onClick={() => setActiveKeyIdx(idx)}>
-                    <span className="lp-keycap-top">{item.key}</span>
-                    <span className="lp-keycap-lbl">{item.name.split(" ")[1] ?? item.name}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="lp-keycap-readout">
-                <div className="lp-keycap-readout-head mono">
-                  <span className="lp-key-badge">[{KEYCAPS[activeKeyIdx].key}]</span>
-                  <strong>{KEYCAPS[activeKeyIdx].name}</strong>
+          <motion.div className="lp-start-grid" variants={listIn} initial="hidden" whileInView="shown"
+            viewport={{ once: true, margin: "-60px" }}>
+            {START.map((s) => (
+              <motion.button key={s.kind} type="button" className="lp-mode-card" variants={itemIn}
+                disabled={launching !== null} onClick={() => void handleCreateDoc(s.kind)}>
+                <div className="lp-mode-icon">{s.icon}</div>
+                <div>
+                  <strong>{s.title}</strong>
+                  <p>{s.text}</p>
                 </div>
-                <p>{KEYCAPS[activeKeyIdx].detail}</p>
-              </div>
-            </div>
-          </div>
-        </section>
+                <ArrowRight size={14} className="lp-mode-arrow" />
+              </motion.button>
+            ))}
+          </motion.div>
 
-        {/* BOTTOM ZERO-FRICTION LAUNCH BAR */}
-        <section className="lp-bottom-cta">
-          <div>
-            <span className="lp-sec-kicker">Free · no sign-up</span>
-            <h2>Start writing. Nothing to install.</h2>
-          </div>
           <div className="lp-bottom-btns">
-            {onOpenSettings && (
-              <button type="button" className="btn" onClick={onOpenSettings}>
-                <Layers size={14} strokeWidth={1.6} />
-                Storage &amp; Sarvam Key
-              </button>
-            )}
-            <button type="button" className="btn" onClick={() => void handleLaunchDemo()}>
-              <Sparkles size={14} strokeWidth={1.6} />
-              Starter Demo
-            </button>
             <button type="button" className="btn primary lp-btn-lg" onClick={() => navigate("/")}>
-              Open Studio Library
+              Start writing
               <ArrowRight size={15} strokeWidth={1.8} />
             </button>
+            <button type="button" className="btn lp-btn-lg" disabled={launching !== null}
+              onClick={() => void handleLaunchDemo()}>
+              <Sparkles size={14} strokeWidth={1.6} />
+              Try the demo
+            </button>
+            <span className="lp-start-hint">Inside the app, press <kbd className="kbd mono">?</kbd> for every shortcut.</span>
           </div>
         </section>
       </main>
 
-      <footer className="lp-footer mono">
+      <footer className="lp-footer">
         <div className="lp-footer-inner">
-          <span>OpenNote · free and open source</span>
-          <span>No ads. No tracking. Your notes stay on your device.</span>
+          <div className="lp-footer-brand">
+            <strong>OpenNote</strong>
+            <span>No ads. No tracking. Your notes stay on your device.</span>
+          </div>
+          <nav className="lp-footer-links" aria-label="Footer">
+            <a href={GITHUB} target="_blank" rel="noreferrer"><GitHubMark size={13} /> Source on GitHub</a>
+            <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer">Releases</a>
+            <a href={`${GITHUB}/issues`} target="_blank" rel="noreferrer">Report a bug</a>
+            {onOpenSettings && (
+              <button type="button" onClick={onOpenSettings}>
+                <Layers size={13} strokeWidth={1.6} /> Storage &amp; keys
+              </button>
+            )}
+          </nav>
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 }

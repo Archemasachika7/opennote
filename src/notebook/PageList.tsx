@@ -72,8 +72,8 @@ export function PageList({
             <header className="page-head">
               <span className="mono dim">{i + 1}</span>
               {isBookmarked && <Bookmark size={13} strokeWidth={1.5} color="var(--accent)" fill="currentColor" aria-hidden />}
-              {p.kind === "html" && <span className="live-tag mono inline">LIVE</span>}
-              <span className="page-head-title">{p.kind === "html" ? p.title : ""}</span>
+              {/* a live page's own bar already shows LIVE and its title; don't say it twice */}
+              <span className="page-head-title" />
               <div style={{ position: "relative" }}>
                 <button className="btn ghost icon" aria-label={`Page options ${i + 1}`} onClick={() => setMenuFor(p.id)}>
                   <MoreHorizontal size={16} strokeWidth={1.5} />

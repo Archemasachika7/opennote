@@ -51,9 +51,12 @@ function loadRelease(): Promise<ReleaseInfo | null> {
   return inflight;
 }
 
-/** The latest GitHub release (CI attaches the APK and EXE to every v* tag). null = none yet. */
+/**
+ * The latest GitHub release (CI attaches the APK and EXE to every v* tag). null = none yet. Until GitHub
+ * answers, the always-latest download links are offered, so the first click already downloads.
+ */
 function useLatestRelease(): { loading: boolean; release: ReleaseInfo | null } {
-  const [state, setState] = useState<{ loading: boolean; release: ReleaseInfo | null }>({ loading: true, release: null });
+  const [state, setState] = useState<{ loading: boolean; release: ReleaseInfo | null }>({ loading: true, release: FALLBACK });
   useEffect(() => {
     let alive = true;
     try {

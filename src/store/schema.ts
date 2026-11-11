@@ -3,6 +3,7 @@ import Dexie, { type Table } from "dexie";
 import type { Stroke } from "../ink/model";
 import type { Layer } from "../ink/layers";
 import type { Srs } from "../study/srs";
+import type { ChartSpec } from "../charts/spec";
 
 export type Paper = "dark" | "light";
 export type Template = "blank" | "ruled" | "grid" | "dot";
@@ -94,6 +95,8 @@ export interface PageObject {
   /** Tape: colour, and whether it is currently peeled back. */
   color?: string;
   revealed?: boolean;
+  /** Image drawn from a chart: the data it came from, so it can be edited and redrawn. */
+  chart?: ChartSpec;
 }
 
 /** A flashcard in a study set (notebookId = the set). */

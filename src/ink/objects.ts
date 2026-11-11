@@ -1,4 +1,5 @@
 import { db, newId, now, PAGE_SIZE, type PageObject } from "../store/schema";
+import type { ChartSpec } from "../charts/spec";
 
 const MAX_SIDE = 2048;
 const MAX_W = PAGE_SIZE.w * 0.8;
@@ -59,6 +60,44 @@ export async function addImage(pageId: string, file: Blob, at?: { x: number; y: 
     await touch(pageId);
   });
   return o;
+}
+
+/**
+ * Adds a chart: an ordinary picture (so move, resize, lasso, PDF export and sync all just work) that also keeps the
+ * data it was drawn from, so "Edit chart" can redraw it. `png` is drawn at 2x the size it takes on the page.
+ */
+export async function addChart(pageId: string, chart: ChartSpec, png: { blob: Blob; w: number; h: number }, at?: { x: number; y: number }): Promise<PageObject> {
+  const w = Math.min(png.w / 2, MAX_W);
+  const h = (w / png.w) * png.h;
+  const blobId = newId();
+  // like pictures: step each new one down and right so it never lands exactly on an earlier one
+  const n = at ? 0 : await db.objects.where("pageId").equals(pageId).filter((x) => x.kind === "image").count();
+  const step = (n % 12) * 36;
+  const o: PageObject = {
+    id: newId(), pageId, kind: "image", w, h, rotation: 0, blobId, chart, z: await nextZ(pageId),
+    x: at && Number.isFinite(at.x) ? Math.max(0, Math.min(at.x, PAGE_SIZE.w - w)) : Math.min((PAGE_SIZE.w - w) / 2 + step, PAGE_SIZE.w - w),
+    y: at && Number.isFinite(at.y) ? Math.max(0, at.y) : Math.max(0, Math.min((PAGE_SIZE.h - h) / 2 + step, PAGE_SIZE.h - h)),
+  };
+  await db.transaction("rw", [db.blobs, db.objects, db.pages, db.notebooks], async () => {
+    await db.blobs.add({ id: blobId, data: png.blob });
+    await db.objects.add(o);
+    await touch(pageId);
+  });
+  return o;
+}
+
+/** Redraws an existing chart with new data. Keeps its place and width; the height follows the new picture's shape. */
+export async function updateChart(id: string, chart: ChartSpec, png: { blob: Blob; w: number; h: number }): Promise<void> {
+  const o = await db.objects.get(id);
+  if (!o) return;
+  const blobId = newId();
+  const h = (o.w / png.w) * png.h;
+  await db.transaction("rw", [db.blobs, db.objects, db.pages, db.notebooks], async () => {
+    await db.blobs.add({ id: blobId, data: png.blob });
+    await db.objects.update(id, { chart, blobId, h, crop: undefined });
+    // the old picture is kept: copies of this chart and undo history (an undone move) may still point at it
+    await touch(o.pageId);
+  });
 }
 
 export async function pasteImages(files: Blob[], pageId: string): Promise<number> {

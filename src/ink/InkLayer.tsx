@@ -29,6 +29,7 @@ import { instantiateElement, saveStrokesAsElement } from "./elements";
 import { currentRecordingStamp, requestAudioSeek, useAudioLiveState } from "../store/audio";
 import { requestRecognize } from "../ai/inkOcr";
 import { tidyStrokes } from "./tidy";
+import { openChartEditor } from "../charts/ChartSheet";
 import type { GeometricShapeKind, ShapeMeta, Stroke, StrokeAudioSync } from "./model";
 import "./ink.css";
 
@@ -1056,7 +1057,8 @@ export function InkLayer({
             strength: tidyStrength, onStrength: (k) => showTidy(k, selStrokes),
             onApply: () => void applyTidy(), onCancel: endTidy,
           }}
-          onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined} />
+          onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined}
+          onEditChart={singleImage?.chart ? () => { openChartEditor({ object: singleImage }); setSelection(null); } : undefined} />
       )}
     </div>
   );

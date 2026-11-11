@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, AudioLines, BookOpen, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
+  ArrowLeft, AudioLines, BookOpen, ChartColumn, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
   Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine,
   RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
 } from "lucide-react";
@@ -27,6 +27,7 @@ export function Toolbar({
   sidebarOpen, onToggleSidebar, onOpenSettings,
   splitOpen, onToggleSplit,
   bookView, onToggleBookView,
+  onAddChart,
   audioOpen, onToggleAudio,
   onOpenSpeechNote,
   onOpenElements, onOpenTemplates, onGenerateTapeCards,
@@ -49,6 +50,7 @@ export function Toolbar({
   /** one page at a time with page turns */
   bookView?: boolean;
   onToggleBookView?: () => void;
+  onAddChart?: () => void;
   audioOpen?: boolean;
   onToggleAudio?: () => void;
   onOpenSpeechNote?: () => void;
@@ -290,6 +292,11 @@ export function Toolbar({
         <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
           title="Ruler [R] (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
           onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
+        {onAddChart && (
+          <button className="btn ghost icon" aria-label="Add chart" title="Add a bar, line, pie or scatter chart" onClick={onAddChart}>
+            <ChartColumn {...ICON} />
+          </button>
+        )}
         {onOpenElements && (
           <button className="btn ghost icon" aria-label="Elements" title="Elements & reusable STEM stamps" onClick={onOpenElements}>
             <Stamp {...ICON} />

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FileText, PenLine, Plus, Sparkles, X, ZoomIn, ZoomOut } from "lucide-react";
-import { MAX_HTML_BYTES, type HtmlPage, type InkPage, type Notebook, type Page } from "../store/schema";
+import { MAX_HTML_BYTES, type HtmlPage, type InkPage, type Notebook, type Page, type PageObject } from "../store/schema";
 import { detectArtifactType, titleOf } from "../live/detect";
 import { getNotebook, listNotebooks, restoreNotebook, toggleBookmark } from "../store/notebooks";
 import { navigate } from "../App";
@@ -12,6 +12,10 @@ import { PageList } from "./PageList";
 import { PageFrame } from "./PageFrame";
 import { useVisiblePages } from "./useVisiblePages";
 import { BookView } from "./BookView";
+import { ChartSheet, onChartEditorRequest, openChartEditor, type ChartRequest } from "../charts/ChartSheet";
+import { renderChartPng } from "../charts/render";
+import type { ChartSpec } from "../charts/spec";
+import { addChart, updateChart } from "../ink/objects";
 import { setPageLayout, turnTarget, usePageLayout } from "./pageLayout";
 import { restoreAnchor, usePinchZoom, type ZoomAnchor } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
@@ -217,6 +221,8 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     reveal(pageId, "nearest");
   };
   useEffect(() => onRecognizeRequest(setRecog), []);
+  const [chartReq, setChartReq] = useState<ChartRequest | null>(null);
+  useEffect(() => onChartEditorRequest(setChartReq), []);
   const inkSearch = useInkSearch();
   const width = BASE_WIDTH * zoom;
   const column = useRef<HTMLDivElement>(null);
@@ -419,6 +425,29 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     reveal(p.id, "start", 50);
   }
 
+  async function saveChart(spec: ChartSpec, editing?: PageObject) {
+    if (!notebook) return;
+    try {
+      const png = await renderChartPng(spec, notebook.paper);
+      if (editing) {
+        await updateChart(editing.id, spec, png);
+        setChartReq(null);
+        toast("Chart updated");
+        return;
+      }
+      const here = pages[current];
+      const to = here?.kind === "ink" ? here.id
+        : await askPlace({ title: "Put the chart on…", fromPageId: here?.id, allowCurrent: false });
+      if (!to) return;
+      await addChart(to, spec, png);
+      setChartReq(null);
+      toast("Chart added. Use the lasso to move or resize it, or to edit its data.");
+      if (to !== here?.id) reveal(to);
+    } catch (e) {
+      toast(`Couldn't draw the chart: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   async function handleGenerateTapeCards(targetPage: Page) {
     if (!notebook) return;
     const pageNum = pages.indexOf(targetPage) + 1;
@@ -495,6 +524,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         onToggleAudio={() => setAudioOpen((v) => !v)}
         onOpenSpeechNote={() => setSpeechNoteOpen(true)}
         onOpenElements={cur?.kind === "ink" ? () => setElementsOpen(true) : undefined}
+        onAddChart={() => openChartEditor()}
         onOpenTemplates={cur?.kind === "ink" ? () => setTemplatesFor(cur) : undefined}
         onGenerateTapeCards={cur?.kind === "ink" ? () => void handleGenerateTapeCards(cur) : undefined}
         enableZoomBox
@@ -644,6 +674,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       <InsertMenu open={addAt !== null} position={addAt !== null ? addAt + 1 : undefined}
         onClose={() => setAddAt(null)} onPick={(k) => { if (addAt !== null) void insert(addAt, k); }} />
       <RecognizeSheet request={recog} onClose={() => setRecog(null)} />
+      <ChartSheet request={chartReq} paper={notebook.paper} onClose={() => setChartReq(null)} onSave={saveChart} />
       <PlaceHost notebookId={notebook.id} pages={pages} current={current} />
       {clipVersion > 0 && clipSize > 0 && !pasteHidden && (
         <div className="paste-bar" role="region" aria-label="Paste">

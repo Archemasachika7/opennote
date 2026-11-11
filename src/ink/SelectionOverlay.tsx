@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { motionTokens } from "../ui/motion";
-import { ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, ImageDown, Minus, MoreHorizontal, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
+import { ChartColumn, ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, ImageDown, Minus, MoreHorizontal, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
 import { Menu } from "../ui/Menu";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
@@ -21,8 +21,10 @@ export function SelectionOverlay({
   shapeFillColor, shapeFillOpacity = 0.42, fillPalette = [],
   onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut,
   onToggleFill, onToggleDashed, onUpdateShapeStyle, onSaveElement, onMakeCard, onToText, onToMath, onMoveToPage, onTidy, tidy,
-  onSaveImage,
+  onSaveImage, onEditChart,
 }: {
+  /** the selection is one chart: change its data */
+  onEditChart?: () => void;
   /** Crop by drawing around it: the selection as a PNG, saved as a file or copied as a picture. */
   onSaveImage?: (how: "file" | "clipboard") => void;
   box: Box;
@@ -174,6 +176,7 @@ export function SelectionOverlay({
         {onMoveToPage && <button className="btn ghost icon" aria-label="Move selection to another page" title="Move to another page" onClick={onMoveToPage}><FileOutput {...I} /></button>}
         {onCopy && <button className="btn ghost icon" aria-label="Copy selection" title="Copy (Ctrl+C), then paste on any page with Ctrl+V" onClick={onCopy}><ClipboardCopy {...I} /></button>}
         {onCut && <button className="btn ghost icon" aria-label="Cut selection" title="Cut (Ctrl+X) to move it to another page" onClick={onCut}><Scissors {...I} /></button>}
+        {onEditChart && <button className="btn ghost icon" aria-label="Edit chart" title="Edit the chart's data" onClick={onEditChart}><ChartColumn {...I} /></button>}
         {onCrop && <button className="btn ghost icon" aria-label="Crop image" onClick={onCrop}><Crop {...I} /></button>}
         <button className="btn ghost icon" aria-label="Delete selection" onClick={onDelete}><Trash2 {...I} /></button>
         <div style={{ position: "relative" }}>

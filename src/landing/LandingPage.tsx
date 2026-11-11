@@ -270,6 +270,8 @@ export function LandingPage({
             <video className="lp-film-video" controls preload="none" playsInline
               poster="/media/opennote-launch-poster.jpg" aria-label="OpenNote launch film, 30 seconds">
               <source src="/media/opennote-launch.mp4" type="video/mp4" />
+              {/* Hosts with a small upload limit ship without the 22 MB film; the browser then tries this copy. */}
+              <source src="https://opennote-neon-nine.vercel.app/media/opennote-launch.mp4" type="video/mp4" />
               <track kind="subtitles" src="/media/opennote-launch.srt" srcLang="en" label="English" />
             </video>
           </Reveal>

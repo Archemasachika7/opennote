@@ -20,8 +20,8 @@ describe("Landing Page (21st.dev architectural studio, zero auth wall)", () => {
     // No auth wall / login gate
     expect(screen.queryByRole("button", { name: /sign up|log in/i })).toBeNull();
 
-    // Clicking Enter Studio navigates to #/ (LibraryView)
-    fireEvent.click(screen.getByRole("button", { name: /enter studio/i }));
+    // The hero's main button ("Start writing" off Windows/Android) navigates to #/ (LibraryView)
+    fireEvent.click(screen.getAllByRole("button", { name: /start writing/i })[0]);
     await waitFor(() => expect(window.location.hash).toBe("#/"));
     expect(await screen.findByRole("heading", { name: "OpenNote" })).toBeInTheDocument();
     unmount();
@@ -35,10 +35,10 @@ describe("Landing Page (21st.dev architectural studio, zero auth wall)", () => {
     expect(result.current).toEqual({ name: "landing" });
   });
 
-  it("creates a real blank notebook immediately from 'New Blank Page' without any auth step", async () => {
+  it("creates a real blank notebook immediately from 'New notebook' without any auth step", async () => {
     window.location.hash = "#/welcome";
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /new blank page/i }));
+    fireEvent.click(screen.getByRole("button", { name: /new notebook/i }));
 
     await waitFor(async () => {
       const nbs = await listNotebooks();
@@ -47,10 +47,10 @@ describe("Landing Page (21st.dev architectural studio, zero auth wall)", () => {
     });
   });
 
-  it("launches the 3-page interactive demo notebook from 'Open 3-Page Demo'", async () => {
+  it("launches the 3-page interactive demo notebook from 'open the 3-page demo'", async () => {
     window.location.hash = "#/welcome";
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open 3-page demo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /3-page demo/i }));
 
     await waitFor(async () => {
       const nbs = await listNotebooks();

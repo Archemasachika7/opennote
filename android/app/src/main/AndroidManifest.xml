@@ -30,6 +30,13 @@
                 <data android:scheme="app.opennote.notes" android:host="auth-callback" />
             </intent-filter>
 
+            <!-- "Share -> OpenNote": a link or text from another app becomes a web clip (ShareIntentPlugin.kt) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
 
         <provider

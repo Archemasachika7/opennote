@@ -25,6 +25,17 @@
 
 /* ---- Tape (cover / reveal) ---- */
 .tape-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+/* Videos: a flat play button over each poster frame; only the button (or the playing video) takes touches */
+.video-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.video-play {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: auto; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text);
+  cursor: pointer; font-size: 12px;
+}
+.video-play:hover { border-color: var(--accent); }
+.video-live { position: absolute; pointer-events: auto; background: #000; transform-origin: center; }
+.video-live video { width: 100%; height: 100%; display: block; object-fit: contain; }
+.video-close { position: absolute; top: 6px; right: 6px; background: var(--surface); border: 1px solid var(--line); }
 .tape { position: absolute; padding: 0; border: 0; border-radius: 3px; cursor: pointer; transform-origin: center;
   background: repeating-linear-gradient(135deg, var(--tape) 0 14px, color-mix(in srgb, var(--tape) 82%, #000) 14px 28px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); transition: background-color 160ms ease, opacity 160ms ease, box-shadow 160ms ease; }
@@ -156,3 +167,7 @@
 .sel-tidy { align-items: center; gap: 8px; padding: 4px 8px; white-space: nowrap; }
 .sel-tidy-label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
 .sel-tidy-label input[type="range"] { width: 120px; accent-color: var(--accent); }
+
+/* lasso toolbar: the ink tools carry words, the rest are icons plus a "More" menu */
+.sel-bar .sel-word { gap: 5px; padding: 0 9px; height: 32px; font-size: 12.5px; white-space: nowrap; }
+.sel-bar .sel-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--line); }

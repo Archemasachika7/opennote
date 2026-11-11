@@ -9,6 +9,7 @@ import { shapePoints, snapLineEndpoint, type ShapeKind } from "./shapes";
 import { getStrokes, putStroke, replaceStrokes } from "../store/strokes";
 import { getTool, onCommand, onShapeStylePatch, onStampElement, setTool, useTool, type ShapeStylePatch } from "../notebook/tool";
 import { classifyPointer, coalesced, predicted, tryCapture } from "./input";
+import { countCancelled, countPen, isPalmContact, isPalmPointer, judgeTouch, onPalmDetected, type TouchVerdict } from "./palmGate";
 import { historyFor, type Op } from "./history";
 import { notifyPageChanged, onPageChanged } from "./pageEvents";
 import { copyToClipboard, cutToClipboard, moveSelection } from "./clipboard";
@@ -21,11 +22,14 @@ import { liveLaserPoints, paintLaser, type LaserPoint } from "./laser";
 import { BASE_LAYER, getActiveLayer, layerOf, layerOrder, lockedLayers, hiddenLayers, type Layer } from "./layers";
 import { intersects, type View } from "../board/viewport";
 import { toast } from "../ui/Toast";
+import { selectionToPng } from "./selectionImage";
+import { platform } from "../platform/port";
 import { isScribbleGesture, pointsToXYPath } from "./gestures";
 import { instantiateElement, saveStrokesAsElement } from "./elements";
 import { currentRecordingStamp, requestAudioSeek, useAudioLiveState } from "../store/audio";
 import { requestRecognize } from "../ai/inkOcr";
 import { tidyStrokes } from "./tidy";
+import { openChartEditor } from "../charts/ChartSheet";
 import type { GeometricShapeKind, ShapeMeta, Stroke, StrokeAudioSync } from "./model";
 import "./ink.css";
 
@@ -507,17 +511,23 @@ export function InkLayer({
     const t = getTool();
     if (e.pointerType === "pen" && !t.penSeen) setTool({ penSeen: true });
     const cur = active.current;
-    if (e.pointerType === "touch" && cur && !cur.pen && cur.id !== e.pointerId) {
-      // a second finger landed while one was writing: it's a pinch, so the half-drawn finger stroke goes
-      clearHoldTimer();
-      active.current = null;
-      lastEvent.current = null;
-      if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
-      const wctx = wet.current?.getContext("2d");
-      if (wctx) clearCanvas(wctx);
-      return;
+    // a palm landing while a line is being written is just the hand: leave the line alone
+    if (cur && e.pointerType === "touch" && (isPalmPointer(e.pointerId) || isPalmContact(e))) return;
+    if (cur && !cur.pen && cur.id !== e.pointerId && (e.pointerType === "touch" || e.pointerType === "pen")) {
+      // a second finger (a pinch) or the pen arrived while a finger was "writing": that finger line was a
+      // pinch or a resting palm, so it goes without being saved
+      discardActive();
+      if (e.pointerType === "touch") return;
     }
-    const action = classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
+    // palm gate: decide what a touch is before anything is drawn (pen and mouse are never a palm)
+    let touchVerdict: TouchVerdict | null = null;
+    if (e.pointerType === "touch") {
+      touchVerdict = judgeTouch(e, { penSeen: t.penSeen });
+      if (touchVerdict === "palm") return; // a resting hand: no ink, no scrolling
+    } else if (e.pointerType === "pen") countPen();
+    const action = touchVerdict === "write" && t.tool !== "hand" ? "draw"
+      : touchVerdict === "navigate" ? "navigate"
+      : classifyPointer(e, { penSeen: t.penSeen || e.pointerType === "pen", tool: t.tool });
     if (action === "navigate") {
       if (e.pointerType === "touch" || onPan) {
         pans.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -647,6 +657,35 @@ export function InkLayer({
     if (remove.length === 0) return;
     historyFor(pageId).push({ remove, add });
     await apply(remove, add);
+  };
+
+  /** Drop the line being drawn without saving it (palm, pinch or a cancelled pointer). */
+  const discardActive = () => {
+    clearHoldTimer();
+    active.current = null;
+    lastEvent.current = null;
+    if (frame.current) { cancelAnimationFrame(frame.current); frame.current = 0; }
+    const wctx = wet.current?.getContext("2d");
+    if (wctx) clearCanvas(wctx);
+  };
+
+  // a touch that is already drawing turns out to be a palm (it spread, or the whole hand landed): drop its line
+  const discardRef = useRef(discardActive);
+  discardRef.current = discardActive;
+  useEffect(() => onPalmDetected((id) => {
+    pans.current.delete(id);
+    const a = active.current;
+    if (a && a.id === id && !a.pen) { discardRef.current(); countCancelled(); }
+  }), []);
+
+  /** The browser took the pointer away (it decided on a scroll, or the pen lost contact): never commit a partial line. */
+  const cancel = (ev: React.PointerEvent) => {
+    pans.current.delete(ev.nativeEvent.pointerId);
+    const a = active.current;
+    if (!a || a.id !== ev.nativeEvent.pointerId) return;
+    if (a.kind === "laser") { active.current = null; return; }
+    discardActive();
+    countCancelled();
   };
 
   const finish = async (ev: React.PointerEvent) => {
@@ -860,6 +899,24 @@ export function InkLayer({
   const singleImage = selObjects.length === 1 && selStrokes.length === 0 && selObjects[0].kind === "image" ? selObjects[0] : null;
   const copySel = () => copyToClipboard(pageId, selStrokes, selObjects);
   const cutSel = async () => { setSelection(null); await cutToClipboard(pageId, selStrokes, selObjects); };
+  /** Crop by drawing around it: the lasso selection as a PNG file, or as a picture on the clipboard. */
+  const saveSelectionPicture = async (how: "file" | "clipboard") => {
+    if (!selBox) return;
+    try {
+      const png = await selectionToPng(selStrokes, selObjects, selBox, paper);
+      if (how === "file") {
+        await platform.saveFile(`OpenNote clip ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.png`, png);
+        toast("Picture saved");
+      } else if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        toast("Copied as a picture. Paste it into any app.");
+      } else {
+        toast("This browser can't copy pictures. Use Save as picture instead.");
+      }
+    } catch (e) {
+      toast(`Couldn't make the picture: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   const moveSel = async () => {
     const st = selStrokes, ob = selObjects;
     const to = await askPlace({ title: "Move selection to…", fromPageId: pageId, allowCurrent: false });
@@ -917,9 +974,9 @@ export function InkLayer({
     : onPan && tool.tool === "hand" ? "grab" : tool.tool === "laser" ? "crosshair" : undefined;
 
   return (
-    <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined}
+    <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined} data-ink-scale={scale}
       style={{ width, height, touchAction, cursor, pointerEvents: disabled ? "none" : undefined }}
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={cancel}
       onPointerLeave={(e) => { if (e.pointerType === "pen") setHover(null); }}>
       <canvas ref={dry} className="ink-canvas" style={{ width, height }} />
       <canvas ref={wet} className="ink-canvas" style={{ width, height }} />
@@ -994,12 +1051,14 @@ export function InkLayer({
           onToText={selStrokes.some((s) => !s.shape) ? () => requestRecognize({ kind: "text", pageId, strokes: selStrokes, box: selBox }) : undefined}
           onToMath={selStrokes.some((s) => !s.shape) ? () => requestRecognize({ kind: "math", pageId, strokes: selStrokes, box: selBox }) : undefined}
           onMoveToPage={view ? undefined : () => void moveSel()}
+          onSaveImage={(how) => void saveSelectionPicture(how)}
           onTidy={selStrokes.some((s) => !s.shape && s.tool !== "highlighter") ? () => showTidy(0.7, selStrokes) : undefined}
           tidy={tidyStrength === null ? null : {
             strength: tidyStrength, onStrength: (k) => showTidy(k, selStrokes),
             onApply: () => void applyTidy(), onCancel: endTidy,
           }}
-          onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined} />
+          onCrop={singleImage && onCropRequest ? () => { onCropRequest(singleImage.id); setSelection(null); } : undefined}
+          onEditChart={singleImage?.chart ? () => { openChartEditor({ object: singleImage }); setSelection(null); } : undefined} />
       )}
     </div>
   );

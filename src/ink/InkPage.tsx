@@ -5,7 +5,10 @@ import { useTool } from "../notebook/tool";
 import { InkLayer } from "./InkLayer";
 import { ObjectLayer } from "./ObjectLayer";
 import { TapeLayer } from "./TapeLayer";
+import { VideoLayer } from "./VideoLayer";
 import { addImage, getObjects } from "./objects";
+import { addVideo } from "./video";
+import { toast } from "../ui/Toast";
 import { resolveColor } from "./render";
 import { BASE_LAYER, getActiveLayer, hiddenLayers, lockedLayers, useActiveLayerVersion, type Layer } from "./layers";
 
@@ -29,12 +32,16 @@ export function InkPage({ pageId, width, height, paper, inputFilter, layers, onM
   const active = getActiveLayer(pageId, { layers });
 
   const onDrop = async (e: React.DragEvent) => {
-    const files = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+    const files = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
     if (files.length === 0) return;
     e.preventDefault();
     const r = e.currentTarget.getBoundingClientRect();
     const at = { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
-    for (const [i, f] of files.entries()) await addImage(pageId, f, { x: at.x + i * 24, y: at.y + i * 24 });
+    for (const [i, f] of files.entries()) {
+      const spot = { x: at.x + i * 24, y: at.y + i * 24 };
+      if (f.type.startsWith("video/")) await addVideo(pageId, f, spot).catch((err: unknown) => toast(err instanceof Error ? err.message : String(err)));
+      else await addImage(pageId, f, spot);
+    }
   };
 
   const textColor = resolveColor({ color: tool.color, paletteIndex: tool.paletteIndex ?? undefined }, paper);
@@ -46,6 +53,7 @@ export function InkPage({ pageId, width, height, paper, inputFilter, layers, onM
         objects={stored.filter((o) => !hidden.has(o.layerId ?? BASE_LAYER))} onPreviewObjects={setPreview} onCropRequest={setCropping}
         onMakeCardFromBox={onMakeCardFromBox}
         disabled={tool.tool === "text" || tool.tool === "image" || cropping !== null} />
+      <VideoLayer objects={objects} scale={scale} hidden={hidden} />
       <TapeLayer objects={objects} scale={scale} tool={tool.tool} hidden={hidden} locked={locked} />
     </div>
   );

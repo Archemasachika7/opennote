@@ -23,11 +23,16 @@ function load(status: (s: string) => void): Promise<AutomaticSpeechRecognitionPi
     dtype: device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8",
     progress_callback,
   });
-  // WebGPU is much faster where it exists; fall back to plain WebAssembly everywhere else
-  asr ??= ("gpu" in navigator ? build("webgpu").catch(() => build("wasm")) : build("wasm"))
-    .catch((err) => { asr = null; throw err; });
+  // WebGPU is much faster where it really exists. `navigator.gpu` alone isn't proof (headless browsers,
+  // blocklisted drivers): ask for an adapter first, and fall back to plain WebAssembly everywhere else.
+  asr ??= (async () => {
+    const adapter = await (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu?.requestAdapter().catch(() => null);
+    return adapter && !gpuFailed ? build("webgpu").catch(() => build("wasm")) : build("wasm");
+  })().catch((err) => { asr = null; throw err; });
   return asr;
 }
+/** Set when the GPU fails while transcribing: later runs stay on WebAssembly. */
+let gpuFailed = false;
 
 self.onmessage = async (e: MessageEvent<{ id: number; samples: Float32Array; options: AsrOptions }>) => {
   const { id, samples, options } = e.data;
@@ -35,7 +40,16 @@ self.onmessage = async (e: MessageEvent<{ id: number; samples: Float32Array; opt
   try {
     const run = await load(status);
     status("Transcribing on this device...");
-    const out = await run(samples, options);
+    let out;
+    try {
+      out = await run(samples, options);
+    } catch (gpuErr) {
+      // a GPU that loaded but fails to run: rebuild on WebAssembly once and try again
+      if (gpuFailed) throw gpuErr;
+      gpuFailed = true;
+      asr = null;
+      out = await (await load(status))(samples, options);
+    }
     self.postMessage({ id, type: "result", out: Array.isArray(out) ? out[0] : out });
   } catch (err) {
     self.postMessage({ id, type: "error", message: `On-device transcription failed: ${err instanceof Error ? err.message : String(err)}` });

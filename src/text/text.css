@@ -86,3 +86,12 @@
   color: var(--accent);
   overflow-x: auto;
 }
+
+/* an empty text page says what it is for, instead of looking like a blank grey box */
+.text-page .ProseMirror { position: relative; }
+.text-page .ProseMirror:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before,
+.text-page .ProseMirror:has(> p:only-child:empty)::before {
+  content: "Tap here and start typing. Use # for a heading, - for a list, $…$ for maths.";
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  color: var(--text-dim); opacity: 0.75;
+}

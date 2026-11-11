@@ -22,6 +22,8 @@ const AMBIENT_MIN_MS = 9000, AMBIENT_SPREAD_MS = 9000;
 const QUIET_AFTER_INPUT_MS = 4000;
 const SLEEP_AFTER_MS = 60_000;
 const DOUBLE_TAP_MS = 380;
+/** How long Blot stays out of the way after the last touch on a page. */
+const SHY_MS = 4000;
 
 const prefersStill = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const clampX = (x: number) => Math.min(0.97, Math.max(0.03, x));
@@ -35,6 +37,9 @@ const viewW = () => (typeof window === "undefined" ? 1000 : window.innerWidth ||
 export function Blot() {
   const enabled = useBlotEnabled();
   const [mood, setMood] = useState<Mood>("idle");
+  const [shy, setShy] = useState(false);
+  const shyTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(shyTimer.current), []);
   const [blink, setBlink] = useState(false);
   const [flap, setFlap] = useState(false);
   const [x, setX] = useState(getBlotX);
@@ -107,9 +112,16 @@ export function Blot() {
   // notice the person: input wakes Blot up and keeps it from wandering mid-sentence
   useEffect(() => {
     if (!enabled) return;
-    const seen = () => {
+    const seen = (e: Event) => {
       lastInput.current = Date.now();
       if (moodRef.current === "sleep") reactRef.current("stretch");
+      // writing on a page: duck out of the way (it can sit right where the hand writes on phones),
+      // and come back a few seconds after the pen stops
+      if (e.type === "pointerdown" && (e.target as Element | null)?.closest?.(".nb-scroll, .wb-stage")) {
+        setShy(true);
+        window.clearTimeout(shyTimer.current);
+        shyTimer.current = window.setTimeout(() => setShy(false), SHY_MS);
+      }
     };
     document.addEventListener("pointerdown", seen, { passive: true, capture: true });
     document.addEventListener("keydown", seen, { passive: true, capture: true });
@@ -155,7 +167,7 @@ export function Blot() {
   if (!enabled) return null;
 
   return (
-    <div className="blot" data-testid="blot" data-mood={mood} data-still={still ? "true" : "false"} data-facing={facing}
+    <div className="blot" data-testid="blot" data-mood={mood} data-shy={shy ? "true" : undefined} data-still={still ? "true" : "false"} data-facing={facing}
       style={{
         left: `calc(${x * 100}% - 26px)`,
         transition: glide ? `left ${glide.ms}ms ${glide.ease}` : undefined,

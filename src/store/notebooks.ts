@@ -1,4 +1,4 @@
-import { db, newId, now, PAGE_SIZE, unreferencedBlobs, type DocKind, type Notebook, type Paper } from "./schema";
+import { db, newId, now, objectBlobIds, PAGE_SIZE, unreferencedBlobs, type DocKind, type Notebook, type Paper } from "./schema";
 
 export const COVERS = ["#F5A524", "#3DDC97", "#FF8A5B", "#5BB8FF", "#4FD1C5", "#E8697A"];
 
@@ -38,6 +38,9 @@ export async function deleteNotebook(id: string): Promise<void> {
     // recordings belong to the notebook alone: their audio goes with them
     const recs = await db.recordings.where("notebookId").equals(id).toArray();
     await db.blobs.bulkDelete(recs.map((r) => r.blobId));
+    // so do a locked notebook's encrypted contents
+    const lockedBlob = (await db.notebooks.get(id))?.locked?.blobId;
+    if (lockedBlob) await db.blobs.delete(lockedBlob);
     await db.recordings.where("notebookId").equals(id).delete();
     const pageIds = (await db.pages.where("notebookId").equals(id).primaryKeys()) as string[];
     const objs = await db.objects.where("pageId").anyOf(pageIds).toArray();
@@ -46,7 +49,7 @@ export async function deleteNotebook(id: string): Promise<void> {
     await db.cards.where("notebookId").equals(id).delete();
     const candidates = [
       ...cards.flatMap((c) => [c.frontImage, c.backImage]),
-      ...objs.map((o) => o.blobId),
+      ...objs.flatMap(objectBlobIds),
       ...pages.map((p) => (p && p.kind === "html" ? p.snapshotBlobId : p && p.kind === "ink" ? p.background?.blobId : undefined)),
     ].filter((x): x is string => !!x);
     await db.objects.where("pageId").anyOf(pageIds).delete();

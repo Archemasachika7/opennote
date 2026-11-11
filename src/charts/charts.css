@@ -1,0 +1,14 @@
+/* Chart editor: flat, no gradients */
+.chart-sheet { display: grid; gap: 14px; }
+.chart-types { display: flex; flex-wrap: wrap; gap: 6px; }
+.chart-field { display: grid; gap: 6px; }
+.chart-data { min-height: 140px; resize: vertical; font-size: 13px; line-height: 1.5; }
+.chart-preview {
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px; min-height: 120px;
+  display: grid; place-items: center;
+}
+.chart-preview.paper-dark { background: var(--page-dark); }
+.chart-preview.paper-light { background: var(--page-light); }
+/* Chart.js writes a fixed pixel size inline (responsive is off, it draws a picture); scale it down to fit */
+.chart-preview { min-width: 0; overflow: hidden; }
+.chart-preview canvas { width: 100% !important; height: auto !important; aspect-ratio: 8 / 5; display: block; }

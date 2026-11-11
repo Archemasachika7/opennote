@@ -1,4 +1,4 @@
-import { db, newId, now, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PageObject, type PagePatch } from "./schema";
+import { db, newId, now, objectBlobIds, PAGE_SIZE, MAX_HTML_BYTES, unreferencedBlobs, type NewPage, type Page, type PageObject, type PagePatch } from "./schema";
 import { layerOf, pageLayers, type Layer } from "../ink/layers";
 import { notifyPageChanged } from "../ink/pageEvents";
 import { clearHistory } from "../ink/history";
@@ -101,7 +101,7 @@ export async function deleteLayer(pageId: string, layerId: string): Promise<void
     await db.strokes.bulkDelete(strokeIds);
     const objs = (await db.objects.where("pageId").equals(pageId).toArray()).filter((o) => layerOf(o) === layerId);
     await db.objects.bulkDelete(objs.map((o) => o.id));
-    await db.blobs.bulkDelete(await unreferencedBlobs(objs.map((o) => o.blobId).filter((x): x is string => !!x)));
+    await db.blobs.bulkDelete(await unreferencedBlobs(objs.flatMap(objectBlobIds)));
     await updatePage(pageId, { layers: ls.filter((l) => l.id !== layerId) });
   });
   // open ink layers hold strokes in memory: reload them; undo could bring back strokes on a dead layer
@@ -152,7 +152,7 @@ export async function deletePageWithUndo(pageId: string): Promise<DeletedPageSna
   const strokes = await db.strokes.where("pageId").equals(pageId).toArray();
   const objects = await db.objects.where("pageId").equals(pageId).toArray();
   const blobIds = new Set<string>();
-  for (const o of objects) if (o.blobId) blobIds.add(o.blobId);
+  for (const o of objects) for (const b of objectBlobIds(o)) blobIds.add(b);
   if (p.kind === "ink" && p.background?.blobId) blobIds.add(p.background.blobId);
   if (p.kind === "html" && p.snapshotBlobId) blobIds.add(p.snapshotBlobId);
   const blobs = (await db.blobs.bulkGet([...blobIds])).filter((b): b is { id: string; data: Blob } => !!b);
@@ -185,7 +185,7 @@ export async function deletePage(pageId: string): Promise<void> {
     if (!p) return;
     const objs = await db.objects.where("pageId").equals(pageId).toArray();
     await db.objects.where("pageId").equals(pageId).delete();
-    const candidates = objs.map((o) => o.blobId).filter((x): x is string => !!x);
+    const candidates = objs.flatMap(objectBlobIds);
     if (p.kind === "ink" && p.background) candidates.push(p.background.blobId);
     if (p.kind === "html" && p.snapshotBlobId) candidates.push(p.snapshotBlobId);
     // remove the page first so its own background no longer counts as a reference

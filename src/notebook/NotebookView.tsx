@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FileText, PenLine, Plus, Sparkles, X, ZoomIn, ZoomOut } from "lucide-react";
-import { MAX_HTML_BYTES, type HtmlPage, type InkPage, type Notebook, type Page } from "../store/schema";
+import { MAX_HTML_BYTES, type HtmlPage, type InkPage, type Notebook, type Page, type PageObject } from "../store/schema";
 import { detectArtifactType, titleOf } from "../live/detect";
 import { getNotebook, listNotebooks, restoreNotebook, toggleBookmark } from "../store/notebooks";
 import { navigate } from "../App";
@@ -11,6 +11,16 @@ import { Thumbnails } from "./Thumbnails";
 import { PageList } from "./PageList";
 import { PageFrame } from "./PageFrame";
 import { useVisiblePages } from "./useVisiblePages";
+import { BookView } from "./BookView";
+import { ChartSheet, onChartEditorRequest, openChartEditor, type ChartRequest } from "../charts/ChartSheet";
+import { renderChartPng } from "../charts/render";
+import type { ChartSpec } from "../charts/spec";
+import { addChart, updateChart } from "../ink/objects";
+import { addVideo } from "../ink/video";
+import { ClipSheet } from "../clip/ClipSheet";
+import { clipUrl } from "../clip/clip";
+import { AiSheet, onAiRequest, openAi, type AiRequest } from "../ai/AiSheet";
+import { setPageLayout, turnTarget, usePageLayout } from "./pageLayout";
 import { restoreAnchor, usePinchZoom, type ZoomAnchor } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
 import { sendCommand, sendStampElement, setTool, useTool } from "./tool";
@@ -35,10 +45,12 @@ import { RulerOverlay } from "../ink/RulerOverlay";
 import { InsertMenu, type InsertKind } from "./InsertMenu";
 import { inkPalette } from "../ink/render";
 import { LatencyOverlay } from "../dev/LatencyOverlay";
+import { PalmOverlay } from "../dev/PalmOverlay";
 import { TemplatesSheet } from "./TemplatesSheet";
 import { getEffectiveTemplate, hydratePageTemplates, setStemTemplateForPage } from "../store/templates";
 import { AudioBar } from "./AudioBar";
 import { RecognizeSheet } from "./RecognizeSheet";
+import { UnlockScreen } from "../library/LockSheet";
 import { onRecognizeRequest, useInkSearch, type RecognizeRequest } from "../ai/inkOcr";
 import { indexHandwriting } from "../store/inkIndex";
 import { SpeechNoteModal } from "./SpeechNoteModal";
@@ -139,7 +151,56 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   const notebook = useLive(async () => (await getNotebook(id)) ?? null, [id], undefined as Notebook | null | undefined);
   const pages = useLive(() => getPages(id), [id], [] as Page[]);
   const scroller = useRef<HTMLDivElement>(null);
-  const { mounted, current } = useVisiblePages(scroller, pages.length);
+  const seen = useVisiblePages(scroller, pages.length);
+  const layout = usePageLayout();
+  const book = layout === "book";
+  // book view: one page at a time; `turnDir` picks which way the page-turn animation swings
+  const [bookIndexRaw, setBookIndex] = useState(0);
+  const [turnDir, setTurnDir] = useState<1 | -1>(1);
+  const bookIndex = Math.min(bookIndexRaw, Math.max(0, pages.length - 1));
+  const current = book ? bookIndex : seen.current;
+  const mounted = book ? new Set([bookIndex]) : seen.mounted;
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+  const bookRef = useRef(book);
+  bookRef.current = book;
+  const bookIndexRef = useRef(bookIndex);
+  bookIndexRef.current = bookIndex;
+  const showIndex = useCallback((i: number, block: ScrollLogicalPosition = "start") => {
+    const p = pagesRef.current[i];
+    if (!p) return;
+    if (bookRef.current) {
+      const from = bookIndexRef.current;
+      if (i !== from) setTurnDir(i > from ? 1 : -1);
+      bookIndexRef.current = i;
+      setBookIndex(i);
+      scroller.current?.scrollTo?.({ top: 0 });
+    } else {
+      document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block });
+    }
+  }, []);
+  /** Bring a page into view once it exists (new pages arrive a moment after they are written). */
+  const reveal = useCallback((pageId: string, block: ScrollLogicalPosition = "start", delay = 60) => {
+    setTimeout(() => {
+      const i = pagesRef.current.findIndex((p) => p.id === pageId);
+      if (i >= 0) showIndex(i, block);
+      else setTimeout(() => { const j = pagesRef.current.findIndex((p) => p.id === pageId); if (j >= 0) showIndex(j, block); }, 250);
+    }, delay);
+  }, [showIndex]);
+  const turnPage = (delta: 1 | -1) => {
+    const to = turnTarget(bookIndex, delta, pages.length);
+    if (to !== null) showIndex(to);
+  };
+  const toggleLayout = () => {
+    if (book) {
+      const keep = pages[bookIndex]?.id;
+      setPageLayout("scroll");
+      if (keep) setTimeout(() => document.getElementById(`page-${keep}`)?.scrollIntoView({ block: "start" }), 30);
+    } else {
+      setBookIndex(seen.current);
+      setPageLayout("book");
+    }
+  };
   const [zoom, setZoomRaw] = useState(initialZoom);
   const setZoom = useCallback((z: number) => setZoomRaw(clampZoom(z)), []);
   const [sidebarOpen, setSidebarOpen] = useState(() => !initialMobile());
@@ -161,9 +222,14 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   const pasteTo = async (pageId: string) => {
     await pasteClipboard(pageId);
     toast("Pasted. Use the lasso to move it.");
-    setTimeout(() => document.getElementById(`page-${pageId}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60);
+    reveal(pageId, "nearest");
   };
   useEffect(() => onRecognizeRequest(setRecog), []);
+  const [chartReq, setChartReq] = useState<ChartRequest | null>(null);
+  const [clipAt, setClipAt] = useState<number | null>(null);
+  const [aiReq, setAiReq] = useState<AiRequest | null>(null);
+  useEffect(() => onAiRequest(setAiReq), []);
+  useEffect(() => onChartEditorRequest(setChartReq), []);
   const inkSearch = useInkSearch();
   const width = BASE_WIDTH * zoom;
   const column = useRef<HTMLDivElement>(null);
@@ -185,10 +251,9 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   useEffect(() => { void hydratePageTemplates(); }, []);
 
   const jump = useCallback((i: number) => {
-    const p = pages[i];
-    if (p) document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showIndex(i);
     if (initialMobile()) setSidebarOpen(false);
-  }, [pages]);
+  }, [showIndex]);
 
   const hasPages = pages.length > 0;
   useEffect(() => {
@@ -223,15 +288,22 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     if (tool.tool !== "image") { lastTool.current = tool.tool; return; }
     setTool({ tool: lastTool.current });
     const snapshot = { pages, current };
-    void platform.openFiles(["image/*"]).then(async (files) => {
+    void platform.openFiles(["image/*", "video/*"]).then(async (files) => {
       if (files.length === 0) return;
       const here = snapshot.pages[snapshot.current];
+      const what = files.every((f) => f.type.startsWith("video/")) ? (files.length === 1 ? "the video" : `${files.length} videos`)
+        : files.length === 1 ? "the picture" : `${files.length} pictures`;
       const targetPageId = here?.kind === "ink" ? here.id
         : snapshot.pages.length === 0 ? await resolveImageTarget(id, snapshot.pages, snapshot.current)
-        : await askPlace({ title: files.length === 1 ? "Put the picture on…" : `Put ${files.length} pictures on…`, fromPageId: here?.id, allowCurrent: false });
+        : await askPlace({ title: `Put ${what} on…`, fromPageId: here?.id, allowCurrent: false });
       if (!targetPageId) return;
-      for (const f of files) await addImage(targetPageId, f);
-      if (targetPageId !== here?.id) setTimeout(() => document.getElementById(`page-${targetPageId}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      for (const f of files) {
+        if (!f.type.startsWith("video/")) { await addImage(targetPageId, f); continue; }
+        toast(`Adding "${f.name}"...`);
+        try { await addVideo(targetPageId, f); toast("Video added. Tap play to watch it on the page."); }
+        catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      }
+      if (targetPageId !== here?.id) reveal(targetPageId);
     });
   }, [tool.tool]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -260,6 +332,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setSheet({ index }); return; }
+    if (kind === "clip") { setClipAt(index); return; }
     if (kind === "file") {
       const f = await platform.openFile([".svg", ".html", ".htm", "image/svg+xml", "text/html"]);
       if (!f) return;
@@ -275,7 +348,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         });
         blotReact("hop");
         toast(`Added "${f.name}" as a live page`);
-        setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+        reveal(p.id, "start", 50);
       } catch (e) {
         toast(`Couldn't open "${f.name}": ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -300,7 +373,8 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       }
       return;
     }
-    await insertPage(id, index, kind === "ink" ? { kind: "ink", template: "blank" } : { kind: "text" });
+    const added = await insertPage(id, index, kind === "ink" ? { kind: "ink", template: "blank" } : { kind: "text" });
+    if (bookRef.current) reveal(added.id);
   }
 
   async function handleDeletePage(p: Page) {
@@ -363,7 +437,30 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
     if (s.edit) { await updatePage(s.edit.id, d); return; }
     const p = await insertPage(id, s.index, { kind: "html", ...d });
     blotReact("hop");
-    setTimeout(() => document.getElementById(`page-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    reveal(p.id, "start", 50);
+  }
+
+  async function saveChart(spec: ChartSpec, editing?: PageObject) {
+    if (!notebook) return;
+    try {
+      const png = await renderChartPng(spec, notebook.paper);
+      if (editing) {
+        await updateChart(editing.id, spec, png);
+        setChartReq(null);
+        toast("Chart updated");
+        return;
+      }
+      const here = pages[current];
+      const to = here?.kind === "ink" ? here.id
+        : await askPlace({ title: "Put the chart on…", fromPageId: here?.id, allowCurrent: false });
+      if (!to) return;
+      await addChart(to, spec, png);
+      setChartReq(null);
+      toast("Chart added. Use the lasso to move or resize it, or to edit its data.");
+      if (to !== here?.id) reveal(to);
+    } catch (e) {
+      toast(`Couldn't draw the chart: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   async function handleGenerateTapeCards(targetPage: Page) {
@@ -410,6 +507,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       </main>
     );
   }
+  if (notebook.locked) return <UnlockScreen notebook={notebook} />;
   if (notebook.trashedAt) {
     return (
       <main className="nb-trashed">
@@ -435,10 +533,14 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         onOpenSettings={onOpenSettings}
         splitOpen={splitOpen}
         onToggleSplit={() => setSplitOpen((v) => !v)}
+        bookView={book}
+        onToggleBookView={toggleLayout}
         audioOpen={audioOpen}
         onToggleAudio={() => setAudioOpen((v) => !v)}
         onOpenSpeechNote={() => setSpeechNoteOpen(true)}
         onOpenElements={cur?.kind === "ink" ? () => setElementsOpen(true) : undefined}
+        onAddChart={() => openChartEditor()}
+        onNotebookAi={(task) => openAi({ task, scope: "notebook" })}
         onOpenTemplates={cur?.kind === "ink" ? () => setTemplatesFor(cur) : undefined}
         onGenerateTapeCards={cur?.kind === "ink" ? () => void handleGenerateTapeCards(cur) : undefined}
         enableZoomBox
@@ -493,8 +595,11 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
               </div>
             </div>
           ) : (
-            <div className="nb-column" ref={column} style={{ width }}>
+            <div className={`nb-column ${book ? "is-book" : ""}`} ref={column} style={{ width }}>
+              {(() => {
+                const list = (
               <PageList
+                only={book ? bookIndex : undefined}
                 pages={pages}
                 notebook={notebook}
                 mounted={mounted}
@@ -522,22 +627,33 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
                 onBookmark={(p) => toggleBookmark(id, p.id)}
                 onTemplate={(p, t) => void setStemTemplateForPage(p.id, t, updatePage)}
                 onOpenStemTemplates={(p) => setTemplatesFor(p)}
+                onAi={(p, i, task) => openAi({ task, scope: "page", page: p, pageNumber: i + 1 })}
                 onReadHandwriting={(p) => {
                   toast("Reading the handwriting on this page...");
                   void indexHandwriting(p.id).then((t) => toast(t ? "Handwriting on this page is now searchable" : "No handwriting found on this page"))
                     .catch((e) => toast(e instanceof Error ? e.message : String(e)));
                 }}
               />
-              <button type="button" className="nb-add-page" onClick={() => setAddAt(pages.length)}>
-                <Plus size={16} strokeWidth={1.5} />Add page
-              </button>
+                );
+                return book ? (
+                  <BookView pageKey={pages[bookIndex]?.id ?? "none"} index={bookIndex} count={pages.length} dir={turnDir}
+                    onTurn={turnPage} onAddPage={() => setAddAt(bookIndex + 1)} scroller={scroller}>
+                    {list}
+                  </BookView>
+                ) : list;
+              })()}
+              {!book && (
+                <button type="button" className="nb-add-page" onClick={() => setAddAt(pages.length)}>
+                  <Plus size={16} strokeWidth={1.5} />Add page
+                </button>
+              )}
             </div>
           )}
         </div>
         {splitOpen && (
           <SplitCompanionPane primaryNotebookId={notebook.id} onClose={() => setSplitOpen(false)} />
         )}
-        {!sidebarOpen && pages.length > 0 && (
+        {!sidebarOpen && pages.length > 0 && !book && (
           <button type="button" className="nb-page-pill mono" onClick={() => setSidebarOpen(true)} title="Show pages sidebar">
             {current + 1} / {pages.length}
           </button>
@@ -575,6 +691,27 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       <InsertMenu open={addAt !== null} position={addAt !== null ? addAt + 1 : undefined}
         onClose={() => setAddAt(null)} onPick={(k) => { if (addAt !== null) void insert(addAt, k); }} />
       <RecognizeSheet request={recog} onClose={() => setRecog(null)} />
+      <AiSheet request={aiReq} notebook={notebook} pages={pages} onClose={() => setAiReq(null)} onOpenSettings={onOpenSettings}
+        onAddSummary={async (title, text, afterPageId) => {
+          const at = afterPageId ? pages.findIndex((p) => p.id === afterPageId) + 1 : Math.min(current + 1, pages.length);
+          const p = await insertPage(id, at, { kind: "text" });
+          await updatePage(p.id, { doc: { type: "doc", content: [
+            { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: title }] },
+            ...text.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => (/^[-*•]\s+/.test(l)
+              ? { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: l.replace(/^[-*•]\s+/, "") }] }] }] }
+              : { type: "paragraph", content: [{ type: "text", text: l }] })),
+          ] } });
+          toast("Summary added as a page");
+          reveal(p.id);
+        }} />
+      <ClipSheet open={clipAt !== null} onClose={() => setClipAt(null)} onClip={async (url) => {
+        const at = clipAt ?? pages.length;
+        const r = await clipUrl(id, at, url);
+        setClipAt(null);
+        toast(r.article ? `Clipped "${r.article.title}"` : `Saved the link only: ${r.blocked ?? "the page could not be read."}`);
+        reveal(r.page.id);
+      }} />
+      <ChartSheet request={chartReq} paper={notebook.paper} onClose={() => setChartReq(null)} onSave={saveChart} />
       <PlaceHost notebookId={notebook.id} pages={pages} current={current} />
       {clipVersion > 0 && clipSize > 0 && !pasteHidden && (
         <div className="paste-bar" role="region" aria-label="Paste">
@@ -586,6 +723,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       )}
       <RulerOverlay />
       {new URLSearchParams(window.location.search).get("debug") === "latency" && <LatencyOverlay />}
+      {new URLSearchParams(window.location.search).get("debug") === "palm" && <PalmOverlay />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import { forwardRef, useState } from "react";
 import { motion } from "motion/react";
-import { Folder, MoreHorizontal, Pencil, RotateCcw, Star, Trash2 } from "lucide-react";
+import { Folder, Lock, MoreHorizontal, Pencil, RotateCcw, Star, Trash2 } from "lucide-react";
 import type { Notebook } from "../store/schema";
 import { COVERS } from "../store/notebooks";
 import { Menu, type MenuItem } from "../ui/Menu";
@@ -37,12 +37,14 @@ type NotebookCardProps = {
   onFavorite: () => void;
   onRestore: () => void;
   onDeleteForever: () => void;
+  /** Lock with a password (absent for study sets and in Trash). */
+  onLock?: () => void;
 };
 
 // forwardRef: the library list animates cards out with AnimatePresence "popLayout", which needs a ref
 export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function NotebookCard({
   nb, liveCount, cardCount = 0, folderName, view, inTrash, selecting, selected,
-  onToggleSelect, onOpen, onRename, onCoverColor, onTrash, onFavorite, onRestore, onDeleteForever,
+  onToggleSelect, onOpen, onRename, onCoverColor, onTrash, onFavorite, onRestore, onDeleteForever, onLock,
 }, ref) {
   const [menu, setMenu] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -57,6 +59,7 @@ export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function 
     : [
       { label: "Rename", icon: <Pencil {...I} />, onSelect: () => { setDraft(nb.title); setEditing(true); } },
       { label: nb.favorite ? "Remove from Favourites" : "Add to Favourites", icon: <Star {...I} />, onSelect: onFavorite },
+      ...(onLock && !nb.locked ? [{ label: "Lock with password…", icon: <Lock {...I} />, onSelect: onLock }] : []),
       { label: "Move to Trash", icon: <Trash2 {...I} />, danger: true, onSelect: onTrash },
       { label: "Delete…", icon: <Trash2 {...I} />, danger: true, onSelect: onDeleteForever },
     ];
@@ -122,6 +125,7 @@ export const NotebookCard = forwardRef<HTMLElement, NotebookCardProps>(function 
           <div className="nb-title-stack">
             <span className="nb-title" data-testid="nb-title">
               {nb.favorite && <Star {...I} className="fav" aria-label="Favourite" fill="currentColor" />}
+              {nb.locked && <Lock {...I} className="nb-lock" aria-label="Locked with a password" />}
               {nb.title}
             </span>
             {folderName && !inTrash && (

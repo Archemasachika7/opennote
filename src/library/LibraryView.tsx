@@ -23,6 +23,7 @@ import { Sheet } from "../ui/Sheet";
 import { motionTokens } from "../ui/motion";
 import { NotebookCard } from "./NotebookCard";
 import { DeleteSheet } from "./DeleteSheet";
+import { LockSheet } from "./LockSheet";
 import { createStarterNotebook } from "./demoNotebook";
 import { importFile } from "../io/importFile";
 import { toast } from "../ui/Toast";
@@ -54,6 +55,7 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
   const [view, setViewRaw] = useState<"grid" | "list">(savedView);
   const [q, setQ] = useState("");
   const [doomed, setDoomed] = useState<Notebook[] | null>(null);
+  const [lockFor, setLockFor] = useState<Notebook | null>(null);
   const [naming, setNaming] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
@@ -420,7 +422,8 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
                     onTrash={() => moveToTrashWithUndo(nb)}
                     onFavorite={() => toggleFavorite(nb.id)}
                     onRestore={() => restoreNotebook(nb.id)}
-                    onDeleteForever={() => setDoomed([nb])} />
+                    onDeleteForever={() => setDoomed([nb])}
+                    onLock={nb.kind === "studyset" ? undefined : () => setLockFor(nb)} />
                 ))}
               </AnimatePresence>
             </motion.section>
@@ -429,6 +432,7 @@ export function LibraryView({ onOpenSettings, onOpenPalette }: { onOpenSettings?
         </div>
       )}
 
+      <LockSheet notebook={lockFor} onClose={() => setLockFor(null)} />
       <DeleteSheet notebooks={doomed} inTrash={inTrash} onClose={() => setDoomed(null)} onDone={endSelect} />
 
       <Sheet open={naming} onClose={() => setNaming(false)} title="New folder" width={420}>

@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, AudioLines, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
+  ArrowLeft, AudioLines, BookOpen, ChartColumn, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
   Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine,
-  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
+  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Sparkles, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
 } from "lucide-react";
 import { useRuler } from "../ink/ruler";
 import { toggleRuler } from "../ink/RulerOverlay";
@@ -26,6 +26,8 @@ export function Toolbar({
   notebook, zoom, setZoom, onResetZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind,
   sidebarOpen, onToggleSidebar, onOpenSettings,
   splitOpen, onToggleSplit,
+  bookView, onToggleBookView,
+  onAddChart, onNotebookAi,
   audioOpen, onToggleAudio,
   onOpenSpeechNote,
   onOpenElements, onOpenTemplates, onGenerateTapeCards,
@@ -45,6 +47,12 @@ export function Toolbar({
   onOpenSettings?: () => void;
   splitOpen?: boolean;
   onToggleSplit?: () => void;
+  /** one page at a time with page turns */
+  bookView?: boolean;
+  onToggleBookView?: () => void;
+  onAddChart?: () => void;
+  /** Gemini over the whole notebook */
+  onNotebookAi?: (task: "summary" | "cards") => void;
   audioOpen?: boolean;
   onToggleAudio?: () => void;
   onOpenSpeechNote?: () => void;
@@ -86,7 +94,7 @@ export function Toolbar({
     { name: "tape", label: "Tape", hint: "Tape (drag over notes to hide them; tap a strip with Tape or Hand to reveal) [B]", icon: <RectangleHorizontal {...ICON} /> },
     { name: "laser", label: "Laser pointer", hint: "Laser pointer (a fading red trail for presenting, never saved) [K]", icon: <LocateFixed {...ICON} color="#FF1F3D" /> },
     { name: "text", label: "Text box", hint: "Text box (click on the page) [T]", icon: <Type {...ICON} /> },
-    { name: "image", label: "Image", hint: "Insert image", icon: <ImageIcon {...ICON} /> },
+    { name: "image", label: "Image", hint: "Insert a picture or video", icon: <ImageIcon {...ICON} /> },
     { name: "hand", label: "Hand", hint: "Hand (scroll, or hold Space) [V]", icon: <Hand {...ICON} /> },
   ];
 
@@ -151,6 +159,8 @@ export function Toolbar({
           {notebook.title}
         </span>
       )}
+      {/* on phones this strip becomes its own sideways-scrolling row under the fixed top row */}
+      <div className="nb-tb-strip">
       <div className="tool-group" role="toolbar" aria-label="Tools">
         {tools.map((x) => (
           <button key={x.name} className={`btn ghost icon ${t.tool === x.name ? "active" : ""}`} aria-label={x.label} title={x.hint}
@@ -161,7 +171,8 @@ export function Toolbar({
         <select className="input" aria-label="Pen type" value={t.variant} onChange={(e) => set({ variant: e.target.value as PenVariant })}>
           <option value="ball">Ballpoint</option><option value="fountain">Fountain</option><option value="brush">Brush</option>
           <option value="pencil">Pencil</option><option value="calligraphy">Calligraphy</option><option value="marker">Marker</option>
-          <option value="beautify">Beautify</option>
+          <option value="beautify">Beautify</option><option value="inkbrush">Ink brush</option>
+          <option value="oblique">Oblique nib</option><option value="rainbow">Rainbow</option>
         </select>
       )}
       <PenPresets paper={notebook.paper} />
@@ -283,6 +294,11 @@ export function Toolbar({
         <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
           title="Ruler [R] (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
           onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
+        {onAddChart && (
+          <button className="btn ghost icon" aria-label="Add chart" title="Add a bar, line, pie or scatter chart" onClick={onAddChart}>
+            <ChartColumn {...ICON} />
+          </button>
+        )}
         {onOpenElements && (
           <button className="btn ghost icon" aria-label="Elements" title="Elements & reusable STEM stamps" onClick={onOpenElements}>
             <Stamp {...ICON} />
@@ -328,8 +344,19 @@ export function Toolbar({
             <Columns2 {...ICON} />
           </button>
         )}
+        {onToggleBookView && (
+          <button
+            className={`btn ghost icon ${bookView ? "active" : ""}`}
+            aria-label="Book view"
+            aria-pressed={!!bookView}
+            title={bookView ? "Book view: one page at a time (switch back to scrolling)" : "Book view: turn pages one at a time"}
+            onClick={onToggleBookView}>
+            <BookOpen {...ICON} />
+          </button>
+        )}
       </div>
-      <div className="tool-group">
+      </div>
+      <div className="tool-group nb-tb-undo">
         <button className="btn ghost icon" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={onUndo}><Undo2 {...ICON} /></button>
         <button className="btn ghost icon" aria-label="Redo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" onClick={onRedo}><Redo2 {...ICON} /></button>
       </div>
@@ -354,7 +381,7 @@ export function Toolbar({
         </button>
         <button className="btn ghost icon" aria-label="Zoom in" onClick={() => setZoom(zoom * 1.2)}><ZoomIn {...ICON} /></button>
       </div>
-      <div style={{ position: "relative" }}>
+      <div className="nb-tb-options" style={{ position: "relative" }}>
         <button className="btn ghost icon" aria-label="Notebook options" onClick={() => setMenu(true)}><MoreHorizontal {...ICON} /></button>
         {menu && (
           <Menu onClose={() => setMenu(false)} style={{ right: 0, top: 34 }} footer={coverFooter} items={[
@@ -363,8 +390,17 @@ export function Toolbar({
               icon: <AudioLines size={14} strokeWidth={1.5} />,
               onSelect: onOpenSpeechNote,
             }] : []),
+            ...(onNotebookAi ? [{
+              label: "Summarise notebook (Gemini)",
+              icon: <Sparkles size={14} strokeWidth={1.5} />,
+              onSelect: () => onNotebookAi("summary"),
+            }, {
+              label: "Flashcards from notebook (Gemini)",
+              icon: <Sparkles size={14} strokeWidth={1.5} />,
+              onSelect: () => onNotebookAi("cards"),
+            }] : []),
             ...(onOpenTemplates && currentKind === "ink" ? [{
-              label: "Paper & STEM templates...",
+              label: "Page templates...",
               icon: <LayoutTemplate size={14} strokeWidth={1.5} />,
               onSelect: onOpenTemplates,
             }] : []),

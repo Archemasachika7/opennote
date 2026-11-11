@@ -1,7 +1,9 @@
+import { uuidV4 } from "../platform/uuid";
 import Dexie, { type Table } from "dexie";
 import type { Stroke } from "../ink/model";
 import type { Layer } from "../ink/layers";
 import type { Srs } from "../study/srs";
+import type { ChartSpec } from "../charts/spec";
 
 export type Paper = "dark" | "light";
 export type Template = "blank" | "ruled" | "grid" | "dot";
@@ -27,7 +29,12 @@ export interface Notebook {
   trashedAt?: number | null;
   /** Document type (absent = notebook). Whiteboard pages are boards; a study set has cards, no pages. */
   kind?: DocKind;
+  /** Password-locked: the whole notebook is encrypted in one blob and its pages are not on the device (store/lock.ts). */
+  locked?: LockInfo;
 }
+
+/** Where a locked notebook's encrypted contents are and how to check the password (salt and check are base64). */
+export interface LockInfo { blobId: string; salt: string; check: string; iterations: number; lockedAt: number }
 export type DocKind = "notebook" | "whiteboard" | "studyset";
 
 interface PageBase {
@@ -88,6 +95,18 @@ export interface PageObject {
   /** Tape: colour, and whether it is currently peeled back. */
   color?: string;
   revealed?: boolean;
+  /** Image drawn from a chart: the data it came from, so it can be edited and redrawn. */
+  chart?: ChartSpec;
+  /** Image that is a video's poster frame: the video itself (its own blob), played in place on the page. */
+  video?: { blobId: string; mime: string; duration?: number };
+}
+
+/** Every blob a page object holds (its picture, and a video's file). Use this wherever blobs are collected or cleaned up. */
+export function objectBlobIds(o: Pick<PageObject, "blobId" | "video">): string[] {
+  const ids: string[] = [];
+  if (o.blobId) ids.push(o.blobId);
+  if (o.video?.blobId) ids.push(o.video.blobId);
+  return ids;
 }
 
 /** A flashcard in a study set (notebookId = the set). */
@@ -179,7 +198,7 @@ class OpenNoteDB extends Dexie {
 }
 
 export const db = new OpenNoteDB();
-export const newId = (): string => crypto.randomUUID();
+export const newId = (): string => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : uuidV4());
 export const now = (): number => Date.now();
 
 /** Of the given blob ids, those no object or page background references any more (safe to delete). */
@@ -187,8 +206,10 @@ export async function unreferencedBlobs(candidates: string[]): Promise<string[]>
   const want = new Set(candidates);
   if (want.size === 0) return [];
   const used = new Set<string>();
-  await db.objects.each((o) => { if (o.blobId && want.has(o.blobId)) used.add(o.blobId); });
+  await db.objects.each((o) => { for (const b of objectBlobIds(o)) if (want.has(b)) used.add(b); });
   await db.cards.each((c) => { for (const b of [c.frontImage, c.backImage]) if (b && want.has(b)) used.add(b); });
   await db.pages.each((p) => { if (p.kind === "ink" && p.background && want.has(p.background.blobId)) used.add(p.background.blobId); });
+  // a locked notebook's encrypted contents are never garbage
+  await db.notebooks.each((n) => { if (n.locked && want.has(n.locked.blobId)) used.add(n.locked.blobId); });
   return [...want].filter((b) => !used.has(b));
 }

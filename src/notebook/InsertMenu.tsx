@@ -1,8 +1,8 @@
-import { FileCode2, FileText, FileUp, PenLine, Sparkles } from "lucide-react";
+import { FileCode2, FileText, FileUp, Globe, PenLine, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { Sheet } from "../ui/Sheet";
 
-export type InsertKind = "ink" | "text" | "live" | "pdf" | "file";
+export type InsertKind = "ink" | "text" | "live" | "pdf" | "file" | "clip";
 
 type Option = { kind: InsertKind; title: string; hint: string; icon: ReactNode };
 const IC = { size: 20, strokeWidth: 1.5 } as const;
@@ -12,6 +12,7 @@ const OPTIONS: Option[] = [
   { kind: "live", title: "Live page", hint: "Paste an AI artifact (HTML, React or SVG) that runs on the page", icon: <Sparkles {...IC} color="var(--live)" /> },
   { kind: "file", title: "Upload SVG or HTML", hint: "Open a .svg or .html file from your device as a live page", icon: <FileCode2 {...IC} /> },
   { kind: "pdf", title: "PDF pages", hint: "Import every page of a PDF to write on", icon: <FileUp {...IC} /> },
+  { kind: "clip", title: "Web clip", hint: "Paste a link: the article's text becomes a page you can annotate", icon: <Globe {...IC} /> },
 ];
 
 /**

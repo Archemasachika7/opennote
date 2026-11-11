@@ -1,0 +1,10 @@
+.clip-sheet { display: grid; gap: 12px; }
+.clip-field { display: grid; gap: 6px; }
+.clip-sheet p { margin: 0; line-height: 1.5; }
+.clip-targets { display: grid; gap: 6px; max-height: 280px; overflow: auto; }
+.clip-target {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text);
+}
+.clip-target[aria-checked="true"] { border-color: var(--accent); }
+.clip-shared { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; word-break: break-all; }

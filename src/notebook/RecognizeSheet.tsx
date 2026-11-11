@@ -3,7 +3,7 @@ import { ArrowDownToLine, Copy, FileOutput, Replace } from "lucide-react";
 import { Sheet } from "../ui/Sheet";
 import { toast } from "../ui/Toast";
 import { recognizeMath, recognizeText, type RecognizeRequest } from "../ai/inkOcr";
-import { MATH_MODEL_MB, TEXT_MODEL_MB } from "../ai/inkOcrModels";
+import { TEXT_MODEL_MB } from "../ai/inkOcrModels";
 import { formatLatexMath } from "../text/mathFormat";
 import { addTextBox, updateObject } from "../ink/objects";
 import { replaceStrokes } from "../store/strokes";
@@ -53,7 +53,7 @@ export function RecognizeSheet({ request, onClose }: { request: RecognizeRequest
     if (!request) return;
     let alive = true;
     setResult(null); setError(null);
-    setStatus(math ? `Getting the maths reader ready (${MATH_MODEL_MB} MB the first time)...` : `Getting the handwriting reader ready (${TEXT_MODEL_MB} MB the first time)...`);
+    setStatus(math ? "Getting the maths reader ready (built in, works offline)..." : `Getting the handwriting reader ready (${TEXT_MODEL_MB} MB the first time)...`);
     const job = math ? recognizeMath(request.strokes, (s) => alive && setStatus(s)) : recognizeText(request.strokes, (s) => alive && setStatus(s));
     job.then((r) => {
       if (!alive) return;

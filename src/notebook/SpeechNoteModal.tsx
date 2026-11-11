@@ -10,7 +10,6 @@ import {
   isBrowserSpeechSupported,
   SARVAM_LANGUAGES,
   SARVAM_MODES,
-  setSarvamApiKey,
   setSarvamPrefs,
   startBrowserDictation,
   testSarvamConnection,
@@ -19,6 +18,7 @@ import {
   type SarvamMode,
   type SttEngine,
 } from "../ai/sarvamStt";
+import { saveSharedKey } from "../sync/run";
 
 const I = { size: 15, strokeWidth: 1.5 } as const;
 
@@ -236,7 +236,7 @@ export function SpeechNoteModal({
 
   const handleTestSarvam = async () => {
     const clean = keyDraft.trim();
-    if (clean !== apiKey && !envManaged) setSarvamApiKey(clean);
+    if (clean !== apiKey && !envManaged) void saveSharedKey("sarvam", clean);
     setBusy("Testing Sarvam AI...");
     const result = await testSarvamConnection(clean);
     setBusy(null);
@@ -293,7 +293,7 @@ export function SpeechNoteModal({
             style={{ padding: 10, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <strong className="small">Sarvam AI API Subscription Key (`saaras:v3`)</strong>
-              {apiKey && <span className="mono small" style={{ color: "var(--ok, #3DDC97)" }}><CheckCircle2 size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />Saved locally</span>}
+              {apiKey && <span className="mono small" style={{ color: "var(--ok, #3DDC97)" }}><CheckCircle2 size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />Saved</span>}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <input
@@ -311,9 +311,9 @@ export function SpeechNoteModal({
                   type="button"
                   className="btn"
                   onClick={() => {
-                    setSarvamApiKey(keyDraft);
+                    void saveSharedKey("sarvam", keyDraft);
                     setSarvamPrefs({ engine: "sarvam" });
-                    toast(keyDraft.trim() ? "Saved Sarvam API key on this device" : "Cleared Sarvam API key");
+                    toast(keyDraft.trim() ? "Saved Sarvam API key" : "Cleared Sarvam API key");
                   }}>
                   Save
                 </button>

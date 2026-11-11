@@ -3,6 +3,12 @@ import { PAGE_SIZE, type Paper } from "../store/schema";
 import { Sheet } from "../ui/Sheet";
 import { ALL_TEMPLATES, drawPaperTemplate, type StemTemplate } from "../store/templates";
 
+const GROUPS = [
+  { id: "basic", label: "Paper" },
+  { id: "stem", label: "Study & STEM" },
+  { id: "planning", label: "Planning" },
+] as const;
+
 function TemplateThumb({ tpl, paper }: { tpl: StemTemplate; paper: Paper }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -35,12 +41,15 @@ export function TemplatesSheet({
   onSelect: (tpl: StemTemplate) => void;
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title="Paper & STEM Templates" width={600}>
+    <Sheet open={open} onClose={onClose} title="Page templates" width={600}>
       <p className="dim small" style={{ marginTop: -4, marginBottom: 14 }}>
-        Choose a paper background for this Ink page. STEM templates export cleanly to PDF and JPG.
+        Choose the paper for this Ink page. Every template exports cleanly to PDF and JPG.
       </p>
+      {GROUPS.map((g) => (
+      <section key={g.id} style={{ marginBottom: 18 }}>
+      <h3 className="small dim" style={{ margin: "0 0 8px", fontWeight: 600 }}>{g.label}</h3>
       <div className="elem-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))" }}>
-        {ALL_TEMPLATES.map((t) => {
+        {ALL_TEMPLATES.filter((t) => t.group === g.id).map((t) => {
           const active = current === t.id;
           return (
             <button
@@ -57,6 +66,8 @@ export function TemplatesSheet({
           );
         })}
       </div>
+      </section>
+      ))}
     </Sheet>
   );
 }

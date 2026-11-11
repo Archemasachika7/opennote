@@ -15,6 +15,7 @@ import { sendCommand, sendStampElement, setTool, useTool } from "../notebook/too
 import { InkLayer } from "../ink/InkLayer";
 import { ObjectLayer } from "../ink/ObjectLayer";
 import { TapeLayer } from "../ink/TapeLayer";
+import { VideoLayer } from "../ink/VideoLayer";
 import { LayersSheet } from "../ink/LayersSheet";
 import { ElementsSheet } from "../ink/ElementsSheet";
 import { RulerOverlay } from "../ink/RulerOverlay";
@@ -413,6 +414,7 @@ function BoardStage({ board, notebook, showMap, onToggleMap }: { board: InkPage;
         onPan={(dx, dy) => setView((v) => panBy(v, dx, dy))}
         objects={stored.filter((o) => !hidden.has(o.layerId ?? BASE_LAYER))} onPreviewObjects={setPreview} onCropRequest={setCropping}
         disabled={tool.tool === "text" || tool.tool === "image" || cropping !== null} />
+      <VideoLayer objects={objects} scale={view.zoom} origin={view} hidden={hidden} />
       <TapeLayer objects={objects} scale={view.zoom} origin={view} tool={tool.tool} hidden={hidden} locked={locked} />
 
       <div className="wb-panel" onPointerDown={(e) => e.stopPropagation()}>

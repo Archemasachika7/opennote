@@ -9,9 +9,17 @@ export type StemTemplate =
   | "engineering"
   | "columns"
   | "staff"
-  | "planner";
+  | "planner"
+  | "college"
+  | "todo"
+  | "meeting"
+  | "weekly"
+  | "monthly"
+  | "habit"
+  | "coordinate"
+  | "storyboard";
 
-export const ALL_TEMPLATES: { id: StemTemplate; label: string; group: "basic" | "stem" }[] = [
+export const ALL_TEMPLATES: { id: StemTemplate; label: string; group: "basic" | "stem" | "planning" }[] = [
   { id: "blank", label: "Blank", group: "basic" },
   { id: "ruled", label: "Ruled", group: "basic" },
   { id: "grid", label: "Grid", group: "basic" },
@@ -23,6 +31,14 @@ export const ALL_TEMPLATES: { id: StemTemplate; label: string; group: "basic" | 
   { id: "columns", label: "Two-Column Proof", group: "stem" },
   { id: "staff", label: "Music Staff", group: "stem" },
   { id: "planner", label: "Study Planner", group: "stem" },
+  { id: "college", label: "College Ruled", group: "basic" },
+  { id: "coordinate", label: "Coordinate Plane", group: "stem" },
+  { id: "todo", label: "To-do List", group: "planning" },
+  { id: "meeting", label: "Meeting Notes", group: "planning" },
+  { id: "weekly", label: "Weekly Planner", group: "planning" },
+  { id: "monthly", label: "Monthly Calendar", group: "planning" },
+  { id: "habit", label: "Habit Tracker", group: "planning" },
+  { id: "storyboard", label: "Storyboard", group: "planning" },
 ];
 
 export function isBasicTemplate(t: StemTemplate): t is Template {
@@ -271,6 +287,11 @@ export function drawPaperTemplate(
     return;
   }
 
+  if (drawPlanningTemplate(ctx, tpl, w, h, { minor, major, accentLine, label: paper === "light" ? "rgba(22, 23, 28, 0.42)" : "rgba(232, 233, 238, 0.38)" })) {
+    ctx.restore();
+    return;
+  }
+
   if (tpl === "planner") {
     const headerY = 142;
     const splitX = Math.round(w * 0.54);
@@ -298,4 +319,144 @@ export function drawPaperTemplate(
     ctx.stroke();
     ctx.restore();
   }
+}
+
+type Ink = { minor: string; major: string; accentLine: string; label: string };
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+}
+function label(ctx: CanvasRenderingContext2D, ink: Ink, text: string, x: number, y: number, size = 24, align: CanvasTextAlign = "left"): void {
+  ctx.save();
+  ctx.fillStyle = ink.label; ctx.font = `500 ${size}px Inter, system-ui, sans-serif`; ctx.textAlign = align; ctx.textBaseline = "alphabetic";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+function rules(ctx: CanvasRenderingContext2D, x1: number, x2: number, y1: number, y2: number, gap: number): void {
+  for (let y = y1; y < y2; y += gap) line(ctx, x1, y, x2, y);
+}
+
+/**
+ * Planning and study pages (to-do, meeting, weekly, monthly, habits, coordinate plane, storyboard, college ruled).
+ * Flat lines and faint printed labels only; the caller saves/restores the context. Returns false for other templates.
+ */
+export function drawPlanningTemplate(ctx: CanvasRenderingContext2D, tpl: StemTemplate, w: number, h: number, ink: Ink): boolean {
+  const pad = 56;
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = ink.minor;
+
+  if (tpl === "college") {
+    rules(ctx, 0, w, 150, h, 54);
+    ctx.strokeStyle = ink.accentLine; ctx.lineWidth = 2;
+    line(ctx, 150, 0, 150, h);
+    return true;
+  }
+
+  if (tpl === "todo") {
+    label(ctx, ink, "To do", pad, 96, 34);
+    ctx.strokeStyle = ink.accentLine; ctx.lineWidth = 2.2; line(ctx, pad, 124, w - pad, 124);
+    ctx.lineWidth = 1.5;
+    for (let y = 124 + 76; y < h - pad; y += 76) {
+      ctx.strokeStyle = ink.major; ctx.strokeRect(pad, y - 44, 32, 32);
+      ctx.strokeStyle = ink.minor; line(ctx, pad + 52, y, w - pad, y);
+    }
+    return true;
+  }
+
+  if (tpl === "meeting") {
+    const fields = ["Meeting", "Date", "People"];
+    fields.forEach((f, i) => { const y = 96 + i * 64; label(ctx, ink, f, pad, y); line(ctx, pad + 130, y + 6, w - pad, y + 6); });
+    const agendaY = 300, actionsY = Math.round(h * 0.68);
+    ctx.strokeStyle = ink.accentLine; ctx.lineWidth = 2.2;
+    line(ctx, pad, agendaY, w - pad, agendaY); line(ctx, pad, actionsY, w - pad, actionsY);
+    label(ctx, ink, "Notes", pad, agendaY - 14);
+    label(ctx, ink, "Action items", pad, actionsY - 14);
+    ctx.strokeStyle = ink.minor; ctx.lineWidth = 1.5;
+    rules(ctx, pad, w - pad, agendaY + 58, actionsY - 20, 58);
+    for (let y = actionsY + 70; y < h - pad; y += 70) {
+      ctx.strokeStyle = ink.major; ctx.strokeRect(pad, y - 40, 28, 28);
+      ctx.strokeStyle = ink.minor; line(ctx, pad + 46, y, w - pad - 220, y); line(ctx, w - pad - 190, y, w - pad, y);
+    }
+    label(ctx, ink, "Who", w - pad - 190, actionsY + 32, 20);
+    return true;
+  }
+
+  if (tpl === "weekly") {
+    label(ctx, ink, "Week of", pad, 90, 28);
+    line(ctx, pad + 120, 96, pad + 520, 96);
+    const top = 130, rows = 4, cols = 2;
+    const cellW = (w - pad * 2) / cols, cellH = (h - top - pad) / rows;
+    ctx.strokeStyle = ink.major;
+    for (let i = 0; i < rows * cols; i++) {
+      const x = pad + (i % cols) * cellW, y = top + Math.floor(i / cols) * cellH;
+      ctx.strokeRect(x, y, cellW, cellH);
+      label(ctx, ink, i < 7 ? DAYS[i] : "Notes", x + 18, y + 38, 24);
+      ctx.strokeStyle = ink.minor; rules(ctx, x + 18, x + cellW - 18, y + 100, y + cellH - 10, 50); ctx.strokeStyle = ink.major;
+    }
+    return true;
+  }
+
+  if (tpl === "monthly") {
+    label(ctx, ink, "Month", pad, 92, 28);
+    line(ctx, pad + 100, 98, pad + 520, 98);
+    const top = 150, cols = 7, rows = 6;
+    const cw = (w - pad * 2) / cols, ch = (h - top - 60 - pad) / rows;
+    DAYS.forEach((d, i) => label(ctx, ink, d, pad + i * cw + cw / 2, top + 36, 22, "center"));
+    ctx.strokeStyle = ink.major;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) ctx.strokeRect(pad + c * cw, top + 60 + r * ch, cw, ch);
+    return true;
+  }
+
+  if (tpl === "habit") {
+    label(ctx, ink, "Habits", pad, 92, 30);
+    const top = 140, nameW = 300, days = 31;
+    const cell = (w - pad * 2 - nameW) / days;
+    for (let d = 0; d < days; d++) label(ctx, ink, String(d + 1), pad + nameW + d * cell + cell / 2, top - 12, 15, "center");
+    ctx.strokeStyle = ink.major;
+    for (let y = top, r = 0; y + 56 < h - pad && r < 26; y += 56, r++) {
+      ctx.strokeRect(pad, y, nameW, 56);
+      for (let d = 0; d < days; d++) ctx.strokeRect(pad + nameW + d * cell, y, cell, 56);
+    }
+    return true;
+  }
+
+  if (tpl === "coordinate") {
+    const cell = 36, cx = Math.round(w / 2 / cell) * cell, cy = Math.round(h / 2 / cell) * cell;
+    for (let x = cx % cell; x < w; x += cell) { ctx.strokeStyle = Math.abs(x - cx) % (cell * 5) === 0 ? ink.major : ink.minor; line(ctx, x, 0, x, h); }
+    for (let y = cy % cell; y < h; y += cell) { ctx.strokeStyle = Math.abs(y - cy) % (cell * 5) === 0 ? ink.major : ink.minor; line(ctx, 0, y, w, y); }
+    // axes with arrowheads, numbered every 5 squares
+    ctx.strokeStyle = ink.accentLine; ctx.fillStyle = ink.accentLine; ctx.lineWidth = 3;
+    line(ctx, 16, cy, w - 16, cy); line(ctx, cx, 16, cx, h - 16);
+    const arrow = (x: number, y: number, dx: number, dy: number) => {
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - dx * 18 - dy * 9, y - dy * 18 - dx * 9); ctx.lineTo(x - dx * 18 + dy * 9, y - dy * 18 + dx * 9); ctx.closePath(); ctx.fill();
+    };
+    arrow(w - 12, cy, 1, 0); arrow(cx, 12, 0, -1);
+    label(ctx, ink, "x", w - 40, cy - 16, 26); label(ctx, ink, "y", cx + 16, 40, 26);
+    for (let k = -5; k * cell * 5 + cx > 0 && k < 20; k++) {
+      if (k === 0) continue;
+      const x = cx + k * cell * 5; if (x < w - 40) label(ctx, ink, String(k * 5), x, cy + 30, 18, "center");
+    }
+    for (let k = -8; k < 12; k++) {
+      if (k === 0) continue;
+      const y = cy - k * cell * 5; if (y > 40 && y < h - 20) label(ctx, ink, String(k * 5), cx - 10, y + 6, 18, "right");
+    }
+    return true;
+  }
+
+  if (tpl === "storyboard") {
+    const cols = 2, rows = 3, gap = 40, top = 90;
+    const fw = (w - pad * 2 - gap) / cols;
+    const fh = (h - top - pad - gap * (rows - 1)) / rows - 120;
+    label(ctx, ink, "Storyboard", pad, 64, 28);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const x = pad + c * (fw + gap), y = top + r * (fh + 120 + gap);
+      ctx.strokeStyle = ink.major; ctx.lineWidth = 2; ctx.strokeRect(x, y, fw, fh);
+      label(ctx, ink, String(r * cols + c + 1), x + 12, y + 32, 22);
+      ctx.strokeStyle = ink.minor; ctx.lineWidth = 1.5; rules(ctx, x, x + fw, y + fh + 50, y + fh + 120, 40);
+    }
+    return true;
+  }
+
+  return false;
 }

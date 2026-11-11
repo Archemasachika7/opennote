@@ -7,7 +7,8 @@ import { paintStroke } from "../ink/render";
 import { drawPaperTemplate, getEffectiveTemplate } from "../store/templates";
 import type { Box } from "../ink/geometry";
 
-async function findOrCreatePairedStudySet(notebook: Notebook): Promise<Notebook> {
+/** The notebook's study set ("<title> — Study Cards"), made the first time cards are added from it. */
+export async function findOrCreatePairedStudySet(notebook: Notebook): Promise<Notebook> {
   const targetTitle = `${notebook.title} — Study Cards`;
   const all = await db.notebooks.toArray();
   const existing = all.find((n) => !n.trashedAt && n.kind === "studyset" && n.title === targetTitle);

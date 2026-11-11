@@ -2,7 +2,8 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { motionTokens } from "../ui/motion";
-import { ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, Minus, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
+import { ChartColumn, ClipboardCopy, Copy, Crop, Droplet, FileOutput, GraduationCap, ImageDown, Minus, MoreHorizontal, PaintBucket, Palette, RotateCw, Scissors, Sigma, Sparkles, Stamp, Trash2, Type } from "lucide-react";
+import { Menu } from "../ui/Menu";
 import type { Box } from "./geometry";
 import { IDENTITY, type Xf } from "./selection";
 import { tryCapture } from "./input";
@@ -20,7 +21,12 @@ export function SelectionOverlay({
   shapeFillColor, shapeFillOpacity = 0.42, fillPalette = [],
   onPreview, onCommit, onDelete, onDuplicate, onRecolor, onCrop, onCopy, onCut,
   onToggleFill, onToggleDashed, onUpdateShapeStyle, onSaveElement, onMakeCard, onToText, onToMath, onMoveToPage, onTidy, tidy,
+  onSaveImage, onEditChart,
 }: {
+  /** the selection is one chart: change its data */
+  onEditChart?: () => void;
+  /** Crop by drawing around it: the selection as a PNG, saved as a file or copied as a picture. */
+  onSaveImage?: (how: "file" | "clipboard") => void;
   box: Box;
   scale: number;
   /** logical point at the surface's top-left (boards) */
@@ -58,6 +64,7 @@ export function SelectionOverlay({
   const drag = useRef<{ mode: "move" | "scale" | "rotate"; x: number; y: number; sx: number; sy: number } | null>(null);
   const el = useRef<HTMLDivElement>(null);
   const [fillPickerOpen, setFillPickerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
 
@@ -120,7 +127,23 @@ export function SelectionOverlay({
         </div>
       ) : (
       <div className="sel-bar" onPointerDown={(e) => e.stopPropagation()}>
-        <button className="btn ghost icon" aria-label="Recolour selection" title="Set border colour from active swatch" onClick={onRecolor}><Palette {...I} /></button>
+        {/* the ink tools get words, not just icons: they are the ones nobody would guess */}
+        {onToText && (
+          <button className="btn ghost sel-word" aria-label="Convert handwriting to text" title="Read the handwriting as text (on this device)" onClick={onToText}>
+            <Type {...I} />Text
+          </button>
+        )}
+        {onToMath && (
+          <button className="btn ghost sel-word" aria-label="Convert handwriting to equation" title="Read handwritten maths as LaTeX (on this device)" onClick={onToMath}>
+            <Sigma {...I} />Maths
+          </button>
+        )}
+        {onTidy && (
+          <button className="btn ghost sel-word" aria-label="Tidy handwriting" title="Tidy handwriting: straighten lines, even out size, slant and spacing" onClick={onTidy}>
+            <Sparkles {...I} />Tidy
+          </button>
+        )}
+        {(onToText || onToMath || onTidy) && <span className="sel-sep" aria-hidden />}
         {hasShape && onToggleFill && (
           <button
             className={`btn ghost icon ${shapeFilled ? "active" : ""}`}
@@ -150,37 +173,28 @@ export function SelectionOverlay({
             <Minus {...I} />
           </button>
         )}
-        {onSaveElement && (
-          <button className="btn ghost icon" aria-label="Save as element" title="Save to Elements & Stamps" onClick={onSaveElement}>
-            <Stamp {...I} />
-          </button>
-        )}
-        {onTidy && (
-          <button className="btn ghost icon" aria-label="Tidy handwriting" title="Tidy handwriting: straighten lines, even out size, slant and spacing" onClick={onTidy}>
-            <Sparkles {...I} />
-          </button>
-        )}
-        {onToText && (
-          <button className="btn ghost icon" aria-label="Convert handwriting to text" title="Convert handwriting to text (on this device)" onClick={onToText}>
-            <Type {...I} />
-          </button>
-        )}
-        {onToMath && (
-          <button className="btn ghost icon" aria-label="Convert handwriting to equation" title="Convert handwritten maths to LaTeX (on this device)" onClick={onToMath}>
-            <Sigma {...I} />
-          </button>
-        )}
-        {onMakeCard && (
-          <button className="btn ghost icon" aria-label="Create flashcard from selection" title="Create occlusion flashcard" onClick={onMakeCard}>
-            <GraduationCap {...I} />
-          </button>
-        )}
-        {onCopy && <button className="btn ghost icon" aria-label="Copy selection" title="Copy (Ctrl+C), then paste on any page with Ctrl+V" onClick={onCopy}><ClipboardCopy {...I} /></button>}
         {onMoveToPage && <button className="btn ghost icon" aria-label="Move selection to another page" title="Move to another page" onClick={onMoveToPage}><FileOutput {...I} /></button>}
+        {onCopy && <button className="btn ghost icon" aria-label="Copy selection" title="Copy (Ctrl+C), then paste on any page with Ctrl+V" onClick={onCopy}><ClipboardCopy {...I} /></button>}
         {onCut && <button className="btn ghost icon" aria-label="Cut selection" title="Cut (Ctrl+X) to move it to another page" onClick={onCut}><Scissors {...I} /></button>}
-        <button className="btn ghost icon" aria-label="Duplicate selection" title="Duplicate" onClick={onDuplicate}><Copy {...I} /></button>
+        {onEditChart && <button className="btn ghost icon" aria-label="Edit chart" title="Edit the chart's data" onClick={onEditChart}><ChartColumn {...I} /></button>}
         {onCrop && <button className="btn ghost icon" aria-label="Crop image" onClick={onCrop}><Crop {...I} /></button>}
         <button className="btn ghost icon" aria-label="Delete selection" onClick={onDelete}><Trash2 {...I} /></button>
+        <div style={{ position: "relative" }}>
+          <button className={`btn ghost icon ${moreOpen ? "active" : ""}`} aria-label="More selection actions" aria-expanded={moreOpen}
+            title="More" onClick={() => setMoreOpen((v) => !v)}><MoreHorizontal {...I} /></button>
+          {moreOpen && (
+            <Menu onClose={() => setMoreOpen(false)} style={{ right: 0, top: 36 }} items={[
+              { label: "Duplicate", icon: <Copy {...I} />, onSelect: onDuplicate },
+              { label: "Recolour with current colour", icon: <Palette {...I} />, onSelect: onRecolor },
+              ...(onMakeCard ? [{ label: "Make a flashcard", icon: <GraduationCap {...I} />, onSelect: onMakeCard }] : []),
+              ...(onSaveElement ? [{ label: "Save as a reusable stamp", icon: <Stamp {...I} />, onSelect: onSaveElement }] : []),
+              ...(onSaveImage ? [
+                { label: "Save as picture (PNG)", icon: <ImageDown {...I} />, onSelect: () => onSaveImage("file") },
+                { label: "Copy as picture", icon: <ClipboardCopy {...I} />, onSelect: () => onSaveImage("clipboard") },
+              ] : []),
+            ]} />
+          )}
+        </div>
       </div>
       )}
       {hasShape && fillPickerOpen && onUpdateShapeStyle && (

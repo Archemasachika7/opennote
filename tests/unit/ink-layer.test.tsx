@@ -122,6 +122,9 @@ it("after a pen is seen the surface still blocks native panning, and finger drag
   draw(el, hline(50));
   await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
   expect((el as HTMLElement).style.touchAction).toBe("none");
+  // a moment later (past the palm gate's pen grace), a finger drag is navigation, not a resting palm
+  const now = performance.now();
+  vi.spyOn(performance, "now").mockReturnValue(now + 2000);
   fireEvent.pointerDown(el, { pointerId: 11, pointerType: "touch", clientX: 100, clientY: 300, buttons: 1 });
   fireEvent.pointerMove(el, { pointerId: 11, pointerType: "touch", clientX: 100, clientY: 240, buttons: 1 });
   fireEvent.pointerUp(el, { pointerId: 11, pointerType: "touch", clientX: 100, clientY: 240 });

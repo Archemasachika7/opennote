@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 // One version for every platform: package.json. versionCode = major*10000 + minor*100 + patch, so each release installs over the last.
 def appVersion = new groovy.json.JsonSlurper().parse(file('../../package.json')).version
@@ -34,6 +35,9 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.shared
+            // `./gradlew assembleDebug -PinkLab`: a test build that installs next to the real app
+            // (its own data, so trying the native ink layer can never touch real notes)
+            if (project.hasProperty('inkLab')) applicationIdSuffix '.inklab'
         }
         release {
             signingConfig signingConfigs.shared
@@ -55,6 +59,10 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // Jetpack Ink 1.0.0 (stable): low-latency native active stroke for a stylus, see NativeInkPlugin.kt
+    implementation "androidx.ink:ink-authoring:1.0.0"
+    implementation "androidx.ink:ink-brush:1.0.0"
+    implementation "androidx.ink:ink-strokes:1.0.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
@@ -70,4 +78,9 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Kotlin compiles to the same bytecode level as the Java code (capacitor.build.gradle: Java 21)
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21) }
 }

@@ -5,14 +5,17 @@ import { Sheet } from "./Sheet";
 import { useTheme, type ThemeMode } from "./theme";
 import { useTool } from "../notebook/tool";
 import { setBlotEnabled, useBlotEnabled } from "./blotPrefs";
+import { setPenOnly, usePenOnly } from "../ink/palmGate";
+import { nativeInkAvailable, setNativeInk, useNativeInk } from "../platform/nativeInk";
 import { setInkSearch, useInkSearch } from "../ai/inkOcr";
 import { TEXT_MODEL_MB } from "../ai/inkOcrModels";
 import { db } from "../store/schema";
 import { platform } from "../platform/port";
 import { toast } from "./Toast";
+import { GeminiSettings } from "../ai/GeminiSettings";
+import { saveSharedKey } from "../sync/run";
 import {
   SARVAM_LANGUAGES,
-  setSarvamApiKey,
   setSarvamPrefs,
   testSarvamConnection,
   useSarvamConfig,
@@ -58,6 +61,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [theme, setTheme] = useTheme();
   const [tool, setToolState] = useTool();
   const blotOn = useBlotEnabled();
+  const penOnlyOn = usePenOnly();
+  const nativeInkOn = useNativeInk();
   const inkSearchOn = useInkSearch();
   const [info, setInfo] = useState<StorageInfo | null>(null);
   const { apiKey: sarvamKey, prefs: sarvamPrefs, envManaged: sarvamEnv } = useSarvamConfig();
@@ -135,6 +140,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           </p>
         </section>
 
+        <GeminiSettings />
+
         <section className="settings-group">
           <div className="settings-head">
             <h3>Search handwriting</h3>
@@ -146,6 +153,36 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           <p className="dim small" style={{ margin: 0 }}>
             Reads your handwriting on this device a few seconds after you stop writing, so search finds words you wrote by hand.
             Downloads a {TEXT_MODEL_MB} MB handwriting model once. Nothing is uploaded. Works best on neat English writing.
+          </p>
+        </section>
+
+        {nativeInkAvailable() && (
+          <section className="settings-group">
+            <div className="settings-head">
+              <h3>Native Android ink</h3>
+              <label className="small" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input type="checkbox" aria-label="Native Android ink" checked={nativeInkOn} onChange={(e) => setNativeInk(e.target.checked)} />
+                Enabled
+              </label>
+            </div>
+            <p className="dim small" style={{ margin: 0 }}>
+              The line under your stylus is drawn by Android itself (Jetpack Ink), so it keeps up with the nib. Turn it off to compare with
+              the standard engine. Your notes are saved the same way either way.
+            </p>
+          </section>
+        )}
+
+        <section className="settings-group">
+          <div className="settings-head">
+            <h3>Only the pen writes</h3>
+            <label className="small" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input type="checkbox" aria-label="Only the pen writes" checked={penOnlyOn} onChange={(e) => setPenOnly(e.target.checked)} />
+              Enabled
+            </label>
+          </div>
+          <p className="dim small" style={{ margin: 0 }}>
+            Fingers only scroll and zoom, from the very first touch. Leave it off to write with a finger until you first use a pen.
+            Either way, a resting palm and touches while the pen is near the screen never leave marks.
           </p>
         </section>
 
@@ -205,9 +242,9 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
                 type="button"
                 className="btn"
                 onClick={() => {
-                  setSarvamApiKey(keyInput);
+                  void saveSharedKey("sarvam", keyInput);
                   if (keyInput.trim()) setSarvamPrefs({ engine: "sarvam" });
-                  toast(keyInput.trim() ? "Saved Sarvam API key locally" : "Cleared Sarvam API key");
+                  toast(keyInput.trim() ? "Saved Sarvam API key" : "Cleared Sarvam API key");
                 }}>
                 Save
               </button>
@@ -218,7 +255,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               disabled={testingSarvam}
               onClick={async () => {
                 const trimmed = keyInput.trim();
-                if (!sarvamEnv && trimmed !== sarvamKey) setSarvamApiKey(trimmed);
+                if (!sarvamEnv && trimmed !== sarvamKey) void saveSharedKey("sarvam", trimmed);
                 setTestingSarvam(true);
                 const r = await testSarvamConnection(trimmed);
                 setTestingSarvam(false);

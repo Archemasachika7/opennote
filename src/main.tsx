@@ -1,8 +1,11 @@
+// first: gives crypto.randomUUID to plain-http network addresses, before anything makes an id
+import "./platform/uuid";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./ui/global.css";
 import { App } from "./App";
 import { installPlatform } from "./platform/install";
+import { startNativeInk } from "./platform/nativeInk";
 import { initTheme } from "./ui/theme";
 import { initAuth } from "./sync/auth";
 import { startSyncLoop } from "./sync/run";
@@ -10,6 +13,8 @@ import { startServiceWorker } from "./platform/serviceWorker";
 
 initTheme();
 void installPlatform();
+// Android app: native low-latency stylus ink (Jetpack Ink); does nothing on the web or Windows
+startNativeInk();
 // optional sign-in: restores a saved session; does nothing when Supabase isn't configured
 void initAuth().catch(() => undefined);
 // encrypted sync: idles until signed in and unlocked with the sync passphrase

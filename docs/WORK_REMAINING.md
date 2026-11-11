@@ -115,9 +115,63 @@ out to be Microsoft's signed Store Installer stub (nothing to analyse).
 - **Flaky tests.** Mostly fixed 2026-11-11: the whiteboard / study set / demo tests waited only 3 s for lazily
   loaded screens, which a full run on a busy machine can exceed. The shared wait is now 8 s (`vitest.setup.ts`).
   Watch for any that still time out.
-- **Commit and release.** Everything on `feat/palm-zoom-thumbs-sync` is uncommitted: pinch zoom, live
-  thumbnails, stroke smoothing, SVG/HTML upload, add-page picker, sync delete scopes, Blot animations, new
-  pens, presets, ink recognition, move/paste/placement, laser, Tidy, Beautify pen, pen hover ring, ts-fsrs,
-  WebGPU recognition.
+- **Commit and release.** The S Note / ink work was merged to master in PR #16. Palm-gate work is on `feat/palm-gate-stable-ink`.
+- **New notebook over Wi-Fi (fixed 2026-11-11).** Opened over plain http on a network address (e.g. a tablet
+  on the same Wi-Fi as the dev machine), browsers hide `crypto.randomUUID`, so new notebooks, pages and strokes
+  got no id and nothing happened. `src/platform/uuid.ts` now fills it in before the app starts. Encrypted sync
+  also needs a secure context (`crypto.subtle`): use https, localhost or the native apps for sync.
 - **Still to build from section 2:** crop by drawing around something, password-locked notes, Chinese
   brush / rainbow / oblique-nib pens, page-turn animation, charts/web clipping/quick memo, Evernote export.
+
+---
+
+## 5. Handwriting engine plan (from the comparative report, 2026-11-11)
+
+Source: `OpenNote_Handwriting_Engine_Comparative_Report.md`. Verdict: keep OpenNote's own ink model and
+web renderer; the wins are device-aware palm rejection, steadier input, and on Android a native
+active-stroke path.
+
+| Item | Status |
+|---|---|
+| Palm gate as its own step (`src/ink/palmGate.ts`): pen hover/lift grace, palm-sized contacts, pen-only setting | Done (branch `feat/palm-gate-stable-ink`) |
+| A cancelled pointer never commits a partial line | Done |
+| A pen landing during a finger "stroke" (the resting hand) discards that stroke | Done |
+| Speed-aware smoothing that keeps corners (`smoothInput`, `speedFactor`) | Done |
+| Predicted points are render-only (never saved) | Already true (`paintWet` only) |
+| Diagnostics overlay `?debug=palm` (plus existing `?debug=latency`) | Done |
+| transformers.js 3.8.1 → 4.3.2 (latest stable) | Done. TrOCR, pix2text and Whisper verified in the browser; runtime wasm +5.3 MB. Whisper now checks for a real GPU adapter and falls back to WASM if the GPU fails mid-run |
+| Jetpack Ink 1.0.0 (latest stable; 1.1.0-alpha11 is preview) Android spike: native active stroke + native PalmGate, finished stroke handed to OpenNote's `Stroke` model | **To do.** The Android SDK is on this machine. Needs a real tablet to judge |
+| Tune `PEN_GRACE_MS` (600) and `PALM_CONTACT_PX` (44) on real devices with `?debug=palm` | **To do** |
+| Quickdraw sandbox comparison | Skipped for now (the npm `quickdraw` package is an unrelated 2014 project; the SDK is young) |
+| Inklus / Scribl | Reference only (Inklus is GPL-3.0: don't copy code) |
+| Excalidraw / tldraw | Not for handwriting (diagram-first / production licence key) |
+
+---
+
+## 6. Open-source projects actually tried (2026-11-11)
+
+Cloned or downloaded and read (no third-party scripts run); engines tested in the browser on the same ink.
+
+| Project | What the code really does | Outcome |
+|---|---|---|
+| **ink-on 0.1.0** (CoMER, Apache-2.0) | Handwritten maths from pen strokes, 7.2 MB 8-bit model | **Adopted.** Ten handwritten-style formulas (Hershey pen paths with wobble): CoMER **10/10** at 0.3–2.8 s; pix2text ~6/10 at 1.9–6.7 s and a 118 MB download. pix2text removed. Model bundled in `public/models/comer` (see NOTICE.md), runs in `inkOcr.worker.ts`; works offline from first use. Verified in a production build through the real UI (write → lasso → Maths) |
+| **Inklus** (Flutter, GPL-3.0) | `lib/logic/palm_rejection.dart`: pen-down/hover grace, `radiusMajor` palm size, drop the palm stroke when the pen lands, pen-only mode | **Thresholds adopted, no code** (GPL): lift grace 400 ms, hover grace 350 ms, palm 56 px (radius 28). Our gate already had the same rules |
+| **Quickdraw** (`@quickdrawjs/core` 0.3.0, MIT) | Palm rule = "once a pen is seen, touch never draws"; pointercancel never commits; ink = a perfect-freehand port | Nothing to take: same as OpenNote's old rule, our ink library is the same |
+| **Scribl** (MIT) | "Strict palm rejection" = ignore touch only while the pen is touching (3 lines in `PointerRouter.ts`) | Nothing to take: weaker than our gate (no hover, no grace, no size) |
+
+Also fixed while testing: transformers.js 4.x reads `env.fetch` (captured at load), not the global `fetch`, so
+the old pix2text file mapping had silently stopped working after the upgrade (an earlier "verified" run was
+served from a stale dev cache). Vite now resolves ink-on's `onnxruntime-web` import to transformers' copy,
+so the app ships **one** ONNX runtime (build 92 MB → 64 MB).
+
+## 7. Walkthrough fixes (2026-11-11)
+
+| Issue | Status |
+|---|---|
+| "New notebook" did nothing over `http://<LAN-IP>` (no `crypto.randomUUID` outside secure contexts) | Fixed (`src/platform/uuid.ts`) |
+| Phone toolbar: name cut to one letter, Undo/Redo scrolled off-screen | Fixed: fixed top row (back, sidebar, name, Undo, Redo, options) + scrolling tools row |
+| Lasso toolbar: 12 unlabeled icons | Fixed: **Text**, **Maths**, **Tidy** have words; Move/Copy/Cut/Delete icons; the rest in a labeled **More** menu |
+| Blot sitting where the hand writes on phones | Fixed: ducks out of sight while you write, back 4 s later |
+| Empty text page looks like a blank box | Fixed: "Tap here and start typing…" hint |
+| Still open | Jetpack Ink Android spike; real-tablet palm tuning |
+| Done after that | Ink brush, oblique nib and rainbow pens; crop by drawing (lasso → More → Save/Copy as picture); password-locked notebooks (really encrypted with PBKDF2 + AES-GCM, sync and backup carry the encrypted copy) |

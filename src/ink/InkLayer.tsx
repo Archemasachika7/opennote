@@ -962,7 +962,7 @@ export function InkLayer({
     : onPan && tool.tool === "hand" ? "grab" : tool.tool === "laser" ? "crosshair" : undefined;
 
   return (
-    <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined}
+    <div ref={surface} className="ink-surface" data-testid="ink-surface" data-loaded={loaded || undefined} data-ink-scale={scale}
       style={{ width, height, touchAction, cursor, pointerEvents: disabled ? "none" : undefined }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={cancel}
       onPointerLeave={(e) => { if (e.pointerType === "pen") setHover(null); }}>

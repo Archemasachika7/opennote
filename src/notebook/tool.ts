@@ -36,6 +36,8 @@ let state: ToolState = {
 const subs = new Set<() => void>();
 
 export function getTool(): ToolState { return state; }
+/** Outside React (e.g. the native Android ink layer): hear about every tool change. */
+export function onToolChange(f: () => void): () => void { subs.add(f); return () => { subs.delete(f); }; }
 export function setTool(p: Partial<ToolState>): void {
   state = { ...state, ...p };
   subs.forEach((f) => f());

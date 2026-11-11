@@ -6,6 +6,7 @@ import { useTheme, type ThemeMode } from "./theme";
 import { useTool } from "../notebook/tool";
 import { setBlotEnabled, useBlotEnabled } from "./blotPrefs";
 import { setPenOnly, usePenOnly } from "../ink/palmGate";
+import { nativeInkAvailable, setNativeInk, useNativeInk } from "../platform/nativeInk";
 import { setInkSearch, useInkSearch } from "../ai/inkOcr";
 import { TEXT_MODEL_MB } from "../ai/inkOcrModels";
 import { db } from "../store/schema";
@@ -60,6 +61,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [tool, setToolState] = useTool();
   const blotOn = useBlotEnabled();
   const penOnlyOn = usePenOnly();
+  const nativeInkOn = useNativeInk();
   const inkSearchOn = useInkSearch();
   const [info, setInfo] = useState<StorageInfo | null>(null);
   const { apiKey: sarvamKey, prefs: sarvamPrefs, envManaged: sarvamEnv } = useSarvamConfig();
@@ -150,6 +152,22 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             Downloads a {TEXT_MODEL_MB} MB handwriting model once. Nothing is uploaded. Works best on neat English writing.
           </p>
         </section>
+
+        {nativeInkAvailable() && (
+          <section className="settings-group">
+            <div className="settings-head">
+              <h3>Native Android ink</h3>
+              <label className="small" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input type="checkbox" aria-label="Native Android ink" checked={nativeInkOn} onChange={(e) => setNativeInk(e.target.checked)} />
+                Enabled
+              </label>
+            </div>
+            <p className="dim small" style={{ margin: 0 }}>
+              The line under your stylus is drawn by Android itself (Jetpack Ink), so it keeps up with the nib. Turn it off to compare with
+              the standard engine. Your notes are saved the same way either way.
+            </p>
+          </section>
+        )}
 
         <section className="settings-group">
           <div className="settings-head">

@@ -389,7 +389,7 @@ export function Toolbar({
               onSelect: onOpenSpeechNote,
             }] : []),
             ...(onOpenTemplates && currentKind === "ink" ? [{
-              label: "Paper & STEM templates...",
+              label: "Page templates...",
               icon: <LayoutTemplate size={14} strokeWidth={1.5} />,
               onSelect: onOpenTemplates,
             }] : []),

@@ -29,7 +29,8 @@ beforeEach(async () => {
 
 describe("Sprint 1 Free Features: STEM Templates, Slash Math & Split-Screen", () => {
   it("persists all 7 STEM paper templates in db.blobs without modifying schema.ts", async () => {
-    expect(ALL_TEMPLATES.map((t) => t.id)).toEqual([
+    // the original 11 stay first, in order; planning templates are added after them (templates-planning.test.ts)
+    expect(ALL_TEMPLATES.map((t) => t.id).slice(0, 11)).toEqual([
       "blank", "ruled", "grid", "dot",
       "cornell", "isometric", "hex", "engineering", "columns", "staff", "planner",
     ]);

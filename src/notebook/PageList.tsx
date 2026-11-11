@@ -46,7 +46,7 @@ export function PageList({
           ...(onMovePage && i > 0 ? [{ label: "Move page up", onSelect: () => onMovePage(i, i - 1) }] : []),
           ...(onMovePage && i < pages.length - 1 ? [{ label: "Move page down", onSelect: () => onMovePage(i, i + 1) }] : []),
           ...(p.kind === "ink" ? TEMPLATES.filter((t) => t !== p.template).map((t) => ({ label: `Template: ${t}`, onSelect: () => onTemplate(p, t) })) : []),
-          ...(p.kind === "ink" && onOpenStemTemplates ? [{ label: "STEM templates...", onSelect: () => onOpenStemTemplates(p) }] : []),
+          ...(p.kind === "ink" && onOpenStemTemplates ? [{ label: "Page templates...", onSelect: () => onOpenStemTemplates(p) }] : []),
           ...(p.kind === "ink" && onRotate ? [{ label: "Rotate page", onSelect: () => onRotate(p) }] : []),
           ...(p.kind === "ink" && onLayers ? [{ label: "Layers...", onSelect: () => onLayers(p) }] : []),
           ...(p.kind === "ink" && onTapeAll ? [

@@ -13,9 +13,9 @@ import { db } from "../store/schema";
 import { platform } from "../platform/port";
 import { toast } from "./Toast";
 import { GeminiSettings } from "../ai/GeminiSettings";
+import { saveSharedKey } from "../sync/run";
 import {
   SARVAM_LANGUAGES,
-  setSarvamApiKey,
   setSarvamPrefs,
   testSarvamConnection,
   useSarvamConfig,
@@ -242,9 +242,9 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
                 type="button"
                 className="btn"
                 onClick={() => {
-                  setSarvamApiKey(keyInput);
+                  void saveSharedKey("sarvam", keyInput);
                   if (keyInput.trim()) setSarvamPrefs({ engine: "sarvam" });
-                  toast(keyInput.trim() ? "Saved Sarvam API key locally" : "Cleared Sarvam API key");
+                  toast(keyInput.trim() ? "Saved Sarvam API key" : "Cleared Sarvam API key");
                 }}>
                 Save
               </button>
@@ -255,7 +255,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               disabled={testingSarvam}
               onClick={async () => {
                 const trimmed = keyInput.trim();
-                if (!sarvamEnv && trimmed !== sarvamKey) setSarvamApiKey(trimmed);
+                if (!sarvamEnv && trimmed !== sarvamKey) void saveSharedKey("sarvam", trimmed);
                 setTestingSarvam(true);
                 const r = await testSarvamConnection(trimmed);
                 setTestingSarvam(false);

@@ -2,7 +2,8 @@
  * Runs sync in the app: passphrase unlock, storage settings shared across devices, and a background loop.
  * The unlocked master key lives in Dexie `syncMeta` on this device only. The bot token and Pinata key are
  * kept there too, and also in profiles.storage_settings encrypted with the master key, so every device
- * signed in to the account gets them after unlocking.
+ * signed in to the account gets them after unlocking. The Gemini and Sarvam keys travel the same way;
+ * on the device they stay in localStorage, where the AI features read them.
  */
 import { useSyncExternalStore } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -17,10 +18,13 @@ import { createTelegramStore, findChatId, verifyBotToken } from "./stores/telegr
 import { createPinataStore } from "./stores/pinata";
 import { StorageFullError } from "./stores/router";
 import type { BlobStore } from "./stores/types";
+import { getGeminiKey, setGeminiKey } from "../ai/gemini";
+import { getSarvamApiKey, hasEnvSarvamKey, setSarvamApiKey } from "../ai/sarvamStt";
 
 const K = { master: "dev:master", telegram: "dev:telegram", pinata: "dev:pinata", owner: "dev:owner" } as const;
 type TelegramSettings = { token: string; username: string; chatId: string | null };
 type PinataSettings = { jwt: string };
+type AiKey = { key: string };
 
 export type SyncState = "off" | "locked" | "idle" | "syncing" | "error";
 export interface SyncStatus {
@@ -53,8 +57,47 @@ async function refreshStorage(): Promise<void> {
  * A field that is missing means "never set from any device"; null means "disconnected". So a device
  * that had a key before this feature adds it, but can't bring back one another device disconnected.
  */
-export type SharedSettings = { telegram?: TelegramSettings | null; pinata?: PinataSettings | null };
-const FIELDS = ["telegram", "pinata"] as const;
+export type SharedSettings = {
+  telegram?: TelegramSettings | null; pinata?: PinataSettings | null; gemini?: AiKey | null; sarvam?: AiKey | null;
+};
+const STORE_FIELDS = ["telegram", "pinata"] as const;
+const AI_FIELDS = ["gemini", "sarvam"] as const;
+export type AiField = (typeof AI_FIELDS)[number];
+
+/* ---- AI keys on this device (localStorage) ---- */
+
+const ai: Record<AiField, { get: () => string; set: (key: string) => void }> = {
+  gemini: { get: getGeminiKey, set: setGeminiKey },
+  // a key built into the app is never uploaded (there is none today; see sarvamStt)
+  sarvam: { get: () => (hasEnvSarvamKey() ? "" : getSarvamApiKey()), set: (k) => { if (!hasEnvSarvamKey()) setSarvamApiKey(k); } },
+};
+/** Which account the AI keys on this device belong to. Absent: entered signed out (or by an older app version). */
+const AI_OWNER = "opennote.sharedKeys.owner";
+/** AI keys changed on this device and not yet in the account, each with a token naming that change. */
+const AI_PENDING = "opennote.sharedKeys.pending";
+type Pending = Partial<Record<AiField, number>>;
+const ls = {
+  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string | null) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
+const readPending = (): Pending => { try { return JSON.parse(ls.get(AI_PENDING) ?? "{}") as Pending; } catch { return {}; } };
+const writePending = (p: Pending) => ls.set(AI_PENDING, Object.keys(p).length ? JSON.stringify(p) : null);
+let pendingSeq = 0;
+const aiValue = (f: AiField): AiKey | null => { const k = ai[f].get(); return k ? { key: k } : null; };
+
+/** Change an AI key on this device now; it goes to the account on the next upload. */
+function setLocalAi(which: AiField, key: string, userId: string | null): void {
+  ai[which].set(key.trim());
+  if (userId) ls.set(AI_OWNER, userId);
+  writePending({ ...readPending(), [which]: Date.now() * 1000 + (pendingSeq++ % 1000) });
+}
+
+/** Forget the AI keys of an account that isn't the one using this device. */
+function forgetAiKeys(): void {
+  for (const f of AI_FIELDS) ai[f].set("");
+  ls.set(AI_OWNER, null);
+  writePending({});
+}
 
 /** The account's copy and its version (profiles.storage_settings_version). */
 async function fetchShared(client: SupabaseClient, userId: string, master: CryptoKey): Promise<{ value: SharedSettings; version: number }> {
@@ -66,7 +109,7 @@ async function fetchShared(client: SupabaseClient, userId: string, master: Crypt
   try {
     return { value: await openJson<SharedSettings>(fromPgBytea(row.storage_settings), master), version };
   } catch {
-    throw new Error("Your saved storage settings couldn't be read. Connect Telegram or Pinata again.");
+    throw new Error("Your saved storage settings couldn't be read. Connect Telegram or Pinata, and enter your AI keys, again.");
   }
 }
 
@@ -83,38 +126,68 @@ async function pushShared(client: SupabaseClient, userId: string, master: Crypto
 }
 const WRITE_TRIES = 3;
 
-async function applyLocal(value: SharedSettings): Promise<void> {
+/**
+ * Put the account's settings on this device. `took` names the AI key changes that went up in `value`:
+ * a change made here since then (or one that didn't go up) is newer than the account's copy, so it stays.
+ */
+async function applyLocal(value: SharedSettings, userId: string, took: Pending): Promise<void> {
   await db.transaction("rw", db.syncMeta, async () => {
-    for (const f of FIELDS) {
+    for (const f of STORE_FIELDS) {
       if (value[f] === undefined) continue;
       if (value[f]) await write(K[f], value[f]); else await db.syncMeta.delete(K[f]);
     }
   });
+  const pending = readPending();
+  let applied = false;
+  for (const f of AI_FIELDS) {
+    if (pending[f] !== undefined) {
+      if (pending[f] !== took[f]) continue;
+      delete pending[f];
+    }
+    if (value[f] === undefined) continue;
+    if ((value[f]?.key ?? "") !== ai[f].get()) ai[f].set(value[f]?.key ?? "");
+    applied = true;
+  }
+  writePending(pending);
+  if (applied) ls.set(AI_OWNER, userId);
 }
 
-/** The account's settings plus any key this device has that the account has never seen. */
+/**
+ * The account's settings plus any key this device has that the account has never seen, and this
+ * device's AI key changes that haven't gone up yet. AI keys of another account are never added.
+ */
 async function mergedShared(client: SupabaseClient, userId: string, master: CryptoKey) {
   const fetched = await fetchShared(client, userId, master);
   const value = { ...fetched.value };
   let added = false;
-  for (const f of FIELDS) {
+  for (const f of STORE_FIELDS) {
     const mine = await read<TelegramSettings & PinataSettings>(K[f]);
     if (value[f] === undefined && mine) { value[f] = mine; added = true; }
   }
-  return { value, added, version: fetched.version };
+  const owner = ls.get(AI_OWNER);
+  const pending = readPending();
+  const took: Pending = {};
+  if (owner === null || owner === userId) {
+    for (const f of AI_FIELDS) {
+      const mine = aiValue(f);
+      if (pending[f] !== undefined) { value[f] = mine; took[f] = pending[f]; added = true; }
+      else if (value[f] === undefined && mine) { value[f] = mine; added = true; }
+    }
+  }
+  return { value, added, version: fetched.version, took };
 }
 
 /** Take the account's storage settings onto this device (adding this device's never-shared keys first). Testable core. */
 export async function loadSharedSettings(client: SupabaseClient, userId: string, master: CryptoKey): Promise<void> {
   for (let i = 0; i < WRITE_TRIES; i++) {
-    const { value, added, version } = await mergedShared(client, userId, master);
+    const { value, added, version, took } = await mergedShared(client, userId, master);
     if (!added || (await pushShared(client, userId, master, value, version))) {
-      await applyLocal(value);
+      await applyLocal(value, userId, took);
       return;
     }
   }
   // another device kept writing: take its copy as is; this device's extra keys go up on the next pull
-  await applyLocal((await fetchShared(client, userId, master)).value);
+  await applyLocal((await fetchShared(client, userId, master)).value, userId, {});
 }
 
 /**
@@ -126,10 +199,10 @@ export async function updateSharedSettings(
   client: SupabaseClient, userId: string, master: CryptoKey, change: (current: SharedSettings) => SharedSettings,
 ): Promise<void> {
   for (let i = 0; i < WRITE_TRIES; i++) {
-    const { value, version } = await mergedShared(client, userId, master);
+    const { value, version, took } = await mergedShared(client, userId, master);
     const next = change(value);
     if (await pushShared(client, userId, master, next, version)) {
-      await applyLocal(next);
+      await applyLocal(next, userId, took);
       return;
     }
   }
@@ -141,6 +214,10 @@ export async function updateSharedSettings(
  * signing in, forgets them, so they can never be uploaded into someone else's account.
  */
 export async function forgetOtherAccount(userId: string | null): Promise<void> {
+  // AI keys: kept while their account (or no account, if entered signed out) uses the device. They are
+  // also usable without sync, so unlike the storage keys, signing in alone never clears unowned ones.
+  const aiOwner = ls.get(AI_OWNER);
+  if (aiOwner !== null && aiOwner !== userId) forgetAiKeys();
   const owner = await read<string>(K.owner);
   // No owner means keys from the previous app version. Their account can't be checked (that version
   // kept them after sign-out), so they're cleared: re-enter them once, then they're shared.
@@ -237,6 +314,34 @@ export async function connectPinata(jwt: string): Promise<void> {
 }
 export async function disconnectStorage(which: "telegram" | "pinata"): Promise<void> {
   await changeSettings((cur) => ({ ...cur, [which]: null }));
+}
+
+/* ---- AI keys: entered once, on every device of the account ---- */
+
+type AccountEnv = { client: SupabaseClient; userId: string; master: CryptoKey };
+
+/**
+ * Save (or, with "", remove) an AI key: on this device at once, then in the account when `env` is given
+ * (sync unlocked). Without it, or if the upload fails, the change goes up on the next sync and the
+ * account's older copy can't overwrite it meanwhile. Testable core.
+ */
+export async function saveAiKey(env: AccountEnv | null, which: AiField, key: string, userId: string | null = env?.userId ?? null): Promise<void> {
+  setLocalAi(which, key, userId);
+  if (env) await withSettingsLock(() => updateSharedSettings(env.client, env.userId, env.master, (cur) => cur));
+}
+
+/** What the Settings fields call: save the key, and share it with the account's other devices. */
+export async function saveSharedKey(which: AiField, key: string): Promise<void> {
+  const auth = getAuthState();
+  const user = auth.status === "signed-in" ? auth.user ?? null : null;
+  setLocalAi(which, key, user?.id ?? null); // usable on this device right away
+  const master = user ? await read<CryptoKey>(K.master) : null;
+  if (!supabase || !user || !master) return; // goes up once sync is unlocked
+  try {
+    await withSettingsLock(() => updateSharedSettings(supabase!, user.id, master, (cur) => cur));
+  } catch (err) {
+    set({ message: `${err instanceof Error ? err.message : String(err)} Your key is saved on this device and will reach your other devices on the next sync.` });
+  }
 }
 
 /* ---- the loop ---- */

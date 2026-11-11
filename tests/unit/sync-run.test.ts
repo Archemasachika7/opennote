@@ -2,10 +2,23 @@
 import "fake-indexeddb/auto";
 import { db } from "../../src/store/schema";
 import {
-  forgetOtherAccount, loadSharedSettings, reactToAuth, unlockWithProfile, updateSharedSettings, withSettingsLock,
+  forgetOtherAccount, loadSharedSettings, reactToAuth, saveAiKey, unlockWithProfile, updateSharedSettings, withSettingsLock,
 } from "../../src/sync/run";
 import { deriveMasterKey, newSalt, openJson, sealJson } from "../../src/sync/crypto";
-import { toPgBytea } from "../../src/sync/supabaseIndex";
+import { fromPgBytea, toPgBytea } from "../../src/sync/supabaseIndex";
+import { getGeminiKey, setGeminiKey } from "../../src/ai/gemini";
+import { getSarvamApiKey } from "../../src/ai/sarvamStt";
+
+// the AI keys live in localStorage, which node doesn't have
+const mem = new Map<string, string>();
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: {
+    getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); },
+    removeItem: (k: string) => { mem.delete(k); }, clear: () => mem.clear(),
+    key: (i: number) => [...mem.keys()][i] ?? null, get length() { return mem.size; },
+  },
+});
 
 function fakeProfiles(initial: { kdf_salt: string | null; key_check: string | null }) {
   const row = { ...initial };
@@ -18,7 +31,7 @@ function fakeProfiles(initial: { kdf_salt: string | null; key_check: string | nu
   return { client: client as never, row };
 }
 
-beforeEach(async () => { await db.syncMeta.clear(); });
+beforeEach(async () => { await db.syncMeta.clear(); mem.clear(); });
 
 it("first unlock creates the salt and key check; later unlocks verify the passphrase", async () => {
   const p = fakeProfiles({ kdf_salt: null, key_check: null });
@@ -76,7 +89,7 @@ const TG = { token: "123:abc", username: "my_bot", chatId: "42" };
 const PIN = { jwt: "a.b.c" };
 const local = async (k: "telegram" | "pinata") => (await db.syncMeta.get(`dev:${k}`))?.value;
 /** Simulate switching to another device: wipe this device's settings. */
-const otherDevice = () => db.syncMeta.clear();
+const otherDevice = async () => { await db.syncMeta.clear(); mem.clear(); };
 
 it("sealJson/openJson round-trip, and a different key can't open it", async () => {
   const k = await key();
@@ -246,6 +259,83 @@ it("keys left by the previous app version (no owner) are not taken into the acco
   await reactToAuth(null, "bob");
   expect(await local("telegram")).toBeUndefined();
   expect(await local("pinata")).toBeUndefined();
+});
+
+/* ---- AI keys (Gemini, Sarvam): entered once, on every device of the account ---- */
+
+it("an AI key entered on one device reaches the others without typing it, encrypted on the way", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  await saveAiKey({ client: a.client, userId: "u1", master: k }, "gemini", "AIza-one");
+  await saveAiKey({ client: a.client, userId: "u1", master: k }, "sarvam", "sk-two");
+  expect(getGeminiKey()).toBe("AIza-one");
+  expect(a.row.storage_settings).not.toContain(Buffer.from("AIza-one").toString("hex"));
+  expect(await openJson(fromPgBytea(a.row.storage_settings!), k)).toMatchObject({ gemini: { key: "AIza-one" }, sarvam: { key: "sk-two" } });
+
+  await otherDevice();
+  await loadSharedSettings(a.client, "u1", k);
+  expect(getGeminiKey()).toBe("AIza-one");
+  expect(getSarvamApiKey()).toBe("sk-two");
+});
+
+it("removing an AI key on one device removes it on the others", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  const env = { client: a.client, userId: "u1", master: k };
+  await saveAiKey(env, "gemini", "AIza-one");
+  await saveAiKey(env, "gemini", "");
+  await otherDevice();
+  setGeminiKey("AIza-one"); // a device that still has the old key
+  localStorage.setItem("opennote.sharedKeys.owner", "u1");
+  await loadSharedSettings(a.client, "u1", k);
+  expect(getGeminiKey()).toBe("");
+});
+
+it("a key changed while sync is locked goes up on the next sync, and the account's older key can't overwrite it", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  await saveAiKey({ client: a.client, userId: "u1", master: k }, "gemini", "AIza-old");
+  await saveAiKey(null, "gemini", "AIza-new", "u1"); // signed in, sync not unlocked yet
+  expect(getGeminiKey()).toBe("AIza-new");
+  await loadSharedSettings(a.client, "u1", k);
+  expect(getGeminiKey()).toBe("AIza-new");
+  await otherDevice();
+  await loadSharedSettings(a.client, "u1", k);
+  expect(getGeminiKey()).toBe("AIza-new");
+});
+
+it("a key entered before signing in is taken into the account that unlocks this device", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  setGeminiKey("AIza-mine"); // older app version, or used signed out
+  await reactToAuth(null, "u1");
+  expect(getGeminiKey()).toBe("AIza-mine"); // never wiped just for signing in
+  await loadSharedSettings(a.client, "u1", k);
+  await otherDevice();
+  await loadSharedSettings(a.client, "u1", k);
+  expect(getGeminiKey()).toBe("AIza-mine");
+});
+
+it("another account signing in never gets, or uploads, the first account's AI keys", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  await saveAiKey({ client: a.client, userId: "alice", master: k }, "gemini", "AIza-alice");
+  await reactToAuth(null, "alice"); // the same account reopening the app keeps it
+  expect(getGeminiKey()).toBe("AIza-alice");
+
+  await reactToAuth(null, "bob");
+  expect(getGeminiKey()).toBe("");
+  const b = fakeAccount();
+  await loadSharedSettings(b.client, "bob", k);
+  expect(b.row.storage_settings).toBeNull();
+});
+
+it("signing out forgets the account's AI keys on this device", async () => {
+  const k = await key();
+  const a = fakeAccount();
+  await saveAiKey({ client: a.client, userId: "alice", master: k }, "sarvam", "sk-alice");
+  await reactToAuth("alice", null);
+  expect(getSarvamApiKey()).toBe("");
 });
 
 it("two devices changing settings at the same moment both keep their change", async () => {

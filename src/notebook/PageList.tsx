@@ -10,11 +10,13 @@ import { hasClipboard } from "../ink/clipboard";
 const TEMPLATES: Template[] = ["blank", "ruled", "grid", "dot"];
 
 export function PageList({
-  pages, notebook, mounted, width, renderPage,
+  pages, notebook, mounted, width, renderPage, only,
   onDuplicate, onDelete, onBookmark, onTemplate, onOpenStemTemplates, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll, onReadHandwriting,
 }: {
   pages: Page[]; notebook: Notebook; mounted: Set<number>; width: number;
   renderPage: (p: Page, index: number, mounted: boolean, width: number) => ReactNode;
+  /** book view: render just this page (keeps its real number and menu) */
+  only?: number;
   onDuplicate: (p: Page) => void;
   onDelete: (p: Page) => void;
   onBookmark: (p: Page) => void;
@@ -35,6 +37,7 @@ export function PageList({
   return (
     <>
       {pages.map((p, i) => {
+        if (only !== undefined && i !== only) return null;
         const isBookmarked = notebook.bookmarks.includes(p.id);
         const items: MenuItem[] = [
           ...(p.kind === "ink" && onPaste && hasClipboard() ? [{ label: "Paste here", onSelect: () => onPaste(p) }] : []),

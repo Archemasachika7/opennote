@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, AudioLines, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
+  ArrowLeft, AudioLines, BookOpen, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
   Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine,
   RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
 } from "lucide-react";
@@ -26,6 +26,7 @@ export function Toolbar({
   notebook, zoom, setZoom, onResetZoom, onUndo, onRedo, palette = DEFAULT_COLORS, currentKind,
   sidebarOpen, onToggleSidebar, onOpenSettings,
   splitOpen, onToggleSplit,
+  bookView, onToggleBookView,
   audioOpen, onToggleAudio,
   onOpenSpeechNote,
   onOpenElements, onOpenTemplates, onGenerateTapeCards,
@@ -45,6 +46,9 @@ export function Toolbar({
   onOpenSettings?: () => void;
   splitOpen?: boolean;
   onToggleSplit?: () => void;
+  /** one page at a time with page turns */
+  bookView?: boolean;
+  onToggleBookView?: () => void;
   audioOpen?: boolean;
   onToggleAudio?: () => void;
   onOpenSpeechNote?: () => void;
@@ -329,6 +333,16 @@ export function Toolbar({
             title="Split-screen dual-pane notebook studio"
             onClick={onToggleSplit}>
             <Columns2 {...ICON} />
+          </button>
+        )}
+        {onToggleBookView && (
+          <button
+            className={`btn ghost icon ${bookView ? "active" : ""}`}
+            aria-label="Book view"
+            aria-pressed={!!bookView}
+            title={bookView ? "Book view: one page at a time (switch back to scrolling)" : "Book view: turn pages one at a time"}
+            onClick={onToggleBookView}>
+            <BookOpen {...ICON} />
           </button>
         )}
       </div>

@@ -13,6 +13,7 @@ export function PalmOverlay() {
       <div>pen strokes {s.pen}</div>
       <div>finger writes {s.touchWrite} · scrolls {s.touchNavigate}</div>
       <div>palm by size {s.palmBySize} · near pen {s.palmByPen}</div>
+      <div>whole hand {s.palmByCluster} · hand landed {s.palmByTiming}</div>
       <div>cancelled lines {s.cancelled}</div>
       <div className="dim">{s.last || "touch the page"}</div>
     </div>

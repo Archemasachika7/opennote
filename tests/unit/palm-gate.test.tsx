@@ -131,6 +131,75 @@ describe("passive stylus / finger-only screens (measured on a Redmi Pad)", () =>
     expect(fingerCount()).toBe(0);
   });
 
+  /*
+   * Two touches, both stylus-sized (the palm blob is often no bigger than the tip on this screen). Size
+   * can't tell them apart, timing can: pinch fingers land together (0–100 ms apart in the recording),
+   * while a hand lands well before or well after the stylus.
+   */
+  const moveBy = (id: number, steps: number, t0: number, dx = 10, x0 = 0, y0 = 0) => {
+    for (let k = 1; k <= steps; k++) trackTouch(ev("pointermove", id, 2.9, x0 + k * dx, y0), t0 + k * 20);
+  };
+
+  it("a hand landing while a line is being written is the palm, and the line keeps going", () => {
+    trackTouch(ev("pointerdown", 1, 2.9, 0, 0), 0);
+    moveBy(1, 5, 0); // writing: 50 px drawn by 100 ms
+    trackTouch(ev("pointerdown", 2, 2.9, 400, 600), 300);
+    expect(isPalmPointer(2)).toBe(true);
+    expect(isPalmPointer(1)).toBe(false);
+    expect(fingerCount()).toBe(1); // not a pinch
+  });
+
+  it("a hand resting first, then the stylus: the resting contact is the palm", () => {
+    trackTouch(ev("pointerdown", 1, 2.9, 400, 600), 0);
+    moveBy(1, 3, 0, 1, 400, 600); // settles, barely moves
+    trackTouch(ev("pointerdown", 2, 2.9, 0, 0), 400);
+    expect(isPalmPointer(1)).toBe(true);
+    expect(isPalmPointer(2)).toBe(false);
+    expect(fingerCount()).toBe(1);
+  });
+
+  it("two fingers landing together are still a pinch", () => {
+    trackTouch(ev("pointerdown", 1, 4, 0, 0), 0);
+    trackTouch(ev("pointerdown", 2, 2.3, 400, 600), 56); // the widest gap between pinch fingers measured
+    expect(isPalmPointer(1) || isPalmPointer(2)).toBe(false);
+    expect(fingerCount()).toBe(2);
+  });
+
+  it("in the ink layer: the line being written survives a palm landing mid-stroke", async () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const el = render(<InkLayer pageId={pageId} width={600} height={800} paper="dark" />).getByTestId("ink-surface");
+    const t = (id: number, x: number, y: number) => ({ pointerId: id, pointerType: "touch", width: 2.9, height: 2.9, clientX: x, clientY: y, buttons: 1 });
+    fireEvent.pointerDown(el, t(8, 50, 50));
+    for (let k = 1; k <= 5; k++) { now = k * 40; fireEvent.pointerMove(el, t(8, 50 + k * 20, 50)); }
+    now = 300;
+    fireEvent.pointerDown(el, t(9, 400, 600)); // the hand lands
+    now = 320; fireEvent.pointerMove(el, t(8, 170, 55));
+    now = 330; fireEvent.pointerMove(el, t(9, 402, 601));
+    now = 360; fireEvent.pointerUp(el, t(8, 170, 55));
+    fireEvent.pointerUp(el, t(9, 402, 601));
+    await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
+    const [s] = await getStrokes(pageId);
+    expect(s.points[0]).toBeLessThan(200); // the stylus line, not the palm
+  });
+
+  it("in the ink layer: the stylus writes while a hand is already resting", async () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const el = render(<InkLayer pageId={pageId} width={600} height={800} paper="dark" />).getByTestId("ink-surface");
+    const t = (id: number, x: number, y: number) => ({ pointerId: id, pointerType: "touch", width: 2.9, height: 2.9, clientX: x, clientY: y, buttons: 1 });
+    fireEvent.pointerDown(el, t(10, 400, 600)); // the hand rests
+    now = 100; fireEvent.pointerMove(el, t(10, 401, 600));
+    now = 500;
+    fireEvent.pointerDown(el, t(11, 50, 50)); // the stylus
+    for (let k = 1; k <= 5; k++) { now = 500 + k * 40; fireEvent.pointerMove(el, t(11, 50 + k * 20, 50)); }
+    fireEvent.pointerUp(el, t(11, 150, 50));
+    fireEvent.pointerUp(el, t(10, 401, 600));
+    await waitFor(async () => expect(await getStrokes(pageId)).toHaveLength(1));
+    const [s] = await getStrokes(pageId);
+    expect(s.points[0]).toBeLessThan(200);
+  });
+
   it("a touch that spreads into a palm while drawing loses its line", async () => {
     [2.9, 2.9, 2.9].forEach((w, i) => write(20 + i, w, i * 1000));
     const el = render(<InkLayer pageId={pageId} width={600} height={800} paper="dark" />).getByTestId("ink-surface");

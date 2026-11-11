@@ -6,6 +6,8 @@
  * - Pen hovering or touching, or lifted less than a moment ago: single-finger contacts are a resting hand.
  *   They neither write nor scroll. (Two-finger pinch zoom is handled separately and still works.)
  * - A contact bigger than a fingertip is a palm, whatever else is going on.
+ * - Two same-sized touches landing far apart in time are a hand and a stylus, not a pinch: the one not
+ *   writing is the palm (passive stylus screens, where the palm blob can be as small as the tip).
  * - A pointer the browser cancels never commits its line (enforced in InkLayer).
  *
  * Platform signals first (pointerType, hover, contact size), timing second. It is a heuristic: device
@@ -30,8 +32,8 @@ type State = { lastPenAt: number; lastHoverAt: number; penDown: boolean; penOnly
 const state: State = { lastPenAt: -Infinity, lastHoverAt: -Infinity, penDown: false, penOnly: readPenOnly() };
 
 /* ---- diagnostics (read by the ?debug=palm overlay) ---- */
-export type GateStats = { pen: number; touchWrite: number; touchNavigate: number; palmBySize: number; palmByCluster: number; palmByPen: number; cancelled: number; last: string };
-const stats: GateStats = { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByCluster: 0, palmByPen: 0, cancelled: 0, last: "" };
+export type GateStats = { pen: number; touchWrite: number; touchNavigate: number; palmBySize: number; palmByCluster: number; palmByTiming: number; palmByPen: number; cancelled: number; last: string };
+const stats: GateStats = { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByCluster: 0, palmByTiming: 0, palmByPen: 0, cancelled: 0, last: "" };
 const subs = new Set<() => void>();
 let snapshot = { ...stats };
 const changed = () => { snapshot = { ...stats }; subs.forEach((f) => f()); };
@@ -78,6 +80,14 @@ const WIDTH_KEY = "opennote.touchWidths";
 const MAX_SAMPLES = 24;
 /** Above this many simultaneous touches it's a hand on the glass, not a gesture. */
 const CLUSTER = 3;
+/*
+ * Two touches the same size (a palm blob is often no bigger than the stylus tip on these screens): timing
+ * decides. Pinch fingers land together (0–100 ms apart on the Redmi Pad); a hand lands well before or after.
+ */
+/** Touches landing closer together than this are a two-finger gesture. */
+export const TOGETHER_MS = 150;
+/** A touch that has drawn this far (CSS px) is writing; a resting hand barely moves. */
+const WRITING_PATH_PX = 12;
 let widths: number[] = (() => { try { return JSON.parse(localStorage.getItem(WIDTH_KEY) ?? "[]") as number[]; } catch { return []; } })();
 const median = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
 
@@ -114,10 +124,10 @@ export const isPalmPointer = (pointerId: number): boolean => live.get(pointerId)
 /** Touches on the glass right now that are not palms (for pinch zoom). */
 export const fingerCount = (): number => [...live.values()].filter((l) => !l.palm).length;
 
-function markPalm(id: number, l: Live, why: "size" | "cluster") {
+function markPalm(id: number, l: Live, why: "size" | "cluster" | "timing") {
   if (l.palm) return;
   l.palm = true;
-  if (why === "size") stats.palmBySize++; else stats.palmByCluster++;
+  if (why === "size") stats.palmBySize++; else if (why === "cluster") stats.palmByCluster++; else stats.palmByTiming++;
   stats.last = `touch ${l.maxW.toFixed(1)}px → palm (${why})`;
   changed();
   palmSubs.forEach((f) => f(id));
@@ -132,6 +142,14 @@ export function trackTouch(e: Pick<PointerEvent, "type" | "pointerId" | "pointer
     live.set(e.pointerId, l);
     for (const o of live.values()) if (o !== l) o.alone = false;
     if (isPalmContact(e)) markPalm(e.pointerId, l, "size");
+    // a second touch long after the first is the hand, not a pinch: whichever of the two isn't writing
+    if (live.size === 2 && !l.palm) {
+      const [firstId, first] = [...live].find(([id]) => id !== e.pointerId)!;
+      if (!first.palm && now - first.start >= TOGETHER_MS) {
+        if (first.path >= WRITING_PATH_PX) markPalm(e.pointerId, l, "timing"); // landed mid-stroke
+        else markPalm(firstId, first, "timing"); // was resting; the stylus just arrived
+      }
+    }
     // a whole hand: every contact on the glass is palm
     if (live.size >= CLUSTER) for (const [id, o] of live) markPalm(id, o, "cluster");
     return;
@@ -172,7 +190,7 @@ export function countCancelled(): void { stats.cancelled++; stats.last = "cancel
 /** Tests only. */
 export function resetGate(): void {
   state.lastPenAt = -Infinity; state.lastHoverAt = -Infinity; state.penDown = false;
-  Object.assign(stats, { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByCluster: 0, palmByPen: 0, cancelled: 0, last: "" });
+  Object.assign(stats, { pen: 0, touchWrite: 0, touchNavigate: 0, palmBySize: 0, palmByCluster: 0, palmByTiming: 0, palmByPen: 0, cancelled: 0, last: "" });
   live.clear();
   widths = [];
   changed();

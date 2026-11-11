@@ -17,6 +17,8 @@ import { renderChartPng } from "../charts/render";
 import type { ChartSpec } from "../charts/spec";
 import { addChart, updateChart } from "../ink/objects";
 import { addVideo } from "../ink/video";
+import { ClipSheet } from "../clip/ClipSheet";
+import { clipUrl } from "../clip/clip";
 import { setPageLayout, turnTarget, usePageLayout } from "./pageLayout";
 import { restoreAnchor, usePinchZoom, type ZoomAnchor } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
@@ -223,6 +225,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   };
   useEffect(() => onRecognizeRequest(setRecog), []);
   const [chartReq, setChartReq] = useState<ChartRequest | null>(null);
+  const [clipAt, setClipAt] = useState<number | null>(null);
   useEffect(() => onChartEditorRequest(setChartReq), []);
   const inkSearch = useInkSearch();
   const width = BASE_WIDTH * zoom;
@@ -326,6 +329,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
 
   async function insert(index: number, kind: InsertKind) {
     if (kind === "live") { setSheet({ index }); return; }
+    if (kind === "clip") { setClipAt(index); return; }
     if (kind === "file") {
       const f = await platform.openFile([".svg", ".html", ".htm", "image/svg+xml", "text/html"]);
       if (!f) return;
@@ -682,6 +686,13 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       <InsertMenu open={addAt !== null} position={addAt !== null ? addAt + 1 : undefined}
         onClose={() => setAddAt(null)} onPick={(k) => { if (addAt !== null) void insert(addAt, k); }} />
       <RecognizeSheet request={recog} onClose={() => setRecog(null)} />
+      <ClipSheet open={clipAt !== null} onClose={() => setClipAt(null)} onClip={async (url) => {
+        const at = clipAt ?? pages.length;
+        const r = await clipUrl(id, at, url);
+        setClipAt(null);
+        toast(r.article ? `Clipped "${r.article.title}"` : `Saved the link only: ${r.blocked ?? "the page could not be read."}`);
+        reveal(r.page.id);
+      }} />
       <ChartSheet request={chartReq} paper={notebook.paper} onClose={() => setChartReq(null)} onSave={saveChart} />
       <PlaceHost notebookId={notebook.id} pages={pages} current={current} />
       {clipVersion > 0 && clipSize > 0 && !pasteHidden && (

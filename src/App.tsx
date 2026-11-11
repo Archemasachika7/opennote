@@ -9,6 +9,7 @@ import { useLive } from "./store/useLive";
 import { getNotebook } from "./store/notebooks";
 import type { Notebook } from "./store/schema";
 import { isNativeShell } from "./platform/shell";
+import { SharedClipHost } from "./clip/SharedClipHost";
 
 const NotebookView = lazy(() => import("./notebook/NotebookView").then((m) => ({ default: m.NotebookView })));
 const WhiteboardView = lazy(() => import("./board/WhiteboardView").then((m) => ({ default: m.WhiteboardView })));
@@ -131,6 +132,7 @@ export function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         inNotebook={route.name === "notebook"}
       />
+      <SharedClipHost />
       <ToastHost />
     </>
   );

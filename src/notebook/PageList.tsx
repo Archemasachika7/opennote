@@ -11,7 +11,7 @@ const TEMPLATES: Template[] = ["blank", "ruled", "grid", "dot"];
 
 export function PageList({
   pages, notebook, mounted, width, renderPage, only,
-  onDuplicate, onDelete, onBookmark, onTemplate, onOpenStemTemplates, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll, onReadHandwriting,
+  onDuplicate, onDelete, onBookmark, onTemplate, onOpenStemTemplates, onMovePage, onPaste, onExportPage, onExportPageJpg, onRotate, onLayers, onTapeAll, onReadHandwriting, onAi,
 }: {
   pages: Page[]; notebook: Notebook; mounted: Set<number>; width: number;
   renderPage: (p: Page, index: number, mounted: boolean, width: number) => ReactNode;
@@ -30,6 +30,8 @@ export function PageList({
   onLayers?: (p: Page) => void;
   onTapeAll?: (p: Page, revealed: boolean) => void;
   onReadHandwriting?: (p: Page) => void;
+  /** Gemini: summarise the page, or make flashcards from it */
+  onAi?: (p: Page, index: number, task: "summary" | "cards") => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const safe = useSafeMotion(motionTokens.distance.lg);
@@ -54,6 +56,10 @@ export function PageList({
             { label: "Cover all tape", onSelect: () => onTapeAll(p, false) },
           ] : []),
           ...(p.kind === "ink" && onReadHandwriting ? [{ label: "Make handwriting searchable", onSelect: () => onReadHandwriting(p) }] : []),
+          ...(onAi ? [
+            { label: "Summarise this page", onSelect: () => onAi(p, i, "summary") },
+            { label: "Make flashcards from this page", onSelect: () => onAi(p, i, "cards") },
+          ] : []),
           ...(onExportPage ? [{ label: "Export page as PDF", onSelect: () => onExportPage(p) }] : []),
           ...(onExportPageJpg ? [{ label: "Export page as JPG", onSelect: () => onExportPageJpg(p) }] : []),
           { label: "Delete", danger: true, onSelect: () => onDelete(p) },

@@ -5,7 +5,7 @@ import { springs } from "../ui/motion";
 import {
   ArrowLeft, AudioLines, BookOpen, ChartColumn, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
   Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine,
-  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
+  RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Sparkles, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
 } from "lucide-react";
 import { useRuler } from "../ink/ruler";
 import { toggleRuler } from "../ink/RulerOverlay";
@@ -27,7 +27,7 @@ export function Toolbar({
   sidebarOpen, onToggleSidebar, onOpenSettings,
   splitOpen, onToggleSplit,
   bookView, onToggleBookView,
-  onAddChart,
+  onAddChart, onNotebookAi,
   audioOpen, onToggleAudio,
   onOpenSpeechNote,
   onOpenElements, onOpenTemplates, onGenerateTapeCards,
@@ -51,6 +51,8 @@ export function Toolbar({
   bookView?: boolean;
   onToggleBookView?: () => void;
   onAddChart?: () => void;
+  /** Gemini over the whole notebook */
+  onNotebookAi?: (task: "summary" | "cards") => void;
   audioOpen?: boolean;
   onToggleAudio?: () => void;
   onOpenSpeechNote?: () => void;
@@ -387,6 +389,15 @@ export function Toolbar({
               label: "Speech-to-text note (Sarvam AI)...",
               icon: <AudioLines size={14} strokeWidth={1.5} />,
               onSelect: onOpenSpeechNote,
+            }] : []),
+            ...(onNotebookAi ? [{
+              label: "Summarise notebook (Gemini)",
+              icon: <Sparkles size={14} strokeWidth={1.5} />,
+              onSelect: () => onNotebookAi("summary"),
+            }, {
+              label: "Flashcards from notebook (Gemini)",
+              icon: <Sparkles size={14} strokeWidth={1.5} />,
+              onSelect: () => onNotebookAi("cards"),
             }] : []),
             ...(onOpenTemplates && currentKind === "ink" ? [{
               label: "Page templates...",

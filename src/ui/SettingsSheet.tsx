@@ -12,6 +12,7 @@ import { TEXT_MODEL_MB } from "../ai/inkOcrModels";
 import { db } from "../store/schema";
 import { platform } from "../platform/port";
 import { toast } from "./Toast";
+import { GeminiSettings } from "../ai/GeminiSettings";
 import {
   SARVAM_LANGUAGES,
   setSarvamApiKey,
@@ -138,6 +139,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             The little ink drop on the bottom edge. It hops when a live page runs, cheers when you know a flashcard, and waves when you tap it. Drag it along the edge to move it.
           </p>
         </section>
+
+        <GeminiSettings />
 
         <section className="settings-group">
           <div className="settings-head">

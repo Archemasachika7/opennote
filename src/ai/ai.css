@@ -1,0 +1,14 @@
+/* Gemini sheet: flat */
+.ai-sheet { display: grid; gap: 12px; }
+.ai-sheet p { margin: 0; line-height: 1.5; }
+.ai-engine { display: inline-flex; align-items: center; gap: 6px; }
+.ai-summary {
+  white-space: pre-wrap; line-height: 1.55; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-2); max-height: 50vh; overflow: auto;
+}
+.ai-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 50vh; overflow: auto; }
+.ai-cards label {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.ai-cards label > span { display: grid; gap: 2px; }
+.ai-cards input { margin-top: 3px; }

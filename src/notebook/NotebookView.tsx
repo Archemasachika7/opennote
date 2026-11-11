@@ -19,6 +19,7 @@ import { addChart, updateChart } from "../ink/objects";
 import { addVideo } from "../ink/video";
 import { ClipSheet } from "../clip/ClipSheet";
 import { clipUrl } from "../clip/clip";
+import { AiSheet, onAiRequest, openAi, type AiRequest } from "../ai/AiSheet";
 import { setPageLayout, turnTarget, usePageLayout } from "./pageLayout";
 import { restoreAnchor, usePinchZoom, type ZoomAnchor } from "./usePinchZoom";
 import { useStudioShortcuts } from "./useStudioShortcuts";
@@ -226,6 +227,8 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   useEffect(() => onRecognizeRequest(setRecog), []);
   const [chartReq, setChartReq] = useState<ChartRequest | null>(null);
   const [clipAt, setClipAt] = useState<number | null>(null);
+  const [aiReq, setAiReq] = useState<AiRequest | null>(null);
+  useEffect(() => onAiRequest(setAiReq), []);
   useEffect(() => onChartEditorRequest(setChartReq), []);
   const inkSearch = useInkSearch();
   const width = BASE_WIDTH * zoom;
@@ -537,6 +540,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
         onOpenSpeechNote={() => setSpeechNoteOpen(true)}
         onOpenElements={cur?.kind === "ink" ? () => setElementsOpen(true) : undefined}
         onAddChart={() => openChartEditor()}
+        onNotebookAi={(task) => openAi({ task, scope: "notebook" })}
         onOpenTemplates={cur?.kind === "ink" ? () => setTemplatesFor(cur) : undefined}
         onGenerateTapeCards={cur?.kind === "ink" ? () => void handleGenerateTapeCards(cur) : undefined}
         enableZoomBox
@@ -623,6 +627,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
                 onBookmark={(p) => toggleBookmark(id, p.id)}
                 onTemplate={(p, t) => void setStemTemplateForPage(p.id, t, updatePage)}
                 onOpenStemTemplates={(p) => setTemplatesFor(p)}
+                onAi={(p, i, task) => openAi({ task, scope: "page", page: p, pageNumber: i + 1 })}
                 onReadHandwriting={(p) => {
                   toast("Reading the handwriting on this page...");
                   void indexHandwriting(p.id).then((t) => toast(t ? "Handwriting on this page is now searchable" : "No handwriting found on this page"))
@@ -686,6 +691,19 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       <InsertMenu open={addAt !== null} position={addAt !== null ? addAt + 1 : undefined}
         onClose={() => setAddAt(null)} onPick={(k) => { if (addAt !== null) void insert(addAt, k); }} />
       <RecognizeSheet request={recog} onClose={() => setRecog(null)} />
+      <AiSheet request={aiReq} notebook={notebook} pages={pages} onClose={() => setAiReq(null)} onOpenSettings={onOpenSettings}
+        onAddSummary={async (title, text, afterPageId) => {
+          const at = afterPageId ? pages.findIndex((p) => p.id === afterPageId) + 1 : Math.min(current + 1, pages.length);
+          const p = await insertPage(id, at, { kind: "text" });
+          await updatePage(p.id, { doc: { type: "doc", content: [
+            { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: title }] },
+            ...text.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => (/^[-*•]\s+/.test(l)
+              ? { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: l.replace(/^[-*•]\s+/, "") }] }] }] }
+              : { type: "paragraph", content: [{ type: "text", text: l }] })),
+          ] } });
+          toast("Summary added as a page");
+          reveal(p.id);
+        }} />
       <ClipSheet open={clipAt !== null} onClose={() => setClipAt(null)} onClip={async (url) => {
         const at = clipAt ?? pages.length;
         const r = await clipUrl(id, at, url);

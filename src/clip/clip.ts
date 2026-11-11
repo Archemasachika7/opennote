@@ -7,14 +7,57 @@ const MAX_HTML = 6 * 1024 * 1024;
 
 export class ClipBlockedError extends Error {}
 
+const PRIVATE_NAMES = /(^|\.)(localhost|local|internal|intranet|home\.arpa|lan)$/i;
+
+function privateV4(a: number, b: number): boolean {
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+}
+
+/**
+ * True for hosts on the device's own network: loopback, private and link-local ranges (including the cloud
+ * metadata address 169.254.169.254), and local-only names. Expects `URL.hostname`, which has already turned
+ * odd IPv4 spellings (2130706433, 0x7f.1) into dotted form. Names that only resolve to a private address via
+ * DNS can't be seen from here; the redirect check below still catches the common case.
+ */
+export function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!h || PRIVATE_NAMES.test(h)) return true;
+  const v4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) return privateV4(+v4[1], +v4[2]);
+  if (h.includes(":")) {
+    if (h === "::" || h === "::1") return true;
+    const mapped = h.match(/^::ffff:(\d+)\.(\d+)\.\d+\.\d+$/) ?? h.match(/^::ffff:([0-9a-f]{1,4}):[0-9a-f]{1,4}$/);
+    if (mapped) {
+      if (mapped[0].includes(".")) return privateV4(+mapped[1], +mapped[2]);
+      const hi = parseInt(mapped[1], 16);
+      return privateV4(hi >> 8, hi & 0xff);
+    }
+    // fc00::/7 unique-local, fe80::/10 link-local
+    return /^f[cd]/.test(h) || /^fe[89ab]/.test(h);
+  }
+  return false;
+}
+
+/** Only ordinary public web pages may be clipped: http(s) to a host outside the device's own network. */
+function assertPublicWebUrl(url: string): void {
+  let u: URL;
+  try { u = new URL(url); } catch { throw new ClipBlockedError("That isn't a web link."); }
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw new ClipBlockedError("Only web links (http or https) can be clipped.");
+  if (isPrivateHost(u.hostname)) throw new ClipBlockedError("Links to this device or your local network can't be clipped.");
+}
+
 /**
  * Downloads the page's HTML. In the Android app this uses native HTTP, which any site answers; a browser (web, and the
- * Windows app's web view) may only read sites that allow it (CORS), so many sites refuse there.
+ * Windows app's web view) may only read sites that allow it (CORS), so many sites refuse there. Links to the local
+ * network are refused before anything is fetched, and a redirect that lands there is refused too.
  */
 export async function fetchPageHtml(url: string): Promise<string> {
+  assertPublicWebUrl(url);
   if (Capacitor.isNativePlatform()) {
     const r = await CapacitorHttp.get({ url, responseType: "text", connectTimeout: 15000, readTimeout: 20000,
       headers: { Accept: "text/html,application/xhtml+xml" } });
+    if (r.url) assertPublicWebUrl(r.url);
     if (r.status >= 400) throw new ClipBlockedError(`The site answered ${r.status}.`);
     const body = typeof r.data === "string" ? r.data : "";
     if (!body) throw new ClipBlockedError("The site sent back no page.");
@@ -26,6 +69,7 @@ export async function fetchPageHtml(url: string): Promise<string> {
   } catch {
     throw new ClipBlockedError("This site doesn't let browsers read it directly.");
   }
+  if (res.url) assertPublicWebUrl(res.url);
   if (!res.ok) throw new ClipBlockedError(`The site answered ${res.status}.`);
   const type = res.headers.get("content-type") ?? "";
   if (type && !/html|xml|text\/plain/i.test(type)) throw new ClipBlockedError("That link is not a web page.");

@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion } from "motion/react";
+import { Check } from "lucide-react";
 import { motionTokens, springs, useSafeMotion } from "./motion";
 
-export type MenuItem = { label: string; icon?: ReactNode; shortcut?: string; onSelect: () => void; danger?: boolean };
+/** `checked` set (true or false) makes the item a toggle: it reads as a menuitemcheckbox and shows a tick when on. */
+export type MenuItem = { label: string; icon?: ReactNode; shortcut?: string; onSelect: () => void; danger?: boolean; checked?: boolean };
 
 export function Menu({ items, onClose, style, footer }: { items: MenuItem[]; onClose: () => void; style?: CSSProperties; footer?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -33,7 +35,7 @@ export function Menu({ items, onClose, style, footer }: { items: MenuItem[]; onC
         return;
       }
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
-      const btns = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+      const btns = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"], [role="menuitemcheckbox"]') ?? []);
       if (btns.length === 0) return;
       e.preventDefault();
       const idx = btns.indexOf(document.activeElement as HTMLButtonElement);
@@ -59,11 +61,14 @@ export function Menu({ items, onClose, style, footer }: { items: MenuItem[]; onC
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={safe.reduce ? safe.transition : springs.instant}>
       {items.map((it) => (
-        <button key={it.label} role="menuitem" style={it.danger ? { color: "var(--danger)" } : undefined}
+        <button key={it.label} role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+          aria-checked={it.checked === undefined ? undefined : it.checked}
+          style={it.danger ? { color: "var(--danger)" } : undefined}
           onClick={() => { it.onSelect(); onClose(); }}>
           {it.icon}
           <span className="menu-label">{it.label}</span>
           {it.shortcut && <kbd className="menu-kbd mono">{it.shortcut}</kbd>}
+          {it.checked && <Check size={14} strokeWidth={1.8} className="menu-check" aria-hidden />}
         </button>
       ))}
       {footer && <div className="menu-footer">{footer}</div>}

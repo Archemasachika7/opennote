@@ -3,6 +3,7 @@ import { ToastHost } from "./ui/Toast";
 import { LibraryView } from "./library/LibraryView";
 import { LandingPage } from "./landing/LandingPage";
 import { Blot } from "./ui/Blot";
+import { CoverLaunchLayer } from "./ui/CoverLaunch";
 import { SettingsSheet } from "./ui/SettingsSheet";
 import { CommandPalette } from "./ui/CommandPalette";
 import { useLive } from "./store/useLive";
@@ -124,6 +125,7 @@ export function App() {
         <DocView key={route.id} id={route.id} pageId={route.pageId} onOpenSettings={() => setSettingsOpen(true)} />
       )}
       {route.name !== "landing" && <Blot />}
+      <CoverLaunchLayer />
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <CommandPalette
         open={paletteOpen}

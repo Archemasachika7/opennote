@@ -111,7 +111,7 @@ export function BookView({ pageKey, index, count, dir, onTurn, onAddPage, scroll
           </motion.div>
         </AnimatePresence>
       </div>
-      <nav className="book-nav" aria-label="Turn pages">
+      <nav className="book-nav" aria-label="Turn pages" data-blot-avoid>
         <button type="button" className="btn ghost icon book-turn prev" aria-label="Previous page" title="Previous page (Left arrow)"
           disabled={index <= 0} onClick={() => onTurn(-1)}>
           <ChevronLeft size={20} strokeWidth={1.5} />

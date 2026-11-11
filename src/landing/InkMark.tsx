@@ -4,7 +4,7 @@ import { motion, useInView, useReducedMotion } from "motion/react";
 import { getStroke } from "perfect-freehand";
 
 type Pt = [number, number];
-type Variant = "underline" | "arrow";
+type Variant = "underline" | "arrow" | "tick";
 
 /** Samples a cubic Bézier into points, so a stroke has the uneven spacing of a real pen. */
 function bez(p0: Pt, p1: Pt, p2: Pt, p3: Pt, n = 28): Pt[] {
@@ -42,6 +42,12 @@ const SHAPES: Record<Variant, { box: [number, number]; size: number; strokes: Pt
     size: 9,
     strokes: [bez([4, 15], [60, 7], [130, 19], [196, 9])],
   },
+  tick: {
+    box: [24, 20],
+    size: 3.4,
+    // one stroke: short dip down, then the long flick up to the right
+    strokes: [[...bez([3, 10], [5, 12], [7, 15], [9, 17], 8), ...bez([9, 17], [13, 11], [17, 7], [21, 3], 12).slice(1)]],
+  },
   arrow: {
     box: [64, 40],
     size: 3.2,
@@ -64,8 +70,10 @@ const BUILT = Object.fromEntries(
  * the same library the notebook uses) revealed by a mask that follows the stroke's centre line.
  * Reduced motion: the mark is simply there.
  */
-export function InkMark({ variant, className, delay = 0, duration = 0.6 }: {
+export function InkMark({ variant, className, delay = 0, duration = 0.6, tilt = 0 }: {
   variant: Variant; className?: string; delay?: number; duration?: number;
+  /** degrees; repeated marks (ticks) look hand-made when no two sit at the same angle */
+  tilt?: number;
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
@@ -76,7 +84,8 @@ export function InkMark({ variant, className, delay = 0, duration = 0.6 }: {
   const each = duration / parts.length;
 
   return (
-    <svg ref={ref} className={className} viewBox={`0 0 ${box[0]} ${box[1]}`} preserveAspectRatio="none" aria-hidden focusable="false">
+    <svg ref={ref} className={className} viewBox={`0 0 ${box[0]} ${box[1]}`} preserveAspectRatio="none" aria-hidden focusable="false"
+      style={tilt ? { rotate: `${tilt}deg` } : undefined}>
       <defs>
         {parts.map((p, i) => (
           <mask id={`${id}-${i}`} key={i} maskUnits="userSpaceOnUse" x="0" y="0" width={box[0]} height={box[1]}>

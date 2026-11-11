@@ -256,6 +256,18 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
   }, [showIndex]);
 
   const hasPages = pages.length > 0;
+  // Phones fit the page on open (initialZoom). Tablets in portrait and small laptop windows (about
+  // 760-1100px) open at 100% with the page panel beside the page, and the page no longer fits:
+  // fit it to the space once, on open, so nothing is cut off. Later zooming is the user's.
+  const autoFitted = useRef(false);
+  useLayoutEffect(() => {
+    if (autoFitted.current || !hasPages || initialMobile()) return;
+    const el = scroller.current;
+    if (!el) return;
+    autoFitted.current = true;
+    const avail = el.clientWidth - 32;
+    if (avail > 120 && avail < BASE_WIDTH * zoomRef.current) setZoomRaw(clampZoom(avail / BASE_WIDTH));
+  }, [hasPages]);
   useEffect(() => {
     if (!pageId || !hasPages) return;
     const i = pages.findIndex((p) => p.id === pageId);
@@ -654,7 +666,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
           <SplitCompanionPane primaryNotebookId={notebook.id} onClose={() => setSplitOpen(false)} />
         )}
         {!sidebarOpen && pages.length > 0 && !book && (
-          <button type="button" className="nb-page-pill mono" onClick={() => setSidebarOpen(true)} title="Show pages sidebar">
+          <button type="button" className="nb-page-pill mono" data-blot-avoid onClick={() => setSidebarOpen(true)} title="Show pages sidebar">
             {current + 1} / {pages.length}
           </button>
         )}
@@ -714,7 +726,7 @@ export function NotebookView({ id, pageId, onOpenSettings }: { id: string; pageI
       <ChartSheet request={chartReq} paper={notebook.paper} onClose={() => setChartReq(null)} onSave={saveChart} />
       <PlaceHost notebookId={notebook.id} pages={pages} current={current} />
       {clipVersion > 0 && clipSize > 0 && !pasteHidden && (
-        <div className="paste-bar" role="region" aria-label="Paste">
+        <div className="paste-bar" role="region" aria-label="Paste" data-blot-avoid>
           <span className="dim">{clipSize} {clipSize === 1 ? "item" : "items"} copied</span>
           {cur?.kind === "ink" && <button className="btn primary" onClick={() => void pasteTo(cur.id)}>Paste on page {current + 1}</button>}
           <button className="btn" onClick={() => void askPlace({ title: "Paste on…", allowCurrent: true }).then((to) => { if (to) void pasteTo(to); })}>Paste on…</button>

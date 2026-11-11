@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { springs } from "../ui/motion";
 import {
-  ArrowLeft, AudioLines, BookOpen, ChartColumn, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutTemplate,
+  ArrowLeft, AudioLines, BookOpen, ChartColumn, ChevronLeft, ChevronRight, Columns2, Eraser, GraduationCap, Hand, Highlighter, Image as ImageIcon, Lasso, LayoutGrid, LayoutTemplate,
   Maximize2, Mic, Minus, MoreHorizontal, MousePointer2, PaintBucket, PanelLeft, PenLine,
   RectangleHorizontal, Redo2, Ruler as RulerIcon, Settings, Shapes, Sparkles, Stamp, Type, Undo2, ZoomIn, ZoomOut, LocateFixed,
 } from "lucide-react";
@@ -13,7 +13,7 @@ import { navigate } from "../App";
 import type { Notebook } from "../store/schema";
 import { COVERS, renameNotebook, updateNotebook } from "../store/notebooks";
 import { useAudioLiveState } from "../store/audio";
-import { Menu } from "../ui/Menu";
+import { Menu, type MenuItem } from "../ui/Menu";
 import { sendShapeStylePatch, useTool, type ToolName, type ToolState } from "./tool";
 import { SHAPES } from "../ink/shapes";
 import type { PenVariant } from "../ink/model";
@@ -119,6 +119,58 @@ export function Toolbar({
 
   const isRecordingHere = Boolean(audioLive.recording && audioLive.recording.notebookId === notebook.id);
 
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreItems: MenuItem[] = [
+    ...(onAddChart ? [{ label: "Add chart", icon: <ChartColumn {...ICON} />, onSelect: onAddChart }] : []),
+    ...(onOpenElements ? [{ label: "Elements & stamps", icon: <Stamp {...ICON} />, onSelect: onOpenElements }] : []),
+    ...(enableZoomBox && currentKind === "ink"
+      ? [{ label: "Zoom writing window", icon: <Maximize2 {...ICON} />, checked: !!t.zoomBoxOpen, onSelect: () => set({ zoomBoxOpen: !t.zoomBoxOpen }) }]
+      : []),
+    ...(onOpenSpeechNote ? [{ label: "Speech-to-text note", icon: <AudioLines {...ICON} />, onSelect: onOpenSpeechNote }] : []),
+    ...(onToggleSplit ? [{ label: "Split screen", icon: <Columns2 {...ICON} />, checked: !!splitOpen, onSelect: onToggleSplit }] : []),
+    ...(onToggleBookView ? [{ label: "Book view", icon: <BookOpen {...ICON} />, checked: !!bookView, onSelect: onToggleBookView }] : []),
+  ];
+  // the button lights up while something from the menu is switched on, so it is never hidden state
+  const moreOn = Boolean(splitOpen || bookView || (enableZoomBox && t.zoomBoxOpen));
+
+  // On phones and small tablets the tools row scrolls sideways. Show an arrow at each end that has
+  // more tools past it, so the row never looks like it simply ends. (On desktop the row wraps and
+  // the strip is `display: contents`, so there is nothing to scroll and no arrows.)
+  const reduceMotion = useReducedMotion() ?? false;
+  const strip = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const measureEdges = useRef(() => {});
+  measureEdges.current = () => {
+    const el = strip.current;
+    if (!el) return;
+    const scrolls = getComputedStyle(el).display !== "contents";
+    const left = scrolls && el.scrollLeft > 4;
+    const right = scrolls && el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
+  };
+  useEffect(() => {
+    const el = strip.current;
+    const measure = () => measureEdges.current();
+    measure();
+    el?.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => { el?.removeEventListener("scroll", measure); window.removeEventListener("resize", measure); };
+  }, []);
+  // the row's contents change with the tool (shape and eraser options appear), so measure again
+  useEffect(() => { measureEdges.current(); }, [t.tool]);
+  const scrollStrip = (dir: 1 | -1) => {
+    const el = strip.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.7, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+  const edgeButton = (side: "left" | "right") => (
+    <motion.button key={side} type="button" className={`nb-tb-edge ${side}`} tabIndex={-1}
+      aria-label={side === "left" ? "Scroll tools left" : "Scroll tools right"}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}
+      onClick={() => scrollStrip(side === "left" ? -1 : 1)}>
+      {side === "left" ? <ChevronLeft {...ICON} /> : <ChevronRight {...ICON} />}
+    </motion.button>
+  );
+
   return (
     <header className="nb-toolbar">
       <button className="btn ghost icon" aria-label="Back to library" title="Back to library" onClick={() => navigate("/")}><ArrowLeft {...ICON} /></button>
@@ -160,7 +212,8 @@ export function Toolbar({
         </span>
       )}
       {/* on phones this strip becomes its own sideways-scrolling row under the fixed top row */}
-      <div className="nb-tb-strip">
+      <div className="nb-tb-strip" ref={strip}>
+      <AnimatePresence initial={false}>{edges.left && edgeButton("left")}</AnimatePresence>
       <div className="tool-group" role="toolbar" aria-label="Tools">
         {tools.map((x) => (
           <button key={x.name} className={`btn ghost icon ${t.tool === x.name ? "active" : ""}`} aria-label={x.label} title={x.hint}
@@ -294,26 +347,6 @@ export function Toolbar({
         <button className={`btn ghost icon ${ruler ? "active" : ""}`} aria-label="Ruler" aria-pressed={!!ruler}
           title="Ruler [R] (drag to move, turn with the round handle; strokes started next to an edge stay straight)"
           onClick={() => toggleRuler(!ruler)}><RulerIcon {...ICON} /></button>
-        {onAddChart && (
-          <button className="btn ghost icon" aria-label="Add chart" title="Add a bar, line, pie or scatter chart" onClick={onAddChart}>
-            <ChartColumn {...ICON} />
-          </button>
-        )}
-        {onOpenElements && (
-          <button className="btn ghost icon" aria-label="Elements" title="Elements & reusable STEM stamps" onClick={onOpenElements}>
-            <Stamp {...ICON} />
-          </button>
-        )}
-        {enableZoomBox && currentKind === "ink" && (
-          <button
-            className={`btn ghost icon ${t.zoomBoxOpen ? "active" : ""}`}
-            aria-label="Zoom writing window"
-            aria-pressed={t.zoomBoxOpen}
-            title="Magnified writing window with auto-advance"
-            onClick={() => set({ zoomBoxOpen: !t.zoomBoxOpen })}>
-            <Maximize2 {...ICON} />
-          </button>
-        )}
         {onToggleAudio && (
           <button
             className={`btn ghost icon ${audioOpen || isRecordingHere ? "active" : ""}`}
@@ -325,37 +358,20 @@ export function Toolbar({
             <Mic {...ICON} />
           </button>
         )}
-        {onOpenSpeechNote && (
-          <button
-            className="btn ghost icon"
-            aria-label="Speech-to-text note"
-            title="Speech-to-Text Note (Sarvam AI / Voice Dictation)"
-            onClick={onOpenSpeechNote}>
-            <AudioLines {...ICON} />
-          </button>
-        )}
-        {onToggleSplit && (
-          <button
-            className={`btn ghost icon ${splitOpen ? "active" : ""}`}
-            aria-label="Split screen"
-            aria-pressed={!!splitOpen}
-            title="Split-screen dual-pane notebook studio"
-            onClick={onToggleSplit}>
-            <Columns2 {...ICON} />
-          </button>
-        )}
-        {onToggleBookView && (
-          <button
-            className={`btn ghost icon ${bookView ? "active" : ""}`}
-            aria-label="Book view"
-            aria-pressed={!!bookView}
-            title={bookView ? "Book view: one page at a time (switch back to scrolling)" : "Book view: turn pages one at a time"}
-            onClick={onToggleBookView}>
-            <BookOpen {...ICON} />
-          </button>
-        )}
       </div>
+      <AnimatePresence initial={false}>{edges.right && edgeButton("right")}</AnimatePresence>
       </div>
+      {/* occasional tools live in one menu, so the row keeps the everyday ones. Outside the strip:
+          on phones the strip scrolls sideways and would clip a menu opened inside it. */}
+      {moreItems.length > 0 && (
+        <div className="nb-tb-more" style={{ position: "relative" }}>
+          <button className={`btn ghost icon ${moreOn ? "active" : ""}`} aria-label="More tools" aria-haspopup="menu"
+            aria-expanded={moreOpen} title="More tools: charts, stamps, split screen, book view…" onClick={() => setMoreOpen(true)}>
+            <LayoutGrid {...ICON} />
+          </button>
+          {moreOpen && <Menu items={moreItems} onClose={() => setMoreOpen(false)} style={{ right: 0, top: 36 }} />}
+        </div>
+      )}
       <div className="tool-group nb-tb-undo">
         <button className="btn ghost icon" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={onUndo}><Undo2 {...ICON} /></button>
         <button className="btn ghost icon" aria-label="Redo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" onClick={onRedo}><Redo2 {...ICON} /></button>

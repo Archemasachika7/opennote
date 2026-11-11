@@ -34,11 +34,17 @@
 .nb-body { position: relative; display: flex; flex: 1; min-height: 0; }
 .nb-drawer-backdrop { display: none; }
 .thumbs {
-  width: 176px; flex: none; border-right: 1px solid var(--line); background: var(--surface);
+  width: 188px; flex: none; border-right: 1px solid var(--line); background: var(--surface);
   display: flex; flex-direction: column; z-index: 15;
 }
 .thumb-tabs { display: flex; border-bottom: 1px solid var(--line); }
-.thumb-tabs button { flex: 1; height: 34px; border: 0; background: none; cursor: pointer; color: var(--text-dim); font-size: 12.5px; }
+/* three tabs share the panel: let each take what its word needs, so "Outline" never runs into the edge */
+.thumb-tabs button {
+  flex: 1 1 auto; height: 34px; padding: 0 6px; border: 0; background: none; cursor: pointer;
+  color: var(--text-dim); font-size: 12.5px; white-space: nowrap;
+  transition-property: color, box-shadow; transition-duration: 140ms;
+}
+.thumb-tabs button:hover { color: var(--text); }
 .thumb-tabs button[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
 .thumb-list { overflow-y: auto; overflow-x: visible; padding: 8px 16px 28px; }
 
@@ -459,8 +465,17 @@
   .nb-toolbar { flex-wrap: wrap; overflow: visible; row-gap: 4px; }
   .nb-toolbar > * { order: 1; }
   .nb-toolbar .nb-name, .nb-toolbar .nb-name-input { flex: 1 1 auto; min-width: 60px; max-width: none; }
+  .nb-tb-more { order: 2; }
   .nb-tb-undo { order: 2; display: flex; }
   .nb-tb-options { order: 3; }
+  /* arrows at the ends of the sideways-scrolling tools row: they stick to the edge they point past */
+  .nb-tb-edge {
+    position: sticky; z-index: 2; flex: none; width: 36px; height: 36px; margin: -2px 0;
+    display: grid; place-items: center; padding: 0; border: 0; cursor: pointer;
+    background: var(--surface); color: var(--text);
+  }
+  .nb-tb-edge.left { left: 0; border-right: 1px solid var(--line); }
+  .nb-tb-edge.right { right: 0; margin-left: auto; border-left: 1px solid var(--line); }
   .nb-tb-strip {
     order: 10; display: flex; align-items: center; gap: 4px; flex: 1 1 100%; min-width: 0;
     overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;

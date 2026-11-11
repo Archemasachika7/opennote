@@ -1224,9 +1224,12 @@ a.lp-eyebrow:hover .lp-eyebrow-arrow { transform: translateX(2px); }
 
 .lp-paper {
   position: relative;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='32'%3E%3Crect y='31' width='8' height='1' fill='%23ffffff' fill-opacity='0.045'/%3E%3C/svg%3E");
-  background-position: 0 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='32'%3E%3Crect y='31' width='8' height='1' fill='%23ffffff' fill-opacity='0.075'/%3E%3C/svg%3E");
+  /* --rule-y is set by useRuledTo so the lines fall under the paragraph's text */
+  background-position: 0 var(--rule-y, 20px);
 }
+/* text that sits on the ruling: one line of text per ruled line (32px, same as the tile) */
+.lp-on-rule { line-height: 32px; }
 :root[data-theme="light"] .lp-paper {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='32'%3E%3Crect y='31' width='8' height='1' fill='%23000000' fill-opacity='0.07'/%3E%3C/svg%3E");
 }
@@ -1273,6 +1276,11 @@ a.lp-eyebrow:hover .lp-eyebrow-arrow { transform: translateX(2px); }
 .lp-start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .lp-start .lp-mode-card { height: 100%; }
 .lp-start-hint { font-size: 13px; color: var(--text-dim); margin-left: 6px; }
+
+/* comparison: a hand-drawn tick, written row by row, instead of a dot */
+.lp-yes { display: inline-flex; align-items: center; gap: 8px; }
+.lp-yes::before { content: none; }
+.lp-tick { flex: none; width: 18px; height: 15px; color: var(--accent); overflow: visible; }
 
 @media (max-width: 860px) {
   .lp-start-grid { grid-template-columns: 1fr; }

@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { MotionConfig, motion, type Variants } from "motion/react";
 import {
   ArrowRight,
@@ -76,6 +76,35 @@ function GitHubMark({ size = 14 }: { size?: number }) {
   );
 }
 
+const RULE = 32; // ruled-paper line spacing in px; must match the SVG tile in landing.css
+
+/**
+ * Lines the ruled paper up with a paragraph, so its text sits on the lines like writing does.
+ * The paragraph's line-height is one RULE; we shift the ruling to wherever that paragraph lands,
+ * and re-measure whenever the layout changes size.
+ */
+function useRuledTo<S extends HTMLElement, T extends HTMLElement>() {
+  const sheet = useRef<S | null>(null);
+  const text = useRef<T | null>(null);
+  useLayoutEffect(() => {
+    const s = sheet.current, t = text.current;
+    if (!s || !t || typeof ResizeObserver === "undefined") return;
+    const align = () => {
+      // offsetTop, not getBoundingClientRect: the hero copy slides in with a transform we must ignore
+      let top = 0;
+      for (let el: HTMLElement | null = t; el && el !== s; el = el.offsetParent as HTMLElement | null) top += el.offsetTop;
+      // the tile draws its line at the bottom; lift it a few px so it sits just under the baseline
+      s.style.setProperty("--rule-y", `${(((top - 6) % RULE) + RULE) % RULE}px`);
+    };
+    align();
+    const ro = new ResizeObserver(align);
+    ro.observe(s);
+    ro.observe(t);
+    return () => ro.disconnect();
+  }, []);
+  return { sheet, text };
+}
+
 /** Section heading: a handwritten margin note, the title, then one plain sentence. */
 function SectionHead({ note, title, children, center }: { note: string; title: string; children?: ReactNode; center?: boolean }) {
   return (
@@ -139,6 +168,8 @@ export function LandingPage({
   };
 
   const onDesktopOrWeb = detectPlatform() === "other";
+  const heroRule = useRuledTo<HTMLElement, HTMLParagraphElement>();
+  const startRule = useRuledTo<HTMLElement, HTMLParagraphElement>();
 
   return (
     <MotionConfig reducedMotion="user">
@@ -199,7 +230,7 @@ export function LandingPage({
 
       <main className="lp-shell">
         {/* HERO: a ruled page with a margin line; the headline gets underlined by hand */}
-        <section className="lp-hero lp-paper">
+        <section className="lp-hero lp-paper" ref={heroRule.sheet}>
           <motion.div
             className="lp-hero-copy"
             initial={{ opacity: 0, y: motionTokens.distance.sm }}
@@ -222,7 +253,7 @@ export function LandingPage({
               ))}
             </h1>
 
-            <p className="lp-subtitle">
+            <p className="lp-subtitle lp-on-rule" ref={heroRule.text}>
               A pen-first notebook for lectures and problem sets. Write with your stylus, record a class and
               replay your ink in sync, and paste AI-made HTML, SVG or React onto a page, where it runs.
             </p>
@@ -275,10 +306,10 @@ export function LandingPage({
 
         {/* LAUNCH FILM */}
         <section id="lp-film" className="lp-section lp-film" aria-label="Launch film">
-          <SectionHead center note="30-second tour" title="See a lecture go from ink to flashcards." />
+          <SectionHead center note="one-minute tour" title="Pen, live pages, lecture replay and flashcards, in one minute." />
           <Reveal>
             <video className="lp-film-video" controls preload="none" playsInline
-              poster="/media/opennote-launch-poster.jpg" aria-label="OpenNote launch film, 30 seconds">
+              poster="/media/opennote-launch-poster-ink.jpg" aria-label="OpenNote launch film, about one minute, with subtitles">
               <source src="/media/opennote-launch.mp4" type="video/mp4" />
               {/* Hosts with a small upload limit ship without the 22 MB film; the browser then tries this copy. */}
               <source src="https://opennote-neon-nine.vercel.app/media/opennote-launch.mp4" type="video/mp4" />
@@ -316,10 +347,14 @@ export function LandingPage({
               <span role="columnheader">OpenNote</span>
               <span role="columnheader">Typical note app</span>
             </div>
-            {COMPARE.map(([what, ours, theirs]) => (
+            {COMPARE.map(([what, ours, theirs], i) => (
               <motion.div role="row" className="lp-compare-row" key={what} variants={itemIn}>
                 <span role="rowheader">{what}</span>
-                <span role="cell" className="lp-yes">{ours}</span>
+                <span role="cell" className="lp-yes">
+                  <InkMark variant="tick" className="lp-tick" delay={0.2 + i * 0.09} duration={0.32}
+                    tilt={[-6, 3, -2, 7, -4, 1, -7][i % 7]} />
+                  {ours}
+                </span>
                 <span role="cell" className="dim">{theirs}</span>
               </motion.div>
             ))}
@@ -329,14 +364,14 @@ export function LandingPage({
         <GetOpenNote />
 
         {/* START: the last page of the notebook */}
-        <section id="lp-start" className="lp-section lp-start lp-paper">
+        <section id="lp-start" className="lp-section lp-start lp-paper" ref={startRule.sheet}>
           <div className="lp-section-head">
             <span className="lp-sec-kicker">free, no sign-up</span>
             <h2>
               Pick a page and start{" "}
               <span className="lp-underlined">writing.<InkMark variant="underline" className="lp-title-underline" delay={0.2} /></span>
             </h2>
-            <p className="lp-sec-lede">It opens in this tab. Your notes stay on this device until you choose to sync.</p>
+            <p className="lp-sec-lede lp-on-rule" ref={startRule.text}>It opens in this tab. Your notes stay on this device until you choose to sync.</p>
           </div>
 
           <motion.div className="lp-start-grid" variants={listIn} initial="hidden" whileInView="shown"

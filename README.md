@@ -67,7 +67,7 @@ Record the class while you write. Later, **tap any stroke** to hear that exact m
 <td width="50%" valign="top">
 
 ### Revision that remembers for you
-Hide key terms under **Tape**, then turn them into flashcards in one click. Spaced repetition (FSRS-4.5 or SM-2) schedules each card for just before you'd forget it.
+Hide key terms under **Tape**, then turn them into flashcards in one click. Spaced repetition (FSRS-6 or SM-2) schedules each card for just before you'd forget it.
 
 </td>
 <td width="50%" valign="top">
@@ -216,6 +216,8 @@ The Android (Capacitor) and Windows (Tauri) apps are built by [GitHub Actions](.
 ---
 
 ## 🤝 Contributing
+
+The full story of the project (timeline, every feature, screen layouts, architecture) is in **[docs/OPENNOTE_PROJECT.md](docs/OPENNOTE_PROJECT.md)**.
 
 Bug reports and ideas are welcome. **[Open an issue](https://github.com/Archemasachika7/opennote/issues/new)** with what you did, what you expected and a screenshot. Pull requests should keep `npm test` and `npm run build` green.
 

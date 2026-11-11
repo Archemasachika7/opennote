@@ -50,15 +50,30 @@ function assertPublicWebUrl(url: string): void {
 /**
  * Downloads the page's HTML. In the Android app this uses native HTTP, which any site answers; a browser (web, and the
  * Windows app's web view) may only read sites that allow it (CORS), so many sites refuse there. Links to the local
- * network are refused before anything is fetched, and a redirect that lands there is refused too.
+ * network are refused before anything is fetched. On Android, redirects are followed one hop at a time and each target
+ * is checked before it is requested, since native HTTP has no CORS to stop it. In a browser, page script can't see
+ * redirect targets; there the browser's own CORS and Private Network Access rules apply, as for any web page, and the
+ * final address is still checked before the page is used.
  */
+const MAX_REDIRECTS = 5;
+
 export async function fetchPageHtml(url: string): Promise<string> {
   assertPublicWebUrl(url);
   if (Capacitor.isNativePlatform()) {
-    const r = await CapacitorHttp.get({ url, responseType: "text", connectTimeout: 15000, readTimeout: 20000,
-      headers: { Accept: "text/html,application/xhtml+xml" } });
+    let target = url;
+    let r: Awaited<ReturnType<typeof CapacitorHttp.get>>;
+    for (let hop = 0; ; hop++) {
+      r = await CapacitorHttp.get({ url: target, responseType: "text", connectTimeout: 15000, readTimeout: 20000,
+        disableRedirects: true, headers: { Accept: "text/html,application/xhtml+xml" } });
+      if (r.status < 300 || r.status >= 400) break;
+      const loc = Object.entries(r.headers ?? {}).find(([k]) => k.toLowerCase() === "location")?.[1];
+      if (!loc) break;
+      if (hop >= MAX_REDIRECTS) throw new ClipBlockedError("The link redirects too many times.");
+      try { target = new URL(loc, target).href; } catch { throw new ClipBlockedError("The site sent a broken redirect."); }
+      assertPublicWebUrl(target);
+    }
     if (r.url) assertPublicWebUrl(r.url);
-    if (r.status >= 400) throw new ClipBlockedError(`The site answered ${r.status}.`);
+    if (r.status >= 300) throw new ClipBlockedError(`The site answered ${r.status}.`);
     const body = typeof r.data === "string" ? r.data : "";
     if (!body) throw new ClipBlockedError("The site sent back no page.");
     return body.slice(0, MAX_HTML);

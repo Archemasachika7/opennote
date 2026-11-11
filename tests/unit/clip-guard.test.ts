@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClipBlockedError, fetchPageHtml, isPrivateHost } from "../../src/clip/clip";
 
-afterEach(() => vi.unstubAllGlobals());
+const cap = vi.hoisted(() => ({ native: false, get: vi.fn() }));
+vi.mock("@capacitor/core", async (orig) => {
+  const real = await orig<typeof import("@capacitor/core")>();
+  return { ...real, Capacitor: { ...real.Capacitor, isNativePlatform: () => cap.native }, CapacitorHttp: { get: cap.get } };
+});
+
+afterEach(() => { vi.unstubAllGlobals(); cap.native = false; cap.get.mockReset(); });
 
 describe("clip fetch guard (security review #6)", () => {
   it.each([
@@ -38,6 +44,35 @@ describe("clip fetch guard (security review #6)", () => {
     Object.defineProperty(res, "url", { value: "http://192.168.1.1/" });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(res));
     await expect(fetchPageHtml("https://short.example/abc")).rejects.toBeInstanceOf(ClipBlockedError);
+  });
+
+  describe("Android native HTTP (no CORS)", () => {
+    const native = async (responses: Array<{ status: number; headers?: Record<string, string>; data?: string }>) => {
+      cap.native = true;
+      for (const r of responses) cap.get.mockResolvedValueOnce({ url: "", headers: {}, data: "", ...r });
+      return cap.get;
+    };
+
+    it("checks a redirect target before requesting it", async () => {
+      const get = await native([{ status: 302, headers: { Location: "http://169.254.169.254/latest/meta-data/" } }]);
+      await expect(fetchPageHtml("https://short.example/abc")).rejects.toBeInstanceOf(ClipBlockedError);
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(get.mock.calls[0][0]).toMatchObject({ url: "https://short.example/abc", disableRedirects: true });
+    });
+
+    it("follows public redirects hop by hop", async () => {
+      const get = await native([
+        { status: 301, headers: { location: "/post" } },
+        { status: 200, data: "<html>moved ok</html>" },
+      ]);
+      await expect(fetchPageHtml("http://example.com/old")).resolves.toContain("moved ok");
+      expect(get.mock.calls[1][0]).toMatchObject({ url: "http://example.com/post", disableRedirects: true });
+    });
+
+    it("gives up after too many redirects", async () => {
+      await native(Array.from({ length: 10 }, (_, i) => ({ status: 302, headers: { Location: `https://example.com/${i}` } })));
+      await expect(fetchPageHtml("https://example.com/start")).rejects.toBeInstanceOf(ClipBlockedError);
+    });
   });
 
   it("still clips an ordinary public page", async () => {

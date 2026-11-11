@@ -86,4 +86,17 @@ describe("one-click download in the hero", () => {
     expect((await screen.findByRole("link", { name: /download for windows/i })).getAttribute("href"))
       .toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-windows-setup.exe");
   });
+
+  it("is there from the first moment, before GitHub answers: one click downloads the latest file", async () => {
+    const { SmartDownload } = await import("../../src/landing/GetOpenNote");
+    globalThis.fetch = vi.fn(() => new Promise<Response>(() => undefined)) as unknown as typeof fetch; // never answers
+    const hero = render(<SmartDownload platform="android" />);
+    expect(screen.getByRole("link", { name: /download for android/i }).getAttribute("href"))
+      .toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-android.apk");
+    hero.unmount();
+    render(<GetOpenNote />);
+    expect(screen.getByRole("link", { name: /download for windows/i }).getAttribute("href"))
+      .toBe("https://github.com/Archemasachika7/opennote/releases/latest/download/OpenNote-windows-setup.exe");
+    expect(screen.queryByText(/checking/i)).toBeNull();
+  });
 });

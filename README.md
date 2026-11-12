@@ -230,8 +230,10 @@ Bug reports and ideas are welcome. **[Open an issue](https://github.com/Archemas
 
 OpenNote is **dual-licensed**:
 
-- **[PolyForm Noncommercial 1.0.0](LICENSE)**: free for personal use, study, research, schools and other noncommercial use.
-- **[Commercial licence](LICENSE-COMMERCIAL.md)**: required for any commercial use, and only the author can grant it.
+- **[AGPL-3.0](LICENSE)**: free and open source. Anyone can use, change and share it, but every copy, fork or hosted version must publish its full source code under the AGPL too.
+- **[Commercial licence](LICENSE-COMMERCIAL.md)**: for closed-source or proprietary use without the AGPL terms. Only the author can grant it.
+
+Copyright (C) 2026 Archishman Das.
 
 Tech stack and methods: **[docs/TECH_STACK.md](docs/TECH_STACK.md)**.
 

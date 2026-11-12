@@ -1,27 +1,27 @@
 # OpenNote Commercial License
 
-Copyright (c) 2026 Archishman Das. All rights reserved except as granted below
-or in [LICENSE](LICENSE).
+Copyright (c) 2026 Archishman Das.
 
-OpenNote is dual-licensed. The public licence is the **PolyForm Noncommercial
-License 1.0.0** ([LICENSE](LICENSE)). It lets anyone use, study, change and share
-OpenNote for **noncommercial** purposes only.
+OpenNote is dual-licensed. The public licence is the **GNU Affero General Public
+License v3.0 only** ([LICENSE](LICENSE)). Under it, anyone may use, change, share
+and even sell OpenNote, **but** every copy, fork or modified version, including
+one that is only offered over a network (a hosted website or app), must publish
+its complete source code under the same AGPL-3.0 terms.
 
-Any **commercial use** needs a separate, written commercial licence from the
-copyright holder. Commercial use includes, for example:
+If you want to use OpenNote **without** those obligations, you need a separate,
+written commercial licence from the copyright holder. For example:
 
-- selling OpenNote, a modified version, or any product built on its source code;
-- offering OpenNote (or a fork) as a hosted or paid service, or bundling it with
-  a paid product or subscription;
-- using it inside a for-profit business for work done for that business;
-- putting ads, paywalls or in-app purchases into a copy or fork;
-- publishing a fork or rebrand of OpenNote on an app store for revenue.
+- shipping a closed-source or proprietary product built on OpenNote code;
+- offering a hosted or paid service based on OpenNote without publishing your
+  full source code under the AGPL;
+- rebranding or white-labelling OpenNote without releasing your changes;
+- combining OpenNote code with proprietary code you do not want to open.
 
 ## Who can grant a commercial licence
 
-Only the copyright holder, Archishman Das. No one else may sell, sublicense or
-grant commercial rights to OpenNote. The copyright holder keeps every right to
-use, sell and license OpenNote commercially without restriction.
+Only the copyright holder, Archishman Das. No one else may grant rights to
+OpenNote outside the AGPL-3.0. The copyright holder keeps every right to use,
+sell and license OpenNote under any terms, including proprietary ones.
 
 ## How to get one
 
@@ -34,10 +34,11 @@ agreement. Nothing in this file is itself a commercial licence.
 ## Contributions
 
 By submitting a contribution (pull request, patch or other code) to this
-repository, you agree that the copyright holder may distribute your contribution
-under both the PolyForm Noncommercial License 1.0.0 and the OpenNote Commercial
-License, and may relicense it in future versions. You keep the copyright in your
-contribution.
+repository, you license it under the AGPL-3.0 and also grant the copyright
+holder a perpetual, worldwide, non-exclusive, royalty-free right to use,
+modify, sublicense and distribute your contribution under other terms,
+including the OpenNote Commercial License and future versions of it. You keep
+the copyright in your contribution.
 
 ## Third-party components
 

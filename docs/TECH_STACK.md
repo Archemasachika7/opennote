@@ -111,6 +111,5 @@ techniques behind each feature.
 
 ## Licence
 
-OpenNote is dual-licensed: PolyForm Noncommercial 1.0.0 for noncommercial use,
-and a separate commercial licence from the copyright holder for anything
-commercial. See [LICENSE](../LICENSE) and [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
+OpenNote is dual-licensed: AGPL-3.0-only for everyone, and a separate commercial
+licence from the copyright holder for closed-source or proprietary use. See [LICENSE](../LICENSE) and [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).

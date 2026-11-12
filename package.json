@@ -1,6 +1,7 @@
 {
   "name": "opennote",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "version": "0.2.5",
   "type": "module",
   "scripts": {

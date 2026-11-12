@@ -1,6 +1,7 @@
 {
   "name": "opennote",
   "private": true,
+  "license": "AGPL-3.0-only",
   "version": "0.2.5",
   "type": "module",
   "scripts": {

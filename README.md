@@ -226,6 +226,17 @@ The full story of the project (timeline, every feature, screen layouts, architec
 
 Bug reports and ideas are welcome. **[Open an issue](https://github.com/Archemasachika7/opennote/issues/new)** with what you did, what you expected and a screenshot. Pull requests should keep `npm test` and `npm run build` green.
 
+## 📜 License
+
+OpenNote is **dual-licensed**:
+
+- **[AGPL-3.0](LICENSE)**: free and open source. Anyone can use, change and share it, but every copy, fork or hosted version must publish its full source code under the AGPL too.
+- **[Commercial licence](LICENSE-COMMERCIAL.md)**: for closed-source or proprietary use without the AGPL terms. Only the author can grant it.
+
+Copyright (C) 2026 Archishman Das.
+
+Tech stack and methods: **[docs/TECH_STACK.md](docs/TECH_STACK.md)**.
+
 <div align="center">
 
 ### If OpenNote saves you a notebook, give it a ⭐
